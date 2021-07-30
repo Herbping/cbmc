@@ -1,13 +1,8 @@
-# Library
 file(GLOB_RECURSE sources "*.cpp" "*.h")
-list(REMOVE_ITEM sources
-    ${CMAKE_CURRENT_SOURCE_DIR}/goto_synthesizer_main.cpp
-)
-add_library(goto-synthesizer-lib ${sources})
+add_executable(goto-synthesizer ${sources})
+generic_includes(goto-synthesizer)
 
-generic_includes(goto-synthesizer-lib)
-
-target_link_libraries(goto-synthesizer-lib
+target_link_libraries(goto-synthesizer
     ansi-c
     cpp
     linking
@@ -24,10 +19,4 @@ target_link_libraries(goto-synthesizer-lib
     json
     solvers
 )
-
-add_if_library(goto-synthesizer-lib glpk)
-
-# Executable
-add_executable(goto-synthesizer goto_synthesizer_main.cpp)
-target_link_libraries(goto-synthesizer goto-synthesizer-lib)
 install(TARGETS goto-synthesizer DESTINATION ${CMAKE_INSTALL_BINDIR})
