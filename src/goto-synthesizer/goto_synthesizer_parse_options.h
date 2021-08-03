@@ -29,6 +29,11 @@ Author: Qinheping Hu, qinhh@amazon.com
 
 #include <analyses/goto_check.h>
 
+#include <goto-instrument/loop_utils.h>
+#include <util/symbol_table_base.h>
+
+
+
 // clang-format off
 #define GOTO_SYNTHESIZER_OPTIONS \
   "(all)" \
@@ -65,12 +70,27 @@ protected:
   void register_languages();
 
   void get_goto_program();
+
+  void synthesize_loop_contracts(goto_functionst &goto_functions);
+  void synthesize_loop_contracts(
+    const irep_idt &function_name,
+    goto_functionst::goto_functiont &goto_function);
+  void synthesize_loop_contracts(
+    const irep_idt &function_name,
+    goto_functionst::goto_functiont &goto_function,
+    const goto_programt::targett loop_head,
+    const loopt &loop);
   
   bool function_pointer_removal_done;
   bool partial_inlining_done;
   bool remove_returns_done;
   
   goto_modelt goto_model;
+  
+  typedef std::unordered_map<irep_idt, symbolt> symbolst;
+
+  symbol_tablet symbol_table;
+  symbolst symbols_in_loop;
 };
 
 #endif // CPROVER_GOTO_SYNTHESIZER_GOTO_SYNTHESIZER_PARSE_OPTIONS_H

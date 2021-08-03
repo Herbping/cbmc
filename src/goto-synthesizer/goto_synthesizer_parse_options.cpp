@@ -15,9 +15,13 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <iostream>
 #include <memory>
 
+#include <analyses/local_may_alias.h>
+
 #include <util/config.h>
 #include <util/version.h>
 #include <util/exit_codes.h>
+
+#include <langapi/language_util.h>
 
 #ifdef _MSC_VER
 #  include <util/unicode.h>
@@ -30,12 +34,97 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <ansi-c/ansi_c_language.h>
 #include <cpp/cpp_language.h>
 
+#include <goto-instrument/loop_utils.h>
+
 
 
 void goto_synthesizer_parse_optionst::register_languages()
 {
   register_language(new_ansi_c_language);
   register_language(new_cpp_language);
+}
+
+void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
+  const irep_idt &function_name,
+  goto_functionst::goto_functiont &goto_function,
+  const goto_programt::targett loop_head,
+  const loopt &loop
+)
+{
+  PRECONDITION(!loop.empty());
+
+  // find the last back edge
+  goto_programt::targett loop_end = loop_head;
+  for(const auto &t : loop)
+  {
+    if(
+      t->is_goto() && t->get_target() == loop_head &&
+      t->location_number > loop_end->location_number)
+      loop_end = t;
+
+    log.status() << t->to_string() << messaget::eom;
+    if(t->is_assign())
+    {
+      log.status() << from_expr(t->assign_lhs()) << messaget::eom;
+      log.status() << from_expr(t->assign_rhs()) << messaget::eom;
+      for(const auto &operand : t->assign_rhs().operands())
+      {
+        log.status() << "  " << from_expr(operand) << messaget::eom;
+        
+        symbol_tablet::symbolst::const_iterator it;
+        // TODO: extract main::1::
+        it = symbol_table.symbols.find(dstringt("main::1::"+from_expr(operand)));
+        
+        if(it == symbol_table.symbols.end())
+        {
+          log.status() << "  NOT FOUND" << messaget::eom;
+        }
+        else
+        {
+          log.status() << "  FOUND" << messaget::eom;
+        }
+        
+      }  
+    }
+  }
+  // see whether we have an invariant and a decreases clause
+  exprt invariant = static_cast<const exprt &>(
+    loop_end->get_condition().find(ID_C_spec_loop_invariant));
+  exprt decreases_clause = static_cast<const exprt &>(
+    loop_end->get_condition().find(ID_C_spec_decreases));
+  
+
+  log.status() << from_expr(loop_end->get_condition()) << messaget::eom;
+  log.status() << from_expr(invariant) << messaget::eom;
+  invariant = conjunction(invariant.operands());
+  log.status() << from_expr(invariant) << messaget::eom;
+
+}
+
+void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
+  const irep_idt &function_name,
+  goto_functionst::goto_functiont &goto_function)
+{
+  local_may_aliast local_may_alias(goto_function);
+  natural_loops_mutablet natural_loops(goto_function.body);
+
+  // Iterate over the (natural) loops in the function,
+  // and syntehsize loop invaraints.
+  for(const auto &loop : natural_loops.loop_map)
+  {
+    synthesize_loop_contracts(
+      function_name,
+      goto_function,
+      loop.first,
+      loop.second);
+  }
+}
+
+void goto_synthesizer_parse_optionst::synthesize_loop_contracts(goto_functionst &goto_functions)
+{
+  for(auto &goto_function : goto_functions.function_map){
+    synthesize_loop_contracts(goto_function.first, goto_function.second);
+  }
 }
 
 /// invoke main modules
@@ -76,11 +165,17 @@ int goto_synthesizer_parse_optionst::doit()
       log.status() << "Model is valid" << messaget::eom;
 
     }
-  }  
+
+    symbol_table = goto_model.symbol_table;
+
+    synthesize_loop_contracts(goto_model.goto_functions);
+    return CPROVER_EXIT_SUCCESS;
+  }
 
   help();
   return CPROVER_EXIT_USAGE_ERROR;
 }
+
 
 
 void goto_synthesizer_parse_optionst::get_goto_program()
