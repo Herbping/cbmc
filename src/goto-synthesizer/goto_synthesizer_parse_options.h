@@ -80,17 +80,34 @@ protected:
     goto_functionst::goto_functiont &goto_function,
     const goto_programt::targett loop_head,
     const loopt &loop);
+  void extract_exprt(const exprt &expr);
+  bool call_back(const exprt &expr);
+
+  exprt copy_exprt(const exprt &expr);
+  exprt eterm(int size);
+  exprt sterm(const irep_idt &id, int size);
+  bool contain_E(const exprt &expr);
+  bool is_partial(const exprt &expr);
+  bool expand_with_symbol(exprt &expr, const exprt &symbol);
+  std::queue<exprt> expand_with_terminals(std::queue<exprt> &expr);
+  bool simple_verification(const exprt &candidate);
+  bool simple_enumeration();
   
   bool function_pointer_removal_done;
   bool partial_inlining_done;
   bool remove_returns_done;
+
+  exprt nonterminal_S = exprt(dstringt("ND_S"));
+  exprt nonterminal_E = exprt(dstringt("ND_E"));
   
   goto_modelt goto_model;
   
   typedef std::unordered_map<irep_idt, symbolt> symbolst;
 
   symbol_tablet symbol_table;
-  symbolst symbols_in_loop;
+  
+  std::vector<exprt> terminal_symbols = {};
 };
 
 #endif // CPROVER_GOTO_SYNTHESIZER_GOTO_SYNTHESIZER_PARSE_OPTIONS_H
+

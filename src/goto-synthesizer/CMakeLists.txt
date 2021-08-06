@@ -3,11 +3,15 @@ add_executable(goto-synthesizer ${sources})
 generic_includes(goto-synthesizer)
 
 target_link_libraries(goto-synthesizer
+    analyses
     ansi-c
+    assembler
+    big-int
     cpp
     linking
     big-int
     goto-programs
+    goto-checker
     goto-instrument-lib
     goto-symex
     assembler
@@ -17,6 +21,7 @@ target_link_libraries(goto-synthesizer
     xml
     util
     json
+    json-symtab-language
     solvers
 )
 install(TARGETS goto-synthesizer DESTINATION ${CMAKE_INSTALL_BINDIR})
