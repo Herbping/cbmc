@@ -93,8 +93,6 @@ protected:
   std::queue<exprt> expand_with_terminals(std::queue<exprt> &expr);
   bool simple_verification(const exprt &candidate);
   bool simple_enumeration();
-  void copy_original_instructions(goto_functiont &goto_function);
-  void paste_original_instructions(goto_functiont &goto_function);
   
   bool function_pointer_removal_done;
   bool partial_inlining_done;
@@ -110,11 +108,11 @@ protected:
   symbol_tablet symbol_table;
   irep_idt target_function_name;
 
-  goto_programt::instructionst original_instructions;
   goto_programt original_program;
 
   std::vector<exprt> terminal_symbols = {};
   goto_programt::targett target_loop_end;
+
 };
 
 #endif // CPROVER_GOTO_SYNTHESIZER_GOTO_SYNTHESIZER_PARSE_OPTIONS_H

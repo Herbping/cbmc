@@ -88,91 +88,15 @@ exprt goto_synthesizer_parse_optionst::copy_exprt(const exprt &expr)
   return result;
 }
 
-void goto_synthesizer_parse_optionst::paste_original_instructions(goto_functiont & goto_function)
-{
-  while(!goto_function.body.instructions.empty())
-  {
-    goto_function.body.instructions.pop_front();
-  }
-  for(goto_programt::instructionst::iterator it=(goto_function.body).instructions.begin(); \
-    it!=(goto_function.body).instructions.end(); it++)
-    {
-      goto_programt::instructiont &i=*it;
-      i.turn_into_skip();
-      i.target_number = 0;
-    }
-  for(goto_programt::instructionst::iterator it=original_instructions.begin(); \
-    it!=original_instructions.end(); it++)
-    {
-      goto_programt::instructiont &i=*it;
-      goto_function.body.instructions.push_back(i);
-    }
-    original_instructions.clear();
-}
-
-void goto_synthesizer_parse_optionst::copy_original_instructions(goto_functiont & goto_function)
-{
-  int idx = 0;
-  std::vector<std::pair<int, int>> edges;
-  for(goto_programt::instructionst::iterator it=(goto_function.body).instructions.begin(); 
-    it!=(goto_function.body).instructions.end(); it++)
-  {
-    goto_programt::instructiont &i=*it;
-    goto_programt::instructiont c(i.get_code(),i.source_location,i.type,i.guard,i.targets);
-    if(i.is_goto())
-    {
-      int jdx = 0;
-      for(goto_programt::instructionst::iterator jt=(goto_function.body).instructions.begin(); 
-        jt!=(goto_function.body).instructions.end(); jt++)
-      {
-        goto_programt::instructiont &j=*jt;
-        if(i.targets.front()->equals(j))
-          break;
-        jdx++;
-      }
-      std::pair<int, int> edge{idx,jdx};
-      edges.push_back(edge);
-    }
-    c.target_number = i.target_number;
-    c.location_number = i.location_number;
-    log.status() << i.incoming_edges.size() << messaget::eom;
-    original_instructions.push_back(c);
-    idx++;
-    }
-  for(auto &edge : edges)
-  {
-    int from = edge.first;
-    int to = edge.second;
-    std::list<goto_programt::instructiont>::iterator it = original_instructions.begin();
-    std::advance(it, from);
-
-    std::list<goto_programt::instructiont>::iterator jt = original_instructions.begin();
-    std::advance(jt, to);
-
-    it->set_target(jt);
-  }
-}
-
 bool goto_synthesizer_parse_optionst::simple_verification(const exprt &expr)
 {
+
+  null_message_handlert null_message_handler;
+  ui_message_handlert ui_null_message(null_message_handler);
+  messaget null_log(ui_null_message);
+
   original_program.copy_from(goto_model.goto_functions.function_map[target_function_name].body);
-     show_goto_functions(
-      goto_model, ui_message_handler, cmdline.isset("list-goto-functions"));
   
-  /*
-  for(auto &gf_entry : goto_model.goto_functions.function_map)
-  {
-    if(gf_entry.first == target_function_name)
-      copy_original_instructions(gf_entry.second);
-  }
-
-  for(auto &i : original_instructions)
-  {
-    log.status() << i.to_string() << messaget::eom;
-    log.status() << i.incoming_edges.size() << messaget::eom;
-  }
-  */
-
 
   local_may_aliast local_may_alias(goto_model.goto_functions.function_map[target_function_name]);
   natural_loops_mutablet natural_loops(goto_model.goto_functions.function_map[target_function_name].body);
@@ -183,10 +107,8 @@ bool goto_synthesizer_parse_optionst::simple_verification(const exprt &expr)
   {
     goto_programt::targett loop_end = loop.first;
 
-  log.status() << "loop_end" << loop_end->to_string()  << messaget::eom;
     for(const auto &t : loop.second)
     {
-  log.status() << "loop_end" << loop_end->to_string()  << messaget::eom;
       
       if(
         t->is_goto() && t->get_target() == loop.first &&
@@ -198,10 +120,7 @@ bool goto_synthesizer_parse_optionst::simple_verification(const exprt &expr)
   }
 
 
-  log.status() << "HERE?" << messaget::eom;
-  log.status() << target_loop_end->to_string() << messaget::eom;
   exprt condition = target_loop_end->get_condition();
-  log.status() << "HERE!" << messaget::eom;
   condition.add(ID_C_spec_loop_invariant) = expr;
   target_loop_end->set_condition(condition);
 
@@ -210,9 +129,7 @@ bool goto_synthesizer_parse_optionst::simple_verification(const exprt &expr)
   log.status() << "Candidate :" << from_expr(invariant) << messaget::eom;
 
 
-     show_goto_functions(
-      goto_model, ui_message_handler, cmdline.isset("list-goto-functions"));
-
+    
   code_contractst cont(goto_model, log);
   cont.apply_loop_contracts();
 
@@ -235,32 +152,24 @@ bool goto_synthesizer_parse_optionst::simple_verification(const exprt &expr)
   // Other default
   options.set_option("arrays-uf", "auto");
 
-  process_goto_program(goto_model,options,log);
+  process_goto_program(goto_model,options,null_log);
 
 
   label_properties(goto_model);
 
-     show_goto_functions(
-      goto_model, ui_message_handler, cmdline.isset("list-goto-functions"));
-
-
   std::unique_ptr<goto_verifiert> verifier = nullptr;
   verifier = util_make_unique<
         all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>(
-        options, ui_message_handler, goto_model);
+        options, ui_null_message, goto_model);
   
   const resultt result = (*verifier)();
 
   verifier->report();
-  log.status() << "result : " << as_string(result) << messaget::eom;
+  if(result == resultt::PASS)
+    log.result() << "result : " << log.green << as_string(result) << messaget::eom << log.reset;
+  else
+    log.result() << "result : " << log.red << as_string(result) << messaget::eom << log.reset;
 
-/*
-  for(auto &gf_entry : goto_model.goto_functions.function_map)
-  {
-    if(gf_entry.first == target_function_name)
-      paste_original_instructions(gf_entry.second);
-  }
-*/
   goto_model.goto_functions.function_map[target_function_name].body.swap(original_program);
   return (result == resultt::PASS);
 }
@@ -437,7 +346,10 @@ void goto_synthesizer_parse_optionst::extract_exprt(const exprt &expr)
       if(expr == symbol)
         return;
     }
-    terminal_symbols.push_back(expr);
+    log.status() << from_expr(expr) << messaget::eom;
+    log.status() << expr.type().pretty() << messaget::eom;
+    if(expr.type() == bitvector_typet(ID_signedbv,32) || expr.type() == bitvector_typet(ID_unsignedbv,32))
+      terminal_symbols.push_back(expr);
   }
 }
 
@@ -466,6 +378,11 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
       extract_exprt(t->assign_lhs());
       extract_exprt(t->assign_rhs());
     }
+
+    if(t->has_condition())
+    {
+      extract_exprt(t->get_condition());
+    }
   }
 
   target_loop_end = loop_end;
@@ -477,19 +394,6 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
   nonterminal_S = copy_exprt(nonterminal_S);
   nonterminal_E = copy_exprt(nonterminal_E);
   simple_enumeration();
-
-  // see whether we have an invariant and a decreases clause
-  /*
-  exprt invariant = static_cast<const exprt &>(
-    loop_end->get_condition().find(ID_C_spec_loop_invariant));
-  exprt decreases_clause = static_cast<const exprt &>(
-    loop_end->get_condition().find(ID_C_spec_decreases));
-  log.status() << from_expr(loop_end->get_condition()) << messaget::eom;
-  log.status() << from_expr(invariant) << messaget::eom;
-  invariant = conjunction(invariant.operands());
-  log.status() << from_expr(invariant) << messaget::eom;
-  */
-
 }
 
 void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
