@@ -20,6 +20,9 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <util/config.h>
 #include <util/version.h>
 #include <util/exit_codes.h>
+#include <util/c_types.h>
+#include <util/range.h>
+#include <util/string_constant.h>
 
 #include <langapi/language_util.h>
 
@@ -40,6 +43,8 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <goto-programs/show_goto_functions.h>
 #include <goto-programs/show_properties.h>
 #include <goto-programs/show_symbol_table.h>
+#include <goto-programs/goto_function.h>
+#include <goto-programs/goto_program.h>
 
 #include <langapi/mode.h>
 
@@ -83,10 +88,134 @@ exprt goto_synthesizer_parse_optionst::copy_exprt(const exprt &expr)
   return result;
 }
 
+void goto_synthesizer_parse_optionst::paste_original_instructions(goto_functiont & goto_function)
+{
+  while(!goto_function.body.instructions.empty())
+  {
+    goto_function.body.instructions.pop_front();
+  }
+  for(goto_programt::instructionst::iterator it=(goto_function.body).instructions.begin(); \
+    it!=(goto_function.body).instructions.end(); it++)
+    {
+      goto_programt::instructiont &i=*it;
+      i.turn_into_skip();
+      i.target_number = 0;
+    }
+  for(goto_programt::instructionst::iterator it=original_instructions.begin(); \
+    it!=original_instructions.end(); it++)
+    {
+      goto_programt::instructiont &i=*it;
+      goto_function.body.instructions.push_back(i);
+    }
+    original_instructions.clear();
+}
+
+void goto_synthesizer_parse_optionst::copy_original_instructions(goto_functiont & goto_function)
+{
+  int idx = 0;
+  std::vector<std::pair<int, int>> edges;
+  for(goto_programt::instructionst::iterator it=(goto_function.body).instructions.begin(); 
+    it!=(goto_function.body).instructions.end(); it++)
+  {
+    goto_programt::instructiont &i=*it;
+    goto_programt::instructiont c(i.get_code(),i.source_location,i.type,i.guard,i.targets);
+    if(i.is_goto())
+    {
+      int jdx = 0;
+      for(goto_programt::instructionst::iterator jt=(goto_function.body).instructions.begin(); 
+        jt!=(goto_function.body).instructions.end(); jt++)
+      {
+        goto_programt::instructiont &j=*jt;
+        if(i.targets.front()->equals(j))
+          break;
+        jdx++;
+      }
+      std::pair<int, int> edge{idx,jdx};
+      edges.push_back(edge);
+    }
+    c.target_number = i.target_number;
+    c.location_number = i.location_number;
+    log.status() << i.incoming_edges.size() << messaget::eom;
+    original_instructions.push_back(c);
+    idx++;
+    }
+  for(auto &edge : edges)
+  {
+    int from = edge.first;
+    int to = edge.second;
+    std::list<goto_programt::instructiont>::iterator it = original_instructions.begin();
+    std::advance(it, from);
+
+    std::list<goto_programt::instructiont>::iterator jt = original_instructions.begin();
+    std::advance(jt, to);
+
+    it->set_target(jt);
+  }
+}
+
 bool goto_synthesizer_parse_optionst::simple_verification(const exprt &expr)
 {
+  original_program.copy_from(goto_model.goto_functions.function_map[target_function_name].body);
+     show_goto_functions(
+      goto_model, ui_message_handler, cmdline.isset("list-goto-functions"));
+  
+  /*
+  for(auto &gf_entry : goto_model.goto_functions.function_map)
+  {
+    if(gf_entry.first == target_function_name)
+      copy_original_instructions(gf_entry.second);
+  }
+
+  for(auto &i : original_instructions)
+  {
+    log.status() << i.to_string() << messaget::eom;
+    log.status() << i.incoming_edges.size() << messaget::eom;
+  }
+  */
+
+
+  local_may_aliast local_may_alias(goto_model.goto_functions.function_map[target_function_name]);
+  natural_loops_mutablet natural_loops(goto_model.goto_functions.function_map[target_function_name].body);
+
+  // Iterate over the (natural) loops in the function,
+  // and syntehsize loop invaraints.
+  for(const auto &loop : natural_loops.loop_map)
+  {
+    goto_programt::targett loop_end = loop.first;
+
+  log.status() << "loop_end" << loop_end->to_string()  << messaget::eom;
+    for(const auto &t : loop.second)
+    {
+  log.status() << "loop_end" << loop_end->to_string()  << messaget::eom;
+      
+      if(
+        t->is_goto() && t->get_target() == loop.first &&
+        t->location_number > loop_end->location_number)
+        loop_end = t;
+    }
+
+    target_loop_end = loop_end;
+  }
+
+
+  log.status() << "HERE?" << messaget::eom;
+  log.status() << target_loop_end->to_string() << messaget::eom;
+  exprt condition = target_loop_end->get_condition();
+  log.status() << "HERE!" << messaget::eom;
+  condition.add(ID_C_spec_loop_invariant) = expr;
+  target_loop_end->set_condition(condition);
+
+  exprt invariant = static_cast<const exprt &>(
+    target_loop_end->get_condition().find(ID_C_spec_loop_invariant));
+  log.status() << "Candidate :" << from_expr(invariant) << messaget::eom;
+
+
+     show_goto_functions(
+      goto_model, ui_message_handler, cmdline.isset("list-goto-functions"));
+
   code_contractst cont(goto_model, log);
   cont.apply_loop_contracts();
+
 
   optionst options;
   // Default true
@@ -100,14 +229,20 @@ bool goto_synthesizer_parse_optionst::simple_verification(const exprt &expr)
   options.set_option("show-goto-symex-steps", false);
   options.set_option("show-points-to-sets", false);
   options.set_option("show-array-constraints", false);
+  options.set_option("assertions", true);
+  options.set_option("assumptions", true);
 
   // Other default
   options.set_option("arrays-uf", "auto");
 
   process_goto_program(goto_model,options,log);
 
-  show_goto_functions(
+
+  label_properties(goto_model);
+
+     show_goto_functions(
       goto_model, ui_message_handler, cmdline.isset("list-goto-functions"));
+
 
   std::unique_ptr<goto_verifiert> verifier = nullptr;
   verifier = util_make_unique<
@@ -115,10 +250,19 @@ bool goto_synthesizer_parse_optionst::simple_verification(const exprt &expr)
         options, ui_message_handler, goto_model);
   
   const resultt result = (*verifier)();
-  verifier->report();
 
-  log.status() << "result" <<  as_string(result) << messaget::eom;
-  return true;
+  verifier->report();
+  log.status() << "result : " << as_string(result) << messaget::eom;
+
+/*
+  for(auto &gf_entry : goto_model.goto_functions.function_map)
+  {
+    if(gf_entry.first == target_function_name)
+      paste_original_instructions(gf_entry.second);
+  }
+*/
+  goto_model.goto_functions.function_map[target_function_name].body.swap(original_program);
+  return (result == resultt::PASS);
 }
 
 bool goto_synthesizer_parse_optionst::call_back(const exprt &expr)
@@ -234,7 +378,6 @@ bool goto_synthesizer_parse_optionst::simple_enumeration()
       exprt skeleton = true_exprt();
       for(int j = 0; j < num_clauses; j++)
       {
-        log.status() << i << " : " << j << messaget::eom;
         if(i > j)
         {
           skeleton = and_exprt(skeleton, sterm(ID_equal, size_eterm));
@@ -307,6 +450,8 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
 {
   PRECONDITION(!loop.empty());
 
+  target_function_name = function_name;
+
   // find the last back edge
   goto_programt::targett loop_end = loop_head;
   for(const auto &t : loop)
@@ -316,13 +461,15 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
       t->location_number > loop_end->location_number)
       loop_end = t;
 
-    log.status() << t->to_string() << messaget::eom;
     if(t->is_assign())
     {
       extract_exprt(t->assign_lhs());
       extract_exprt(t->assign_rhs());
     }
   }
+
+  target_loop_end = loop_end;
+
   // add the constant 0 to terminal_symbols
   exprt zero = constant_exprt(irep_idt(dstringt("0")), terminal_symbols[0].type());
   terminal_symbols.push_back(zero);
