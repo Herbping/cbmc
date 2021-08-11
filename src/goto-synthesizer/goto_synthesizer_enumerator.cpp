@@ -18,7 +18,7 @@ Author: Qinheping Hu
 #include <iostream>
 #include <memory>
 
-exprt simple_enumerator::eterm(int size)
+exprt simple_enumeratort::eterm(int size)
 {
   if(size == 1)
   {
@@ -28,12 +28,12 @@ exprt simple_enumerator::eterm(int size)
   return plus_exprt(nonterminal_E, eterm(size-1));
 }
 
-exprt simple_enumerator::sterm(const irep_idt &id, int size)
+exprt simple_enumeratort::sterm(const irep_idt &id, int size)
 {
   return binary_relation_exprt(eterm(size), id, eterm(size));
 }
 
-exprt simple_enumerator::copy_exprt(const exprt &expr)
+exprt simple_enumeratort::copy_exprt(const exprt &expr)
 {
   exprt result(expr.id(), expr.type());
   for(const auto &operand : expr.operands())
@@ -43,7 +43,7 @@ exprt simple_enumerator::copy_exprt(const exprt &expr)
   return result;
 }
 
-bool simple_enumerator::contain_E(const exprt &expr)
+bool simple_enumeratort::contain_E(const exprt &expr)
 {
   if(expr == nonterminal_E)
   {
@@ -57,7 +57,7 @@ bool simple_enumerator::contain_E(const exprt &expr)
   return false;
 }
 
-bool simple_enumerator::is_partial(const exprt &expr)
+bool simple_enumeratort::is_partial(const exprt &expr)
 {
   if(expr == nonterminal_S || expr == nonterminal_E)
   {
@@ -71,7 +71,7 @@ bool simple_enumerator::is_partial(const exprt &expr)
   return false;
 }
 
-bool simple_enumerator::expand_with_symbol(exprt &expr, const exprt &symbol)
+bool simple_enumeratort::expand_with_symbol(exprt &expr, const exprt &symbol)
 {
   if(expr == nonterminal_E)
   {
@@ -88,7 +88,7 @@ bool simple_enumerator::expand_with_symbol(exprt &expr, const exprt &symbol)
   return false;
 }
 
-std::queue<exprt> simple_enumerator::expand_with_terminals(std::queue<exprt> &exprs)
+std::queue<exprt> simple_enumeratort::expand_with_terminals(std::queue<exprt> &exprs)
 {
   std::queue<exprt> result;
 
@@ -115,7 +115,7 @@ std::queue<exprt> simple_enumerator::expand_with_terminals(std::queue<exprt> &ex
   return result;
 }
 
-bool simple_enumerator::enumerate()
+bool simple_enumeratort::enumerate()
 {
   std::deque<exprt> current_partial_terms;
 

@@ -19,15 +19,6 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <util/ui_message.h>
 #include <util/validation_interface.h>
 
-#include <goto-programs/class_hierarchy.h>
-#include <goto-programs/remove_calls_no_body.h>
-#include <goto-programs/remove_const_function_pointers.h>
-#include <goto-programs/restrict_function_pointers.h>
-#include <goto-programs/show_goto_functions.h>
-#include <goto-programs/show_properties.h>
-#include <goto-programs/goto_model.h>
-#include <goto-programs/goto_function.h>
-
 #include <analyses/goto_check.h>
 
 #include <goto-instrument/loop_utils.h>
@@ -58,6 +49,8 @@ public:
   bool call_back(const exprt &expr);  
   
   std::vector<exprt> terminal_symbols = {};
+  goto_modelt goto_model;
+  irep_idt target_function_name;
 
   goto_synthesizer_parse_optionst(int argc, const char **argv)
     : parse_options_baset(
@@ -86,23 +79,14 @@ protected:
     const goto_programt::targett loop_head,
     const loopt &loop);
   void extract_exprt(const exprt &expr);
-
-  bool simple_verification(const exprt &candidate);
   
   bool function_pointer_removal_done;
   bool partial_inlining_done;
   bool remove_returns_done;
   
-  goto_modelt goto_model;
-  
   typedef std::unordered_map<irep_idt, symbolt> symbolst;
 
   symbol_tablet symbol_table;
-  irep_idt target_function_name;
-
-  goto_programt original_program;
-
-  goto_programt::targett target_loop_end;
 
 };
 

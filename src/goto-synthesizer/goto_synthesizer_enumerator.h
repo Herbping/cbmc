@@ -21,10 +21,10 @@ public:
   virtual bool enumerate() = 0;
 };
 
-class simple_enumerator : public goto_synthesizer_enumeratort
+class simple_enumeratort : public goto_synthesizer_enumeratort
 {
 public:
-  simple_enumerator(goto_synthesizer_parse_optionst &po)
+  simple_enumeratort(goto_synthesizer_parse_optionst &po)
     : parse_option(po)
   {
   }
