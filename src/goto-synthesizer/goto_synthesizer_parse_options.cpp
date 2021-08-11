@@ -1,15 +1,15 @@
 /*******************************************************************\
 
-Module: Main Module
+Module: Command Line Parsing
 
 Author: Qinheping Hu, qinhh@amazon.com
 
 \*******************************************************************/
 
 /// \file
-/// Main Module
-
+/// Command Line Parsing
 #include "goto_synthesizer_parse_options.h"
+#include "goto_synthesizer_enumerator.h"
 
 #include <fstream>
 #include <iostream>
@@ -23,11 +23,11 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <util/c_types.h>
 #include <util/range.h>
 #include <util/string_constant.h>
+#include <util/unicode.h>
 
 #include <langapi/language_util.h>
 
 #ifdef _MSC_VER
-#  include <util/unicode.h>
 #endif
 
 
@@ -76,16 +76,6 @@ void goto_synthesizer_parse_optionst::register_languages()
 {
   register_language(new_ansi_c_language);
   register_language(new_cpp_language);
-}
-
-exprt goto_synthesizer_parse_optionst::copy_exprt(const exprt &expr)
-{
-  exprt result(expr.id(), expr.type());
-  for(const auto &operand : expr.operands())
-  {
-    result.add_to_operands(operand);
-  }
-  return result;
 }
 
 bool goto_synthesizer_parse_optionst::simple_verification(const exprt &expr)
@@ -176,158 +166,8 @@ bool goto_synthesizer_parse_optionst::simple_verification(const exprt &expr)
 
 bool goto_synthesizer_parse_optionst::call_back(const exprt &expr)
 {
-  return true;
-}
-
-exprt goto_synthesizer_parse_optionst::eterm(int size)
-{
-  if(size == 1)
-  {
-    return nonterminal_E;
-  }
-
-  return plus_exprt(nonterminal_E, eterm(size-1));
-}
-
-exprt goto_synthesizer_parse_optionst::sterm(const irep_idt &id, int size)
-{
-  return binary_relation_exprt(eterm(size), id, eterm(size));
-}
-
-bool goto_synthesizer_parse_optionst::contain_E(const exprt &expr)
-{
-  if(expr == nonterminal_E)
-  {
-    return true;
-  }
-
-  for(const auto &operand : expr.operands()){
-    if(contain_E(operand))
-      return true;
-  } 
-  return false;
-}
-
-bool goto_synthesizer_parse_optionst::is_partial(const exprt &expr)
-{
-  if(expr == nonterminal_S || expr == nonterminal_E)
-  {
-    return true;
-  }
-
-  for(const auto &operand : expr.operands()){
-    if(is_partial(operand))
-      return true;
-  } 
-  return false;
-}
-
-bool goto_synthesizer_parse_optionst::expand_with_symbol(exprt &expr, const exprt &symbol)
-{
-  if(expr == nonterminal_E)
-  {
-    expr = symbol;
-    return true;
-  }
-  for(auto &operand : expr.operands())
-  {
-    if(expand_with_symbol(operand, symbol))
-    {
-      return true;
-    }
-  }
-  return false;
-}
-
-std::queue<exprt> goto_synthesizer_parse_optionst::expand_with_terminals(std::queue<exprt> &exprs)
-{
-  std::queue<exprt> result;
-
-  while(!exprs.empty())
-  {
-    exprt current_expr = exprs.front();
-
-    if(contain_E(current_expr))
-    {
-      for(const auto &symbol : terminal_symbols)
-      {
-        exprt new_expr = copy_exprt(current_expr);
-        expand_with_symbol(new_expr, symbol);
-        exprs.push(new_expr);
-      }
-    }
-    else
-    {
-      result.push(current_expr);
-    }
-
-    exprs.pop();
-  }
-  return result;
-}
-
-bool goto_synthesizer_parse_optionst::simple_enumeration()
-{
-  std::deque<exprt> current_partial_terms;
-
-  // number of clauses in the invariant
-  // depth of each clause
-  int num_clauses = 0;
-  int size_eterm = 0; 
-
-  // limit the search depth?
-  while(true)  
-  {
-    num_clauses++;
-    if(num_clauses % 2 == 1)
-      size_eterm++;
-
-    for(int i = 0; i <= num_clauses; i++)
-    {
-      exprt skeleton = true_exprt();
-      for(int j = 0; j < num_clauses; j++)
-      {
-        if(i > j)
-        {
-          skeleton = and_exprt(skeleton, sterm(ID_equal, size_eterm));
-        }
-        else
-        {
-          skeleton = and_exprt(skeleton, sterm(ID_le, size_eterm));
-        }
-      }
-      current_partial_terms.push_back(skeleton);
-    }
-
-    while(!current_partial_terms.empty())
-    {
-      exprt partial_term = current_partial_terms.front();
-      current_partial_terms.pop_front();
-
-      std::queue<exprt> to_add;
-      if(contain_E(partial_term))
-      {
-        to_add.push(partial_term);
-        to_add = expand_with_terminals(to_add);
-        while(!to_add.empty())
-        {
-          current_partial_terms.push_front(to_add.front());
-          to_add.pop();
-        }
-      }
-      else
-      {
-        if(!is_partial(partial_term))
-        {
-          if(simple_verification(partial_term))
-          {
-            return true;
-          }
-        }
-      }
-
-    }
-  }
+  
+  return simple_verification(expr);
 }
 
 void goto_synthesizer_parse_optionst::extract_exprt(const exprt &expr)
@@ -391,9 +231,8 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
   exprt zero = constant_exprt(irep_idt(dstringt("0")), terminal_symbols[0].type());
   terminal_symbols.push_back(zero);
 
-  nonterminal_S = copy_exprt(nonterminal_S);
-  nonterminal_E = copy_exprt(nonterminal_E);
-  simple_enumeration();
+  simple_enumerator enumerator(*this);  
+  enumerator.enumerate();
 }
 
 void goto_synthesizer_parse_optionst::synthesize_loop_contracts(

@@ -55,6 +55,10 @@ public:
   virtual int doit();
   virtual void help();
 
+  bool call_back(const exprt &expr);  
+  
+  std::vector<exprt> terminal_symbols = {};
+
   goto_synthesizer_parse_optionst(int argc, const char **argv)
     : parse_options_baset(
         GOTO_SYNTHESIZER_OPTIONS,
@@ -82,24 +86,12 @@ protected:
     const goto_programt::targett loop_head,
     const loopt &loop);
   void extract_exprt(const exprt &expr);
-  bool call_back(const exprt &expr);
 
-  exprt copy_exprt(const exprt &expr);
-  exprt eterm(int size);
-  exprt sterm(const irep_idt &id, int size);
-  bool contain_E(const exprt &expr);
-  bool is_partial(const exprt &expr);
-  bool expand_with_symbol(exprt &expr, const exprt &symbol);
-  std::queue<exprt> expand_with_terminals(std::queue<exprt> &expr);
   bool simple_verification(const exprt &candidate);
-  bool simple_enumeration();
   
   bool function_pointer_removal_done;
   bool partial_inlining_done;
   bool remove_returns_done;
-
-  exprt nonterminal_S = exprt(dstringt("ND_S"));
-  exprt nonterminal_E = exprt(dstringt("ND_E"));
   
   goto_modelt goto_model;
   
@@ -110,7 +102,6 @@ protected:
 
   goto_programt original_program;
 
-  std::vector<exprt> terminal_symbols = {};
   goto_programt::targett target_loop_end;
 
 };
