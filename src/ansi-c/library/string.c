@@ -554,7 +554,20 @@ __CPROVER_HIDE:;
 
 #undef strlen
 
-inline size_t strlen(const char *s)
+inline size_t strlen(const char *s)  
+  __CPROVER_requires(s != NULL && 
+    __CPROVER_exists {
+      int i;
+      (0 <= i && i < MAX_BUFFER_SIZE) ==> (i < __CPROVER_OBJECT_SIZE(s)) ==> s[i] == '\0'
+  })
+  __CPROVER_ensures(
+    __CPROVER_return_value < __CPROVER_OBJECT_SIZE(s) &&
+    ((s[0] == '\0' && __CPROVER_return_value == 0) || 
+      (s[__CPROVER_return_value]=='\0' &&  
+        __CPROVER_forall {
+        int i;
+        (0 <= i && i < MAX_BUFFER_SIZE) ==> (i < __CPROVER_return_value) ==> s[i] != '\0'
+  })))
 {
   __CPROVER_HIDE:;
   #ifdef __CPROVER_STRING_ABSTRACTION
