@@ -14,6 +14,9 @@ Author: Qinheping Hu
 
 #include "util/expr.h"
 #include "util/irep.h"
+
+#include <langapi/language_util.h>
+
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -134,7 +137,6 @@ bool simple_enumeratort::enumerate()
     num_clauses++;
     if(num_clauses % 2 == 1)
       size_eterm++;
-
     for(int i = 0; i <= num_clauses; i++)
     {
       exprt skeleton = true_exprt();
@@ -150,35 +152,32 @@ bool simple_enumeratort::enumerate()
         }
       }
       current_partial_terms.push_back(skeleton);
-    }
-
-    while(!current_partial_terms.empty())
-    {
-      exprt partial_term = current_partial_terms.front();
-      current_partial_terms.pop_front();
-
-      std::queue<exprt> to_add;
-      if(contain_E(partial_term))
+      // instantiate skeleton with terminal symbols
+      // and send candidate back to call_back function
+      while(!current_partial_terms.empty())
       {
-        to_add.push(partial_term);
-        to_add = expand_with_terminals(to_add);
-        while(!to_add.empty())
+        exprt partial_term = current_partial_terms.front();
+        current_partial_terms.pop_front();
+
+        std::queue<exprt> to_add;
+        if(contain_E(partial_term))
         {
-          current_partial_terms.push_front(to_add.front());
-          to_add.pop();
+          to_add.push(partial_term);
+          to_add = expand_with_terminals(to_add);
+          while(!to_add.empty())
+          {
+            current_partial_terms.push_front(to_add.front());
+            to_add.pop();
+          }
         }
-      }
-      else
-      {
-        if(!is_partial(partial_term))
+        else
         {
-          if(parse_option.call_back(partial_term))
+          if(!is_partial(partial_term) && parse_option.call_back(partial_term))
           {
             return true;
           }
         }
       }
-
     }
   }
 }
