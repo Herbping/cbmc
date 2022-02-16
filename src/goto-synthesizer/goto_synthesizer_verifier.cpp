@@ -28,7 +28,6 @@ Author: Qinheping Hu
 #ifdef _MSC_VER
 #endif
 
-#include <goto-programs/add_malloc_may_fail_variable_initializations.h>
 #include <goto-programs/initialize_goto_model.h>
 #include <goto-programs/link_to_library.h>
 #include <goto-programs/loop_ids.h>
@@ -49,7 +48,7 @@ Author: Qinheping Hu
 #include <cpp/cpp_language.h>
 
 #include <goto-instrument/loop_utils.h>
-#include <goto-instrument/code_contracts.h>
+#include <goto-instrument/contracts/contracts.h>
 
 #include <cbmc/cbmc_parse_options.h>
 
