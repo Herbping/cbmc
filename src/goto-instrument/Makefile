@@ -16,12 +16,15 @@ SRC = accelerate/accelerate.cpp \
       alignment_checks.cpp \
       branch.cpp \
       call_sequences.cpp \
-      code_contracts.cpp \
+      contracts/assigns.cpp \
+      contracts/memory_predicates.cpp \
+      contracts/contracts.cpp \
       concurrency.cpp \
       count_eloc.cpp \
       cover.cpp \
       cover_basic_blocks.cpp \
       cover_filter.cpp \
+      cover_instrument_assume.cpp \
       cover_instrument_branch.cpp \
       cover_instrument_condition.cpp \
       cover_instrument_decision.cpp \
@@ -41,6 +44,7 @@ SRC = accelerate/accelerate.cpp \
       goto_instrument_parse_options.cpp \
       goto_program2code.cpp \
       havoc_loops.cpp \
+      havoc_utils.cpp \
       horn_encoding.cpp \
       insert_final_assert_false.cpp \
       interrupt.cpp \

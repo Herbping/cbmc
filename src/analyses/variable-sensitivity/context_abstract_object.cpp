@@ -87,7 +87,6 @@ abstract_object_pointert context_abstract_objectt::expression_transform(
   const namespacet &ns) const
 {
   PRECONDITION(expr.operands().size() == operands.size());
-
   std::vector<abstract_object_pointert> child_operands;
 
   std::transform(
@@ -104,6 +103,17 @@ abstract_object_pointert context_abstract_objectt::expression_transform(
   auto result = child_abstract_object->expression_transform(
     expr, child_operands, environment, ns);
   return envelop(result);
+}
+
+abstract_object_pointert context_abstract_objectt::write_location_context(
+  const locationt &location) const
+{
+  auto result = update_location_context_internal({location});
+
+  auto updated_child = child_abstract_object->write_location_context(location);
+  result->set_child(updated_child);
+
+  return result;
 }
 
 abstract_object_pointert
@@ -159,6 +169,11 @@ bool context_abstract_objectt::has_been_modified(
 abstract_object_pointert context_abstract_objectt::unwrap_context() const
 {
   return child_abstract_object->unwrap_context();
+}
+
+exprt context_abstract_objectt::to_predicate_internal(const exprt &name) const
+{
+  return child_abstract_object->to_predicate(name);
 }
 
 void context_abstract_objectt::get_statistics(

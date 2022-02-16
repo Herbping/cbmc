@@ -12,14 +12,17 @@
 #include <analyses/variable-sensitivity/constant_abstract_value.h>
 #include <analyses/variable-sensitivity/interval_abstract_value.h>
 #include <analyses/variable-sensitivity/value_set_abstract_object.h>
+#include <analyses/variable-sensitivity/variable_sensitivity_domain.h>
 
 #include <ansi-c/ansi_c_language.h>
 
 #include <testing-utils/use_catch.h>
 
+#include <util/arith_tools.h>
 #include <util/bitvector_types.h>
 #include <util/mathematical_types.h>
 #include <util/string_utils.h>
+#include <util/symbol_table.h>
 
 std::shared_ptr<const constant_abstract_valuet>
 make_constant(exprt val, abstract_environmentt &env, namespacet &ns)
@@ -138,7 +141,8 @@ as_interval(const abstract_object_pointert &aop)
 std::shared_ptr<const value_set_abstract_objectt>
 as_value_set(const abstract_object_pointert &aop)
 {
-  return std::dynamic_pointer_cast<const value_set_abstract_objectt>(aop);
+  return std::dynamic_pointer_cast<const value_set_abstract_objectt>(
+    aop->unwrap_context());
 }
 
 bool set_contains(const std::vector<exprt> &set, const exprt &val)
@@ -163,6 +167,11 @@ bool set_contains(const abstract_object_sett &set, const exprt &val)
 }
 
 static std::string interval_to_str(const constant_interval_exprt &expr);
+
+exprt to_expr(int v)
+{
+  return from_integer(v, integer_typet());
+}
 
 std::string expr_to_str(const exprt &expr)
 {
@@ -265,10 +274,7 @@ void EXPECT(
   REQUIRE(values.size() == expected_values.size());
 
   for(auto &ev : expected_values)
-  {
-    INFO("Expect " + value_string + " to match " + expected_string);
     REQUIRE(set_contains(values, ev));
-  }
 }
 
 void EXPECT(
@@ -285,6 +291,60 @@ void EXPECT(
     INFO("Expect " + value_string + " to match " + expected_string);
     REQUIRE(set_contains(values, ev));
   }
+}
+
+void EXPECT_INDEX(
+  std::shared_ptr<const abstract_objectt> &result,
+  int index,
+  int expected,
+  abstract_environmentt &environment,
+  namespacet &ns)
+{
+  auto type = signedbv_typet(32);
+  auto index_expr = index_exprt(nil_exprt(), from_integer(index, type));
+  auto expr = result->expression_transform(index_expr, {}, environment, ns)
+                ->to_constant();
+
+  auto expected_expr = from_integer(expected, type);
+  INFO(
+    "Expect array[" + std::to_string(index) +
+    "] == " + std::to_string(expected));
+  REQUIRE(expr_to_str(expr) == expr_to_str(expected_expr));
+}
+
+void EXPECT_INDEX(
+  std::shared_ptr<const abstract_objectt> &result,
+  int index,
+  std::vector<int> expected,
+  abstract_environmentt &environment,
+  namespacet &ns)
+{
+  auto type = signedbv_typet(32);
+  auto index_expr = index_exprt(nil_exprt(), from_integer(index, type));
+  auto value =
+    as_value_set(result->expression_transform(index_expr, {}, environment, ns));
+
+  auto expected_exprs = std::vector<exprt>{};
+  for(int e : expected)
+    expected_exprs.push_back(from_integer(e, type));
+  INFO(
+    "Expect array[" + std::to_string(index) +
+    "] == " + exprs_to_str(expected_exprs));
+  EXPECT(value, expected_exprs);
+}
+
+void EXPECT_INDEX_TOP(
+  std::shared_ptr<const abstract_objectt> &result,
+  int index,
+  abstract_environmentt &environment,
+  namespacet &ns)
+{
+  auto type = signedbv_typet(32);
+  auto index_expr = index_exprt(nil_exprt(), from_integer(index, type));
+  auto value = result->expression_transform(index_expr, {}, environment, ns);
+
+  INFO("Expect array[" + std::to_string(index) + "] to be TOP");
+  REQUIRE(value->is_top());
 }
 
 void EXPECT_UNMODIFIED(
@@ -520,4 +580,36 @@ std::shared_ptr<const value_set_abstract_objectt> add_as_value_set(
   INFO("Result should be a value set")
   REQUIRE(vs);
   return vs;
+}
+
+void THEN_PREDICATE(const abstract_object_pointert &obj, const std::string &out)
+{
+  const auto x_name = symbol_exprt(dstringt("x"), obj->type());
+  auto pred = obj->to_predicate(x_name);
+  THEN("predicate is " + out)
+  {
+    auto repr = expr_to_str(pred);
+    REQUIRE(repr == out);
+  }
+}
+
+void THEN_PREDICATE(const exprt &pred, const std::string &out)
+{
+  THEN("predicate is " + out)
+  {
+    auto repr = expr_to_str(pred);
+    REQUIRE(repr == out);
+  }
+}
+
+void THEN_PREDICATE(const abstract_environmentt &env, const std::string &out)
+{
+  THEN_PREDICATE(env.to_predicate(), out);
+}
+
+void THEN_PREDICATE(
+  const variable_sensitivity_domaint &domain,
+  const std::string &out)
+{
+  THEN_PREDICATE(domain.to_predicate(), out);
 }

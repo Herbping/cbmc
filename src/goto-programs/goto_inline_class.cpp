@@ -18,6 +18,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/cprover_prefix.h>
 #include <util/invariant.h>
 #include <util/std_code.h>
+#include <util/symbol.h>
 
 void goto_inlinet::parameter_assignments(
   const goto_programt::targett target,
@@ -155,7 +156,7 @@ void goto_inlinet::replace_return(
       it!=dest.instructions.end();
       it++)
   {
-    if(it->is_return())
+    if(it->is_set_return_value())
     {
       if(lhs.is_not_nil())
       {
@@ -436,11 +437,9 @@ void goto_inlinet::get_call(
 {
   PRECONDITION(it->is_function_call());
 
-  const code_function_callt &call = it->get_function_call();
-
-  lhs=call.lhs();
-  function=call.function();
-  arguments=call.arguments();
+  lhs = it->call_lhs();
+  function = it->call_function();
+  arguments = it->call_arguments();
 }
 
 /// Inline all of the given call locations.

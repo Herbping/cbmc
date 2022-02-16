@@ -67,6 +67,19 @@ public:
     const class namespacet &ns) const override;
 
   /**
+   * Update the location context for an abstract object.
+   *
+   * \param location the location to be updated
+   *
+   * \return a clone of this abstract object with its location context
+   * updated
+   */
+  abstract_object_pointert
+  write_location_context(const locationt &location) const override;
+  abstract_object_pointert
+  merge_location_context(const locationt &location) const override;
+
+  /**
    * Apply a visitor operation to all sub elements of this abstract_object.
    * A sub element might be a member of a struct, or an element of an array,
    * for instance, but this is entirely determined by the particular
@@ -169,6 +182,8 @@ protected:
   abstract_object_pointert merge(
     const abstract_object_pointert &other,
     const widen_modet &widen_mode) const override;
+
+  exprt to_predicate_internal(const exprt &name) const override;
 };
 
 #endif // CPROVER_ANALYSES_VARIABLE_SENSITIVITY_FULL_STRUCT_ABSTRACT_OBJECT_H

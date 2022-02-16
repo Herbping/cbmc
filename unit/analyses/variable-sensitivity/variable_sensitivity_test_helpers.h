@@ -18,6 +18,7 @@ class constant_abstract_valuet;
 class constant_interval_exprt;
 class interval_abstract_valuet;
 class value_set_abstract_objectt;
+class variable_sensitivity_domaint;
 
 std::shared_ptr<const constant_abstract_valuet>
 make_constant(exprt val, abstract_environmentt &env, namespacet &ns);
@@ -82,6 +83,24 @@ void EXPECT(
 void EXPECT(
   const std::vector<exprt> &values,
   const std::vector<exprt> &expected_values);
+
+void EXPECT_INDEX(
+  std::shared_ptr<const abstract_objectt> &result,
+  int index,
+  int expected,
+  abstract_environmentt &environment,
+  namespacet &ns);
+void EXPECT_INDEX(
+  std::shared_ptr<const abstract_objectt> &result,
+  int index,
+  std::vector<int> expected,
+  abstract_environmentt &environment,
+  namespacet &ns);
+void EXPECT_INDEX_TOP(
+  std::shared_ptr<const abstract_objectt> &result,
+  int index,
+  abstract_environmentt &environment,
+  namespacet &ns);
 
 void EXPECT_TOP(std::shared_ptr<const abstract_objectt> result);
 
@@ -248,7 +267,16 @@ std::shared_ptr<const value_set_abstract_objectt> add_as_value_set(
   abstract_environmentt &environment,
   namespacet &ns);
 
+exprt to_expr(int v);
 std::string expr_to_str(const exprt &expr);
 std::string exprs_to_str(const std::vector<exprt> &values);
+
+void THEN_PREDICATE(
+  const abstract_object_pointert &obj,
+  const std::string &out);
+void THEN_PREDICATE(const abstract_environmentt &env, const std::string &out);
+void THEN_PREDICATE(
+  const variable_sensitivity_domaint &domain,
+  const std::string &out);
 
 #endif

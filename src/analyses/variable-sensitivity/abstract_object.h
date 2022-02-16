@@ -171,6 +171,17 @@ public:
   /// that allows an object to be built from a value.
   virtual exprt to_constant() const;
 
+  /// Converts to an invariant expression
+  ///
+  /// \param name - the variable name to substitute into the expression
+  /// \return Returns an exprt representing the object as an invariant.
+  ///
+  /// The the abstract element represents a single value the expression will
+  /// have the form _name = value_, if the value is an interval it will have the
+  /// the form _lower <= name <= upper_, etc.
+  /// If the value is bottom returns false, if top returns true.
+  exprt to_predicate(const exprt &name) const;
+
   /**
    * A helper function to evaluate writing to a component of an
    * abstract object. More precise abstractions may override this to
@@ -206,7 +217,7 @@ public:
     const class ai_baset &ai,
     const namespacet &ns) const;
 
-  typedef std::set<goto_programt::const_targett> locationst;
+  typedef goto_programt::const_targett locationt;
   typedef sharing_mapt<irep_idt, abstract_object_pointert, false, irep_id_hash>
     shared_mapt;
 
@@ -256,6 +267,11 @@ public:
   static combine_result merge(
     const abstract_object_pointert &op1,
     const abstract_object_pointert &op2,
+    const locationt &merge_location,
+    const widen_modet &widen_mode);
+  static combine_result merge(
+    const abstract_object_pointert &op1,
+    const abstract_object_pointert &op2,
     const widen_modet &widen_mode);
 
   /// Interface method for the meet operation. Decides whether to use the base
@@ -278,19 +294,26 @@ public:
   meet(const abstract_object_pointert &other) const;
 
   /**
-   * Update the location context for an abstract object, potentially
-   * propogating the update to any children of this abstract object.
+   * Update the write location context for an abstract object.
    *
-   * \param locations the set of locations to be updated
-   * \param update_sub_elements if true, propogate the update operation to any
-   * children of this abstract object
+   * \param location the location to be updated
    *
-   * \return a clone of this abstract object with it's location context
+   * \return a clone of this abstract object with its location context
    * updated
    */
-  virtual abstract_object_pointert update_location_context(
-    const locationst &locations,
-    const bool update_sub_elements) const;
+  virtual abstract_object_pointert
+  write_location_context(const locationt &location) const;
+
+  /**
+   * Update the merge location context for an abstract object.
+   *
+   * \param location the location to be updated
+   *
+   * \return a clone of this abstract object with its location context
+   * updated
+   */
+  virtual abstract_object_pointert
+  merge_location_context(const locationt &location) const;
 
   // Const versions must perform copy-on-write
   abstract_object_pointert make_top() const
@@ -322,7 +345,7 @@ public:
   struct abstract_object_visitort
   {
     virtual abstract_object_pointert
-    visit(const abstract_object_pointert element) const = 0;
+    visit(const abstract_object_pointert &element) const = 0;
   };
 
   /**
@@ -351,6 +374,11 @@ public:
   {
     return shared_from_this() == other;
   }
+
+  /// to_predicate implementation - derived classes will override
+  /// \param name - the variable name to substitute into the expression
+  /// \return Returns an exprt representing the object as an invariant.
+  virtual exprt to_predicate_internal(const exprt &name) const;
 
 private:
   /// To enforce copy-on-write these are private and have read-only accessors

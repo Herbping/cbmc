@@ -27,6 +27,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/namespace.h>
 #include <util/pointer_expr.h>
 #include <util/pointer_offset_size.h>
+#include <util/prefix.h>
 #include <util/range.h>
 #include <util/simplify_expr.h>
 #include <util/std_expr.h>
@@ -96,6 +97,7 @@ smt2_convt::smt2_convt(
     break;
 
   case solvert::CVC4:
+    logic = "ALL";
     use_array_of_bool = true;
     use_as_const = true;
     break;
@@ -1369,6 +1371,10 @@ void smt2_convt::convert_expr(const exprt &expr)
   else if(expr.id()==ID_floatbv_mult)
   {
     convert_floatbv_mult(to_ieee_float_op_expr(expr));
+  }
+  else if(expr.id() == ID_floatbv_rem)
+  {
+    convert_floatbv_rem(to_binary_expr(expr));
   }
   else if(expr.id()==ID_address_of)
   {
@@ -3047,6 +3053,11 @@ void smt2_convt::convert_constant(const constant_exprt &expr)
   else if(expr_type.id()==ID_rational)
   {
     std::string value=id2string(expr.get_value());
+    const bool negative = has_prefix(value, "-");
+
+    if(negative)
+      out << "(- ";
+
     size_t pos=value.find("/");
 
     if(pos==std::string::npos)
@@ -3056,10 +3067,19 @@ void smt2_convt::convert_constant(const constant_exprt &expr)
       out << "(/ " << value.substr(0, pos) << ".0 "
                    << value.substr(pos+1) << ".0)";
     }
+
+    if(negative)
+      out << ')';
   }
   else if(expr_type.id()==ID_integer)
   {
-    out << expr.get_value();
+    const auto value = id2string(expr.get_value());
+
+    // SMT2 has no negative integer literals
+    if(has_prefix(value, "-"))
+      out << "(- " << value.substr(1, std::string::npos) << ')';
+    else
+      out << value;
   }
   else
     UNEXPECTEDCASE("unknown constant: "+expr_type.id_string());
@@ -3721,6 +3741,29 @@ void smt2_convt::convert_floatbv_mult(const ieee_float_op_exprt &expr)
   }
   else
     convert_floatbv(expr);
+}
+
+void smt2_convt::convert_floatbv_rem(const binary_exprt &expr)
+{
+  DATA_INVARIANT(
+    expr.type().id() == ID_floatbv,
+    "type of ieee floating point expression shall be floatbv");
+
+  if(use_FPA_theory)
+  {
+    // Note that these do not have a rounding mode
+    out << "(fp.rem ";
+    convert_expr(expr.lhs());
+    out << " ";
+    convert_expr(expr.rhs());
+    out << ")";
+  }
+  else
+  {
+    SMT2_TODO(
+      "smt2_convt::convert_floatbv_rem to be implemented when not using "
+      "FPA_theory");
+  }
 }
 
 void smt2_convt::convert_with(const with_exprt &expr)

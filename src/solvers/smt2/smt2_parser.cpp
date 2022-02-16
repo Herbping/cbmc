@@ -345,11 +345,9 @@ exprt smt2_parsert::cast_bv_to_unsigned(const exprt &expr)
   return typecast_exprt(expr, unsignedbv_typet(width));
 }
 
-exprt smt2_parsert::multi_ary(irep_idt id, const exprt::operandst &op)
+void smt2_parsert::check_matching_operand_types(
+  const exprt::operandst &op) const
 {
-  if(op.empty())
-    throw error("expression must have at least one operand");
-
   for(std::size_t i = 1; i < op.size(); i++)
   {
     if(op[i].type() != op[0].type())
@@ -360,6 +358,14 @@ exprt smt2_parsert::multi_ary(irep_idt id, const exprt::operandst &op)
                     << smt2_format(op[i].type()) << '\'';
     }
   }
+}
+
+exprt smt2_parsert::multi_ary(irep_idt id, const exprt::operandst &op)
+{
+  if(op.empty())
+    throw error("expression must have at least one operand");
+
+  check_matching_operand_types(op);
 
   exprt result(id, op[0].type());
   result.operands() = op;
@@ -371,13 +377,7 @@ exprt smt2_parsert::binary_predicate(irep_idt id, const exprt::operandst &op)
   if(op.size()!=2)
     throw error("expression must have two operands");
 
-  if(op[0].type() != op[1].type())
-  {
-    throw error() << "expression must have operands with matching types,"
-                     " but got '"
-                  << smt2_format(op[0].type()) << "' and '"
-                  << smt2_format(op[1].type()) << '\'';
-  }
+  check_matching_operand_types(op);
 
   return binary_predicate_exprt(op[0], id, op[1]);
 }
@@ -395,8 +395,7 @@ exprt smt2_parsert::binary(irep_idt id, const exprt::operandst &op)
   if(op.size()!=2)
     throw error("expression must have two operands");
 
-  if(op[0].type() != op[1].type())
-    throw error("expression must have operands with matching types");
+  check_matching_operand_types(op);
 
   return binary_exprt(op[0], id, op[1], op[0].type());
 }
@@ -471,9 +470,19 @@ exprt smt2_parsert::function_application_fp(const exprt::operandst &op)
   const auto width_f = to_unsignedbv_type(op[2].type()).get_width();
 
   // stitch the bits together
+  const auto concat_type = unsignedbv_typet(width_f + width_e + 1);
+
+  // We need a bitvector type without numerical interpretation
+  // to do this conversion.
+  const auto bv_type = bv_typet(concat_type.get_width());
+
+  // The target type
+  const auto fp_type = ieee_float_spect(width_f, width_e).to_type();
+
   return typecast_exprt(
-    concatenation_exprt(exprt::operandst(op), bv_typet(width_f + width_e + 1)),
-    ieee_float_spect(width_f, width_e).to_type());
+    typecast_exprt(
+      concatenation_exprt(exprt::operandst(op), concat_type), bv_type),
+    fp_type);
 }
 
 exprt smt2_parsert::function_application()
@@ -904,7 +913,7 @@ exprt smt2_parsert::bv_division(
 
   return let_exprt(
     {divisor},
-    {operands[1]},
+    operands[1],
     if_exprt(divisor_is_zero, all_ones, division_result));
 }
 
@@ -1278,6 +1287,27 @@ void smt2_parsert::setup_expressions()
     return function_application_ieee_float_op("fp.div", operands());
   };
 
+  expressions["fp.rem"] = [this] {
+    auto op = operands();
+
+    // Note that these do not have a rounding mode.
+    if(op.size() != 2)
+      throw error() << "fp.rem takes three operands";
+
+    if(op[0].type().id() != ID_floatbv || op[1].type().id() != ID_floatbv)
+      throw error() << "fp.rem takes FloatingPoint operands";
+
+    if(op[0].type() != op[1].type())
+    {
+      throw error()
+        << "fp.rem takes FloatingPoint operands with matching sort, "
+        << "but got " << smt2_format(op[0].type()) << " vs "
+        << smt2_format(op[1].type());
+    }
+
+    return binary_exprt(op[0], ID_floatbv_rem, op[1]);
+  };
+
   expressions["fp.eq"] = [this] {
     return function_application_ieee_float_eq(operands());
   };
@@ -1373,6 +1403,19 @@ void smt2_parsert::setup_sorts()
   sorts["Bool"] = [] { return bool_typet(); };
   sorts["Int"] = [] { return integer_typet(); };
   sorts["Real"] = [] { return real_typet(); };
+
+  sorts["Float16"] = [] {
+    return ieee_float_spect::half_precision().to_type();
+  };
+  sorts["Float32"] = [] {
+    return ieee_float_spect::single_precision().to_type();
+  };
+  sorts["Float64"] = [] {
+    return ieee_float_spect::double_precision().to_type();
+  };
+  sorts["Float128"] = [] {
+    return ieee_float_spect::quadruple_precision().to_type();
+  };
 
   sorts["BitVec"] = [this] {
     if(next_token() != smt2_tokenizert::NUMERAL)

@@ -67,30 +67,6 @@ public:
 
   bool has_been_modified(const abstract_object_pointert &before) const override;
 
-  abstract_object_pointert update_location_context(
-    const abstract_objectt::locationst &locations,
-    const bool update_sub_elements) const override;
-
-  // A visitor class to update the last_written_locations of any visited
-  // abstract_object with a given set of locations.
-  class location_update_visitort
-    : public abstract_objectt::abstract_object_visitort
-  {
-  public:
-    explicit location_update_visitort(const locationst &locations)
-      : locations(locations)
-    {
-    }
-
-    abstract_object_pointert visit(const abstract_object_pointert element) const
-    {
-      return element->update_location_context(locations, true);
-    }
-
-  private:
-    const locationst &locations;
-  };
-
   locationst get_location_union(const locationst &locations) const;
 
   void output(std::ostream &out, const class ai_baset &ai, const namespacet &ns)
@@ -116,11 +92,11 @@ protected:
     const abstract_object_pointert &value,
     bool merging_write) const override;
 
-  static void output_last_written_locations(
-    std::ostream &out,
-    const abstract_objectt::locationst &locations);
+  static void
+  output_last_written_locations(std::ostream &out, const locationst &locations);
 
-  virtual abstract_objectt::locationst get_last_written_locations() const;
+  virtual locationst get_last_written_locations() const;
+  void set_last_written_locations(const locationst &locations);
 
 private:
   using combine_fn = std::function<abstract_objectt::combine_result(
@@ -133,10 +109,10 @@ private:
   combine(const write_location_context_ptrt &other, combine_fn fn) const;
 
   // To enforce copy-on-write these are private and have read-only accessors
-  abstract_objectt::locationst last_written_locations;
+  locationst last_written_locations;
 
-  void
-  set_last_written_locations(const abstract_objectt::locationst &locations);
+  context_abstract_object_ptrt
+  update_location_context_internal(const locationst &locations) const override;
 };
 
 #endif // CPROVER_ANALYSES_VARIABLE_SENSITIVITY_WRITE_LOCATION_CONTEXT_H

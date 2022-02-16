@@ -61,6 +61,19 @@ public:
     const override;
 
   /**
+   * Update the location context for an abstract object.
+   *
+   * \param location the location to be updated
+   *
+   * \return a clone of this abstract object with its location context
+   * updated
+   */
+  abstract_object_pointert
+  write_location_context(const locationt &location) const override;
+  abstract_object_pointert
+  merge_location_context(const locationt &location) const override;
+
+  /**
    * Apply a visitor operation to all sub elements of this abstract_object.
    * A sub element might be a member of a struct, or an element of an array,
    * for instance, but this is entirely determined by the particular
@@ -190,6 +203,15 @@ private:
 
   shared_array_mapt map;
 
+  void map_put(
+    mp_integer index,
+    const abstract_object_pointert &value,
+    bool overrun);
+  abstract_object_pointert map_find_or_top(
+    mp_integer index,
+    const abstract_environmentt &env,
+    const namespacet &ns) const;
+
   /// Short hand method for creating a top element of the array
   ///
   /// \param env: the abstract environment
@@ -212,6 +234,8 @@ private:
   abstract_object_pointert full_array_merge(
     const full_array_pointert &other,
     const widen_modet &widen_mode) const;
+
+  exprt to_predicate_internal(const exprt &name) const override;
 };
 
 #endif // CPROVER_ANALYSES_VARIABLE_SENSITIVITY_FULL_ARRAY_ABSTRACT_OBJECT_H

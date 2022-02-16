@@ -9,8 +9,12 @@
 #include <analyses/variable-sensitivity/abstract_environment.h>
 #include <analyses/variable-sensitivity/abstract_object_statistics.h>
 #include <analyses/variable-sensitivity/variable_sensitivity_object_factory.h>
+
 #include <util/expr_util.h>
 #include <util/simplify_expr.h>
+#include <util/simplify_expr_class.h>
+#include <util/simplify_utils.h>
+#include <util/symbol_table.h>
 
 #include <algorithm>
 #include <map>
@@ -45,13 +49,46 @@ static exprt assume_greater_than(
   const exprt &expr,
   const namespacet &ns);
 
-abstract_value_pointert as_value(const abstract_object_pointert &obj);
-bool is_value(const abstract_object_pointert &obj);
+static abstract_value_pointert as_value(const abstract_object_pointert &obj);
+static bool is_value(const abstract_object_pointert &obj);
 
 std::vector<abstract_object_pointert> eval_operands(
   const exprt &expr,
   const abstract_environmentt &env,
   const namespacet &ns);
+
+bool is_ptr_diff(const exprt &expr)
+{
+  return (expr.id() == ID_minus) &&
+         (expr.operands()[0].type().id() == ID_pointer) &&
+         (expr.operands()[1].type().id() == ID_pointer);
+}
+
+bool is_ptr_comparison(const exprt &expr)
+{
+  auto const &id = expr.id();
+  bool is_comparison = id == ID_equal || id == ID_notequal || id == ID_lt ||
+                       id == ID_le || id == ID_gt || id == ID_ge;
+
+  return is_comparison && (expr.operands()[0].type().id() == ID_pointer) &&
+         (expr.operands()[1].type().id() == ID_pointer);
+}
+
+static bool is_access_expr(const irep_idt &id)
+{
+  return id == ID_member || id == ID_index || id == ID_dereference;
+}
+
+static bool is_object_creation(const irep_idt &id)
+{
+  return id == ID_array || id == ID_struct || id == ID_constant ||
+         id == ID_address_of;
+}
+
+static bool is_dynamic_allocation(const exprt &expr)
+{
+  return expr.id() == ID_side_effect && expr.get(ID_statement) == ID_allocate;
+}
 
 abstract_object_pointert
 abstract_environmentt::eval(const exprt &expr, const namespacet &ns) const
@@ -67,35 +104,32 @@ abstract_environmentt::eval(const exprt &expr, const namespacet &ns) const
     return resolve_symbol(simplified_expr, ns);
 
   if(
-    simplified_id == ID_member || simplified_id == ID_index ||
-    simplified_id == ID_dereference)
+    is_access_expr(simplified_id) || is_ptr_diff(simplified_expr) ||
+    is_ptr_comparison(simplified_expr))
   {
-    auto access_expr = simplified_expr;
-    auto target = eval(access_expr.operands()[0], ns);
+    auto const operands = eval_operands(simplified_expr, *this, ns);
+    auto const &target = operands.front();
 
-    return target->expression_transform(
-      access_expr, eval_operands(access_expr, *this, ns), *this, ns);
+    return target->expression_transform(simplified_expr, operands, *this, ns);
   }
 
-  if(
-    simplified_id == ID_array || simplified_id == ID_struct ||
-    simplified_id == ID_constant || simplified_id == ID_address_of)
-  {
+  if(is_object_creation(simplified_id))
     return abstract_object_factory(simplified_expr.type(), simplified_expr, ns);
-  }
+
+  if(is_dynamic_allocation(simplified_expr))
+    return abstract_object_factory(
+      typet(ID_dynamic_object),
+      exprt(ID_dynamic_object, simplified_expr.type()),
+      ns);
 
   // No special handling required by the abstract environment
   // delegate to the abstract object
   if(!simplified_expr.operands().empty())
-  {
     return eval_expression(simplified_expr, ns);
-  }
-  else
-  {
-    // It is important that this is top as the abstract object may not know
-    // how to handle the expression
-    return abstract_object_factory(simplified_expr.type(), ns, true, false);
-  }
+
+  // It is important that this is top as the abstract object may not know
+  // how to handle the expression
+  return abstract_object_factory(simplified_expr.type(), ns, true, false);
 }
 
 abstract_object_pointert abstract_environmentt::resolve_symbol(
@@ -306,14 +340,14 @@ abstract_object_pointert abstract_environmentt::abstract_object_factory(
     type, top, bttm, e, environment, ns);
 }
 
-abstract_object_pointert abstract_environmentt::add_object_context(
-  const abstract_object_pointert &abstract_object) const
+const vsd_configt &abstract_environmentt::configuration() const
 {
-  return object_factory->wrap_with_context(abstract_object);
+  return object_factory->config();
 }
 
 bool abstract_environmentt::merge(
   const abstract_environmentt &env,
+  const goto_programt::const_targett &merge_location,
   widen_modet widen_mode)
 {
   // for each entry in the incoming environment we need to either add it
@@ -332,8 +366,9 @@ bool abstract_environmentt::merge(
   bool modified = false;
   for(const auto &entry : env.map.get_delta_view(map))
   {
-    auto merge_result =
-      abstract_objectt::merge(entry.get_other_map_value(), entry.m, widen_mode);
+    auto merge_result = abstract_objectt::merge(
+      entry.get_other_map_value(), entry.m, merge_location, widen_mode);
+
     modified |= merge_result.modified;
     map.replace(entry.k, merge_result.object);
   }
@@ -377,22 +412,43 @@ void abstract_environmentt::output(
 {
   out << "{\n";
 
-  decltype(map)::viewt view;
-  map.get_view(view);
-  for(const auto &entry : view)
+  for(const auto &entry : map.get_view())
   {
     out << entry.first << " () -> ";
     entry.second->output(out, ai, ns);
     out << "\n";
   }
+
   out << "}\n";
+}
+
+exprt abstract_environmentt::to_predicate() const
+{
+  if(is_bottom())
+    return false_exprt();
+  if(is_top())
+    return true_exprt();
+
+  exprt::operandst predicates;
+  for(const auto &entry : map.get_view())
+  {
+    auto sym = entry.first;
+    auto val = entry.second;
+    auto pred = val->to_predicate(symbol_exprt(sym, val->type()));
+
+    predicates.push_back(pred);
+  }
+
+  if(predicates.size() == 1)
+    return predicates.front();
+
+  sort_operands(predicates);
+  return and_exprt(predicates);
 }
 
 bool abstract_environmentt::verify() const
 {
-  decltype(map)::viewt view;
-  map.get_view(view);
-  for(const auto &entry : view)
+  for(const auto &entry : map.get_view())
   {
     if(entry.second == nullptr)
     {
@@ -429,9 +485,7 @@ abstract_environmentt::modified_symbols(
 {
   // Find all symbols who have different write locations in each map
   std::vector<abstract_environmentt::map_keyt> symbols_diff;
-  decltype(first.map)::viewt view;
-  first.map.get_view(view);
-  for(const auto &entry : view)
+  for(const auto &entry : first.map.get_view())
   {
     const auto &second_entry = second.map.find(entry.first);
     if(second_entry.has_value())
@@ -474,10 +528,8 @@ abstract_environmentt::gather_statistics(const namespacet &ns) const
 {
   abstract_object_statisticst statistics = {};
   statistics.number_of_globals = count_globals(ns);
-  decltype(map)::viewt view;
-  map.get_view(view);
   abstract_object_visitedt visited;
-  for(auto const &object : view)
+  for(auto const &object : map.get_view())
   {
     if(visited.find(object.second) == visited.end())
     {
@@ -520,7 +572,7 @@ static auto inverse_operations =
                                {ID_ge, ID_lt},
                                {ID_gt, ID_le}};
 
-exprt invert_result(const exprt &result)
+static exprt invert_result(const exprt &result)
 {
   if(!result.is_boolean())
     return result;
@@ -530,7 +582,7 @@ exprt invert_result(const exprt &result)
   return true_exprt();
 }
 
-exprt invert_expr(const exprt &expr)
+static exprt invert_expr(const exprt &expr)
 {
   auto expr_id = expr.id();
 
@@ -563,7 +615,7 @@ exprt assume_not(
   const exprt &expr,
   const namespacet &ns)
 {
-  auto not_expr = to_not_expr(expr);
+  auto const &not_expr = to_not_expr(expr);
 
   auto inverse_expression = invert_expr(not_expr.op());
   if(inverse_expression.is_not_nil())

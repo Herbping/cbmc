@@ -3,10 +3,15 @@
 int *x;
 int y;
 
+struct blob
+{
+  int allocated;
+};
 struct buf
 {
   int *data;
   size_t len;
+  struct blob aux;
 };
 
 void foo1(int a) __CPROVER_assigns(a)
@@ -40,8 +45,7 @@ void foo5(struct buf buffer) __CPROVER_assigns(buffer)
   buffer.len = 0;
 }
 
-void foo6(struct buf *buffer)
-  __CPROVER_assigns(buffer->data, *(buffer->data), buffer->len)
+void foo6(struct buf *buffer) __CPROVER_assigns(buffer->data, buffer->len)
 {
   buffer->data = malloc(sizeof(*(buffer->data)));
   *(buffer->data) = 1;
@@ -76,9 +80,10 @@ void foo9(int array[]) __CPROVER_assigns(array)
 }
 
 void foo10(struct buf *buffer) __CPROVER_requires(buffer != NULL)
-  __CPROVER_assigns(*buffer)
+  __CPROVER_assigns(buffer->len, buffer->aux.allocated)
 {
   buffer->len = 0;
+  buffer->aux.allocated = 0;
 }
 
 int main()

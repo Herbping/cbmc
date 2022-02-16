@@ -10,6 +10,7 @@
 
 #include <analyses/variable-sensitivity/abstract_environment.h>
 
+#include <util/mathematical_types.h>
 #include <util/simplify_expr.h>
 #include <util/std_expr.h>
 
@@ -102,6 +103,12 @@ abstract_object_pointert abstract_objectt::abstract_object_meet_internal(
   return shared_from_this();
 }
 
+static bool is_pointer_addition(const exprt &expr)
+{
+  return (expr.id() == ID_plus) && (expr.type().id() == ID_pointer) &&
+         (expr.operands().size() == 2) && is_number(expr.operands()[1].type());
+}
+
 abstract_object_pointert abstract_objectt::expression_transform(
   const exprt &expr,
   const std::vector<abstract_object_pointert> &operands,
@@ -117,7 +124,8 @@ abstract_object_pointert abstract_objectt::expression_transform(
     op = const_op.is_nil() ? op : const_op;
   }
 
-  simplify(copy, ns);
+  if(!is_pointer_addition(copy))
+    copy = simplify_expr(copy, ns);
 
   for(const exprt &op : copy.operands())
   {
@@ -164,6 +172,21 @@ exprt abstract_objectt::to_constant() const
   return nil_exprt();
 }
 
+exprt abstract_objectt::to_predicate(const exprt &name) const
+{
+  if(is_top())
+    return true_exprt();
+  if(is_bottom())
+    return false_exprt();
+  return to_predicate_internal(name);
+}
+
+exprt abstract_objectt::to_predicate_internal(const exprt &name) const
+{
+  UNREACHABLE;
+  return nil_exprt();
+}
+
 void abstract_objectt::output(
   std::ostream &out,
   const ai_baset &ai,
@@ -186,11 +209,25 @@ void abstract_objectt::output(
 abstract_objectt::combine_result abstract_objectt::merge(
   const abstract_object_pointert &op1,
   const abstract_object_pointert &op2,
+  const locationt &merge_location,
+  const widen_modet &widen_mode)
+{
+  abstract_object_pointert result = merge(op1, op2, widen_mode).object;
+  result = result->merge_location_context(merge_location);
+
+  // If no modifications, we will return the original pointer
+  return {result, result != op1};
+}
+
+abstract_objectt::combine_result abstract_objectt::merge(
+  const abstract_object_pointert &op1,
+  const abstract_object_pointert &op2,
   const widen_modet &widen_mode)
 {
   abstract_object_pointert result = op1->should_use_base_merge(op2)
                                       ? op1->abstract_object_merge(op2)
                                       : op1->merge(op2, widen_mode);
+
   // If no modifications, we will return the original pointer
   return {result, result != op1};
 }
@@ -218,9 +255,14 @@ bool abstract_objectt::should_use_base_meet(
   return is_bottom() || is_top() || other->is_bottom() || other->is_top();
 }
 
-abstract_object_pointert abstract_objectt::update_location_context(
-  const locationst &locations,
-  const bool update_sub_elements) const
+abstract_object_pointert
+abstract_objectt::write_location_context(const locationt &location) const
+{
+  return shared_from_this();
+}
+
+abstract_object_pointert
+abstract_objectt::merge_location_context(const locationt &location) const
 {
   return shared_from_this();
 }
