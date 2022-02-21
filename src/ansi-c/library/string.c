@@ -555,7 +555,7 @@ __CPROVER_HIDE:;
 #undef strlen
 
 inline size_t strlen(const char *s)  
-{
+ {
   __CPROVER_HIDE:;
   #ifdef __CPROVER_STRING_ABSTRACTION
   __CPROVER_precondition(__CPROVER_is_zero_string(s),
