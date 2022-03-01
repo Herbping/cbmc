@@ -24,8 +24,9 @@ public:
 class simple_verifiert : public goto_synthesizer_verifiert
 {
 public:
-  simple_verifiert(goto_synthesizer_parse_optionst &po)
-    : parse_option(po)
+  simple_verifiert(goto_synthesizer_parse_optionst &po, ui_message_handlert &umh)
+    : parse_option(po),
+      ui_message_handler(umh)
   {
   }
 
@@ -36,6 +37,8 @@ protected:
 
   goto_programt original_program;
   goto_programt::targett target_loop_end;
+
+  ui_message_handlert &ui_message_handler;
 
 };
 

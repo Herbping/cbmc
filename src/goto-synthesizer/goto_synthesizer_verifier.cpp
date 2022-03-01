@@ -23,6 +23,9 @@ Author: Qinheping Hu
 #include <util/string_constant.h>
 #include <util/unicode.h>
 
+#include <cpp/cprover_library.h>
+#include <ansi-c/cprover_library.h>
+
 #include <langapi/language_util.h>
 
 #ifdef _MSC_VER
@@ -79,7 +82,7 @@ bool simple_verifiert::verify(const exprt &expr)
   natural_loops_mutablet natural_loops(parse_option.goto_model.goto_functions.function_map[parse_option.target_function_name].body);
 
   // Iterate over the (natural) loops in the function,
-  // and syntehsize loop invaraints.
+  // to find the target loop end
   for(const auto &loop : natural_loops.loop_map)
   {
     goto_programt::targett loop_end = loop.first;
@@ -110,6 +113,7 @@ bool simple_verifiert::verify(const exprt &expr)
   cont.apply_loop_contracts();
 
 
+
   optionst options;
   // Default true
   options.set_option("built-in-assertions", true);
@@ -124,21 +128,31 @@ bool simple_verifiert::verify(const exprt &expr)
   options.set_option("show-array-constraints", false);
   options.set_option("assertions", true);
   options.set_option("assumptions", true);
+  //options.set_option("pointer-check", true);
 
   // Other default
   options.set_option("arrays-uf", "auto");
+  options.set_option("depth", UINT32_MAX);
 
+  link_to_library(
+    parse_option.goto_model, ui_message_handler, cprover_cpp_library_factory);
+  link_to_library(
+    parse_option.goto_model, ui_message_handler, cprover_c_library_factory);
   process_goto_program(parse_option.goto_model,options,null_log);
-
-
+  remove_skip(parse_option.goto_model);
   label_properties(parse_option.goto_model);
+
+
+  //show_goto_functions(      parse_option.goto_model, ui_message_handler, false);
 
   std::unique_ptr<goto_verifiert> verifier = nullptr;
   verifier = util_make_unique<
         all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>(
-        options, ui_null_message, parse_option.goto_model);
+        options, ui_message_handler, parse_option.goto_model);
   
   const resultt result = (*verifier)();
+
+  verifier->report();
 
   parse_option.goto_model.goto_functions.function_map[parse_option.target_function_name].body.swap(original_program);
   return (result == resultt::PASS);

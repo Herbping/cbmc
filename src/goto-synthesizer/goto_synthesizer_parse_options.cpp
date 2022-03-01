@@ -58,7 +58,7 @@ void goto_synthesizer_parse_optionst::register_languages()
 
 bool goto_synthesizer_parse_optionst::call_back(const exprt &expr)
 {
-  simple_verifiert v(*this);
+  simple_verifiert v(*this, this->ui_message_handler);
   log.status() << "Candidate :" << from_expr(expr) << messaget::eom;
   if(v.verify(expr))
   {
@@ -234,7 +234,7 @@ void goto_synthesizer_parse_optionst::get_goto_program()
 void goto_synthesizer_parse_optionst::help()
 {
   // clang-format off
-  std::cout << '\n' << banner_string("Goto-Synthesizer", CBMC_VERSION) << '\n'
+  std::cout << '\n' << banner_string("InvSynthesizer", CBMC_VERSION) << '\n'
             << align_center_with_border("Copyright (C) 2008-2013") << '\n'
             << align_center_with_border("Qinheping Hu") << '\n'
             << align_center_with_border("qinhh@amazon.com") << '\n'
