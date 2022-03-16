@@ -36,6 +36,8 @@ Author: Qinheping Hu, qinhh@amazon.com
   OPT_TIMESTAMP \
   "(validate-goto-binary)" \
   OPT_VALIDATE \
+  "(deductive)"\
+  "(hybrid)"\
   // empty last line
 
 // clang-format on
@@ -60,7 +62,9 @@ public:
         "goto-synthesizer"),
       function_pointer_removal_done(false),
       partial_inlining_done(false),
-      remove_returns_done(false)
+      remove_returns_done(false),
+      deductive(false),
+      hybrid(false)
   {
   }
 
@@ -83,6 +87,9 @@ protected:
   bool function_pointer_removal_done;
   bool partial_inlining_done;
   bool remove_returns_done;
+
+  bool deductive;
+  bool hybrid;
   
   typedef std::unordered_map<irep_idt, symbolt> symbolst;
 

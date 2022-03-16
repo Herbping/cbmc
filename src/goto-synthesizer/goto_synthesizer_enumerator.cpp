@@ -125,8 +125,8 @@ bool simple_enumeratort::enumerate()
   // number of clauses in the invariant
   // depth of each clause
 
-  nonterminal_S = copy_exprt(nonterminal_S);
-  nonterminal_E = copy_exprt(nonterminal_E);
+  // nonterminal_S = copy_exprt(nonterminal_S);
+  // nonterminal_E = copy_exprt(nonterminal_E);
 
   int num_clauses = 0;
   int size_eterm = 0; 
@@ -144,7 +144,7 @@ bool simple_enumeratort::enumerate()
       {
         if(i > j)
         {
-          skeleton = and_exprt(skeleton, sterm(ID_equal, size_eterm));
+          skeleton = and_exprt(skeleton, sterm(ID_lt, size_eterm));
         }
         else
         {
@@ -176,6 +176,8 @@ bool simple_enumeratort::enumerate()
           {
             return true;
           }
+          // TODO delete here later
+          //return true;
         }
       }
     }

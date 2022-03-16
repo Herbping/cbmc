@@ -59,7 +59,6 @@ void goto_synthesizer_parse_optionst::register_languages()
 bool goto_synthesizer_parse_optionst::call_back(const exprt &expr)
 {
   simple_verifiert v(*this, this->ui_message_handler);
-  log.status() << "Candidate :" << from_expr(expr) << messaget::eom;
   if(v.verify(expr))
   {
     log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
@@ -90,8 +89,8 @@ void goto_synthesizer_parse_optionst::extract_exprt(const exprt &expr)
       if(expr == symbol)
         return;
     }
-    log.status() << from_expr(expr) << messaget::eom;
-    log.status() << expr.type().pretty() << messaget::eom;
+    // log.status() << from_expr(expr) << messaget::eom;
+    // log.status() << expr.type().pretty() << messaget::eom;
     if(expr.type() == bitvector_typet(ID_signedbv,32) || expr.type() == bitvector_typet(ID_unsignedbv,32))
       terminal_symbols.push_back(expr);
   }
@@ -117,6 +116,7 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
       t->location_number > loop_end->location_number)
       loop_end = t;
 
+    /*
     if(t->is_assign())
     {
       extract_exprt(t->assign_lhs());
@@ -127,14 +127,87 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
     {
       extract_exprt(t->get_condition());
     }
+    */
   }
 
   // add the constant 0 to terminal_symbols
-  exprt zero = constant_exprt(irep_idt(dstringt("0")), terminal_symbols[0].type());
+
+  simple_verifiert v(*this, this->ui_message_handler);
+  log.status() << "Candidate :" << from_expr(true_exprt()) << messaget::eom;
+  if(v.verify(true_exprt()))
+  {
+    log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
+    return;
+  }
+  else
+  {
+    log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
+  }
+
+  typet idx_type;
+  std::cout << "start to construct \n";
+  for(exprt lhs: v.return_cex.live_lhs)
+  {
+    if(lhs.type().id() == ID_unsignedbv)
+    {
+      terminal_symbols.push_back(lhs);
+      idx_type = lhs.type();
+    }
+    if((lhs.type().id() == ID_pointer))
+    {
+      terminal_symbols.push_back(unary_exprt(ID_object_size, lhs, size_type()));
+    }
+  }
+  
+  exprt zero = from_integer(0, idx_type);
   terminal_symbols.push_back(zero);
 
-  simple_enumeratort enumerator(*this);  
-  enumerator.enumerate();
+  if(deductive)
+  {
+    exprt offset;
+    exprt deref_object;
+    for(exprt lhs : v.return_cex.live_lhs)
+    {
+      if(lhs.get(ID_identifier) == v.offset.get(ID_identifier))
+        offset = lhs;
+      if(lhs.get(ID_identifier) == v.dereferenced_object.get(ID_identifier))
+        deref_object = lhs;
+    }
+    std::cout << "=============\n";
+    std::cout << from_expr(and_exprt(less_than_or_equal_exprt(zero, offset), less_than_or_equal_exprt(offset, unary_exprt(ID_object_size, deref_object)))) << "\n";
+    
+    simple_verifiert v2(*this, this->ui_message_handler);
+    if(v2.verify(and_exprt(less_than_or_equal_exprt(zero, offset), less_than_exprt(offset, unary_exprt(ID_object_size, deref_object,size_type())))))
+    {
+      log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
+      return;
+    }
+    else
+    {
+      log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
+    }
+  }
+  else if(hybrid)
+  {
+    for(exprt candidate : terminal_symbols)
+    {
+      simple_verifiert v2(*this, this->ui_message_handler);
+      if(v2.verify(and_exprt(less_than_or_equal_exprt(zero, candidate), less_than_exprt(candidate, unary_exprt(ID_object_size, v.dereferenced_object,size_type())))))
+      {
+        log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
+        return;
+      }
+      else
+      {
+        log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
+      }
+    }
+  }
+  else
+  {
+    simple_enumeratort enumerator(*this);  
+    enumerator.enumerate();
+  }
 }
 
 void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
@@ -171,7 +244,7 @@ int goto_synthesizer_parse_optionst::doit()
     return CPROVER_EXIT_SUCCESS;
   }
 
-  if(cmdline.args.size()!=1 && cmdline.args.size()!=2)
+  if(cmdline.args.size()!=1 && cmdline.args.size()!=2 && cmdline.args.size()!=3)
   {
     help();
     return CPROVER_EXIT_USAGE_ERROR;
@@ -202,6 +275,12 @@ int goto_synthesizer_parse_optionst::doit()
     }
 
     symbol_table = goto_model.symbol_table;
+
+    if(cmdline.isset("deductive"))
+      deductive = true;
+    
+    if(cmdline.isset("hybrid"))
+      hybrid = true;
 
     synthesize_loop_contracts(goto_model.goto_functions);
     return CPROVER_EXIT_SUCCESS;
