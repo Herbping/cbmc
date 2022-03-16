@@ -159,13 +159,14 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
     }
   }
   
-  exprt zero = from_integer(0, idx_type);
-  terminal_symbols.push_back(zero);
+  exprt one = from_integer(1, idx_type);
+  terminal_symbols.push_back(one);
 
   if(deductive)
   {
-    exprt offset;
-    exprt deref_object;
+    exprt offset = v.offset;
+    exprt deref_object = v.dereferenced_object;
+    /*
     for(exprt lhs : v.return_cex.live_lhs)
     {
       if(lhs.get(ID_identifier) == v.offset.get(ID_identifier))
@@ -173,11 +174,12 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
       if(lhs.get(ID_identifier) == v.dereferenced_object.get(ID_identifier))
         deref_object = lhs;
     }
+    */
     std::cout << "=============\n";
-    std::cout << from_expr(and_exprt(less_than_or_equal_exprt(zero, offset), less_than_or_equal_exprt(offset, unary_exprt(ID_object_size, deref_object)))) << "\n";
+    std::cout << from_expr(and_exprt(less_than_or_equal_exprt(one, offset), less_than_exprt(offset, unary_exprt(ID_object_size, deref_object)))) << "\n";
     
     simple_verifiert v2(*this, this->ui_message_handler);
-    if(v2.verify(and_exprt(less_than_or_equal_exprt(zero, offset), less_than_exprt(offset, unary_exprt(ID_object_size, deref_object,size_type())))))
+    if(v2.verify(and_exprt(less_than_or_equal_exprt(one, offset), less_than_exprt(offset, plus_exprt(one, unary_exprt(ID_object_size, deref_object,size_type()))))))
     {
       log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
       return;
@@ -192,7 +194,7 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
     for(exprt candidate : terminal_symbols)
     {
       simple_verifiert v2(*this, this->ui_message_handler);
-      if(v2.verify(and_exprt(less_than_or_equal_exprt(zero, candidate), less_than_exprt(candidate, unary_exprt(ID_object_size, v.dereferenced_object,size_type())))))
+      if(v2.verify(and_exprt(less_than_or_equal_exprt(one, candidate), less_than_exprt(candidate, plus_exprt(one, unary_exprt(ID_object_size, v.dereferenced_object,size_type()))))))
       {
         log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
         return;

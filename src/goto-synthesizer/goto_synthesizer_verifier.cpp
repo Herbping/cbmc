@@ -190,7 +190,7 @@ exprt get_object(exprt range_predicate)
 
 exprt get_index(exprt range_predicate)
 {
-  return range_predicate.operands()[0].operands()[0].operands()[1].operands()[0];
+  return range_predicate.operands()[1].operands()[1];
 }
 
 bool simple_verifiert::verify(const exprt &expr)
@@ -269,7 +269,7 @@ bool simple_verifiert::verify(const exprt &expr)
         all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>> verifier = nullptr;
   verifier = util_make_unique<
         all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>(
-        options, ui_null_message, parse_option.goto_model);
+        options, ui_message_handler, parse_option.goto_model);
   
   const resultt result = (*verifier)();
 
