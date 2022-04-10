@@ -199,8 +199,8 @@ bool simple_verifiert::verify(const exprt &expr)
   std::cout << "Candidate :" << from_expr(expr) << "\n";
 
   null_message_handlert null_message_handler;
-  ui_message_handlert ui_null_message(null_message_handler);
-  messaget null_log(ui_null_message);
+  ui_message_handlert ui_null_message_handler(null_message_handler);
+  messaget null_log(ui_null_message_handler);
 
   original_program.copy_from(parse_option.goto_model.goto_functions.function_map[parse_option.target_function_name].body);
   
@@ -269,7 +269,7 @@ bool simple_verifiert::verify(const exprt &expr)
         all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>> verifier = nullptr;
   verifier = util_make_unique<
         all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>(
-        options, ui_message_handler, parse_option.goto_model);
+        options, ui_null_message_handler, parse_option.goto_model);
   
   const resultt result = (*verifier)();
 

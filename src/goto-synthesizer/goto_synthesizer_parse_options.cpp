@@ -156,6 +156,10 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
     if((lhs.type().id() == ID_pointer))
     {
       terminal_symbols.push_back(unary_exprt(ID_object_size, lhs, size_type()));
+      if(lhs.type().subtype().id() == ID_unsignedbv){
+        // std::cout << lhs.type().subtype().pretty() << "\n";
+        terminal_symbols.push_back(dereference_exprt(lhs));
+      }
     }
   }
   
@@ -166,15 +170,7 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
   {
     exprt offset = v.offset;
     exprt deref_object = v.dereferenced_object;
-    /*
-    for(exprt lhs : v.return_cex.live_lhs)
-    {
-      if(lhs.get(ID_identifier) == v.offset.get(ID_identifier))
-        offset = lhs;
-      if(lhs.get(ID_identifier) == v.dereferenced_object.get(ID_identifier))
-        deref_object = lhs;
-    }
-    */
+
     std::cout << "=============\n";
     std::cout << from_expr(and_exprt(less_than_or_equal_exprt(one, offset), less_than_exprt(offset, unary_exprt(ID_object_size, deref_object)))) << "\n";
     
