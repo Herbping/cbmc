@@ -23,6 +23,9 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <util/range.h>
 #include <util/string_constant.h>
 #include <util/unicode.h>
+#include <util/pointer_predicates.h>
+
+#include <ansi-c/c_expr.h>
 
 #include <langapi/language_util.h>
 
@@ -61,13 +64,14 @@ bool goto_synthesizer_parse_optionst::call_back(const exprt &expr)
   simple_verifiert v(*this, this->ui_message_handler);
   if(v.verify(expr))
   {
+    std::cout<< "Candidate: " << from_expr(expr) <<"\n";
     log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
 
     return true;
   }
   else
   {
-    log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
+    //log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
 
     return false;
   }
@@ -145,26 +149,34 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
   }
 
   typet idx_type;
-  std::cout << "start to construct \n";
+  log.result() << "start to construct \n";
   for(exprt lhs: v.return_cex.live_lhs)
   {
     if(lhs.type().id() == ID_unsignedbv)
-    {
+    { 
       terminal_symbols.push_back(lhs);
       idx_type = lhs.type();
     }
     if((lhs.type().id() == ID_pointer))
     {
       terminal_symbols.push_back(unary_exprt(ID_object_size, lhs, size_type()));
+      terminal_symbols.push_back(unary_exprt(ID_pointer_offset, lhs, size_type()));
       if(lhs.type().subtype().id() == ID_unsignedbv){
-        // std::cout << lhs.type().subtype().pretty() << "\n";
-        terminal_symbols.push_back(dereference_exprt(lhs));
+        //TODO terminal_symbols.push_back(dereference_exprt(lhs));
       }
     }
   }
-  
   exprt one = from_integer(1, idx_type);
+  exprt zero = from_integer(0, idx_type);
   terminal_symbols.push_back(one);
+  
+  exprt first_candidate = true_exprt();
+
+  if(v.return_cex.cex_type == cex_null_pointer)
+  {
+    exprt original_checked_pointer = v.checked_pointer;
+    first_candidate = same_object(original_checked_pointer , unary_exprt(ID_loop_entry, original_checked_pointer));
+  }
 
   if(deductive)
   {
@@ -175,7 +187,7 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
     std::cout << from_expr(and_exprt(less_than_or_equal_exprt(one, offset), less_than_exprt(offset, unary_exprt(ID_object_size, deref_object)))) << "\n";
     
     simple_verifiert v2(*this, this->ui_message_handler);
-    if(v2.verify(and_exprt(less_than_or_equal_exprt(one, offset), less_than_exprt(offset, plus_exprt(one, unary_exprt(ID_object_size, deref_object,size_type()))))))
+    if(v2.verify(and_exprt(less_than_or_equal_exprt(zero, offset), less_than_exprt(offset, plus_exprt(zero, unary_exprt(ID_object_size, deref_object,size_type()))))))
     {
       log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
       return;
@@ -190,7 +202,7 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
     for(exprt candidate : terminal_symbols)
     {
       simple_verifiert v2(*this, this->ui_message_handler);
-      if(v2.verify(and_exprt(less_than_or_equal_exprt(one, candidate), less_than_exprt(candidate, plus_exprt(one, unary_exprt(ID_object_size, v.dereferenced_object,size_type()))))))
+      if(v2.verify(and_exprt(less_than_or_equal_exprt(zero, candidate), less_than_exprt(candidate, plus_exprt(zero, v.dereferenced_object,size_type())))))
       {
         log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
         return;
@@ -203,7 +215,7 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
   }
   else
   {
-    simple_enumeratort enumerator(*this);  
+    simple_enumeratort enumerator(*this, first_candidate, v.return_cex);  
     enumerator.enumerate();
   }
 }

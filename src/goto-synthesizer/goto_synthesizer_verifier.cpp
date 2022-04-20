@@ -45,6 +45,7 @@ Author: Qinheping Hu
 #include <goto-programs/goto_function.h>
 #include <goto-programs/goto_program.h>
 #include <goto-programs/goto_trace.h>
+#include <goto-programs/goto_trace.cpp>
 
 #include <langapi/mode.h>
 
@@ -71,14 +72,25 @@ Author: Qinheping Hu
 #include <goto-checker/stop_on_fail_verifier_with_fault_localization.h>
 #include <goto-checker/report_util.cpp>
 
-cext::cext(const namespacet &ns, const goto_tracet &goto_trace, const source_locationt &loop_entry_loc)
+cext simple_verifiert::get_cex(const namespacet &ns, const goto_tracet &goto_trace, const source_locationt &loop_entry_loc, cex_typet type)
 {
+
+  std::map<exprt, std::string> lhs_eval;
+  std::map<std::string, std::string> object_sizes;
+  std::map<std::string, std::string> pointer_offsets;
+  std::set<exprt> live_lhs;
+
+  optionst options;
+  trace_optionst trace_options(options);
 
   std::string next_object_size = "";
   bool have_seen_entry = false;
+  bool after_entry = false;
+  // for tmp_post case, the checked pointer is the late seen alive variable
+  exprt last_lhs;
+
   for(const auto &step : goto_trace.steps)
   {        
-
     // stop record after the entry of the loop
     if(!step.pc->source_location().is_nil())
     {
@@ -89,17 +101,11 @@ cext::cext(const namespacet &ns, const goto_tracet &goto_trace, const source_loc
       {
         have_seen_entry = true;
       }
-      else
-      {
-        if(have_seen_entry){
-          continue;
-        }
+      else{
+        if(have_seen_entry)
+          after_entry = true;
       }
     }
-
-    // hide the hidden ones
-    if(step.hidden)
-      continue;
 
     switch(step.type)
     {
@@ -119,14 +125,48 @@ cext::cext(const namespacet &ns, const goto_tracet &goto_trace, const source_loc
         {
           std::string lhs = from_expr(ns, identifier, step.full_lhs);
           std::string rhs = from_expr(ns, identifier, step.full_lhs_value);
+          if(rhs.find("ul") != std::string::npos)
+            rhs = rhs.substr(0, rhs.length()-2);
           lhs_eval[step.full_lhs] =  rhs;
-
-          if(step.pc->source_location().get_function() == loop_entry_loc.get_function() && step.type == goto_trace_stept::typet::DECL)
+          if(step.pc->source_location().get_function() == loop_entry_loc.get_function() && !after_entry && !step.hidden)
+          {
+            last_lhs = step.full_lhs;
             live_lhs.insert(step.full_lhs);
+            if(rhs.find("dynamic_object") != std::string::npos)
+            {
+              const irep_idt value = to_constant_expr(step.full_lhs_value).get_value();
+              const typet &type = to_constant_expr(step.full_lhs_value).type();
+              const auto width = to_pointer_type(type).get_width();
+              mp_integer int_value = bvrep2integer(value, width, false);
+              mp_integer mask = string2integer("72057594037927935");
+
+              pointer_offsets[lhs] = integer2string(bitwise_and(mask, int_value));
+              
+              size_t left = rhs.find("dynamic_object") + 14;
+              size_t right = left;
+              while(rhs[right] != ' ')
+              {
+                right++;
+              }
+
+              object_sizes[lhs] = object_sizes[rhs.substr(left, right-left)];
+            }
+          }
+
+          if(!step.hidden)
+          {
+            last_lhs = step.full_lhs;
+          }
 
           if(rhs.find("dynamic_object") != std::string::npos  && next_object_size != "")
           {
-            object_size[rhs] = next_object_size;
+            size_t left = rhs.find("dynamic_object") + 14;
+            size_t right = left;
+            while(rhs[right] != ' ')
+            {
+              right++;
+            }
+            object_sizes[rhs.substr(left, right-left)] = next_object_size;
             next_object_size = "";
           }
 
@@ -162,36 +202,27 @@ cext::cext(const namespacet &ns, const goto_tracet &goto_trace, const source_loc
         UNREACHABLE;
     }
   }
+  if(live_lhs.find(checked_pointer) == live_lhs.end())
+    checked_pointer = last_lhs;
 
-  /*
-  for(std::map<exprt, std::string>::const_iterator it = lhs_eval.begin(); it != lhs_eval.end(); ++it)
-  {
-    std::cout << it->first.get(ID_identifier) << " : " << it->second << " " << ";\n";
-  }
-    std::cout <<  ";\n";
-
-  for(std::map<std::string, std::string>::const_iterator it = object_size.begin(); it != object_size.end(); ++it)
-  {
-    std::cout << it->first << " :: " << it->second << " " << ";\n";
-  }  
-  
-    std::cout <<  ";\n";
-  for(exprt expr : live_lhs)
-  {
-    std::cout << expr.get(ID_identifier) << ";\n";
-  }
-  */
+  return cext(lhs_eval, object_sizes, pointer_offsets, live_lhs, type);
 }
 
 exprt get_object(exprt range_predicate)
 {
-  return range_predicate.operands()[0].operands()[0].operands()[0].operands()[0];
+  return range_predicate.operands()[1].operands()[0];
 }
 
 exprt get_index(exprt range_predicate)
 {
   return range_predicate.operands()[1].operands()[1];
 }
+
+exprt get_checked_pointer(exprt range_predicate)
+{
+  return range_predicate.operands()[0].operands()[0].operands()[0];
+}
+
 
 bool simple_verifiert::verify(const exprt &expr)
 {
@@ -267,10 +298,14 @@ bool simple_verifiert::verify(const exprt &expr)
 
   std::unique_ptr<
         all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>> verifier = nullptr;
-  verifier = util_make_unique<
+  //verifier = util_make_unique<
+  //      all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>(
+  //      options, ui_null_message_handler, parse_option.goto_model);
+
+    verifier = util_make_unique<
         all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>(
-        options, ui_null_message_handler, parse_option.goto_model);
-  
+        options, ui_message_handler, parse_option.goto_model);
+
   const resultt result = (*verifier)();
 
   verifier->report();
@@ -284,17 +319,24 @@ bool simple_verifiert::verify(const exprt &expr)
     {
       if(property_it->second.status == property_statust::FAIL)
       {
+        cex_typet cex_type;
         if((property_it->second.description.find("pointer outside object bounds") != std::string::npos))
         {
           offset = get_index(property_it->second.pc->condition());
           dereferenced_object = get_object(property_it->second.pc->condition());
+          cex_type = cex_oob;
         }
-        // std::cout << property_it->second.pc->condition().pretty() << "\n";
-        return_cex = cext(verifier->get_traces().get_namespace(), verifier->get_traces()[property_it->first], target_loop_head->source_location());
+        
+        if(property_it->second.description.find("pointer NULL") != std::string::npos)
+        {
+          cex_type = cex_null_pointer;
+          checked_pointer = get_checked_pointer(property_it->second.pc->condition());
+        }
+        return_cex = get_cex(verifier->get_traces().get_namespace(), verifier->get_traces()[property_it->first], target_loop_head->source_location(), cex_type);
+ 
         return false;
       }
     }
   }
-
   return (result == resultt::PASS);
 }

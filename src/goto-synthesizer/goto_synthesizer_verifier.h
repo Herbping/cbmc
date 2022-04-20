@@ -22,16 +22,25 @@ public:
   virtual bool verify(const exprt &expr) = 0;
 };
 
-
+enum cex_typet { cex_oob, cex_null_pointer, cex_ERROR};
 class cext
 {
 public:
-  cext(const namespacet &ns, const goto_tracet &goto_trace, const source_locationt &loop_entry_loc);
+  cext(std::map<exprt, std::string> &l_e, std::map<std::string, std::string> &o_s, std::map<std::string, std::string> &p_o, std::set<exprt> &l_l, cex_typet &type)
+    : lhs_eval(l_e),
+      object_sizes(o_s),
+      pointer_offsets(p_o),
+      live_lhs(l_l),
+      cex_type(type)
+  {
+  }
   cext() = default;
   
   std::map<exprt, std::string> lhs_eval;
-  std::map<std::string, std::string> object_size;
+  std::map<std::string, std::string> object_sizes;
+  std::map<std::string, std::string> pointer_offsets;
   std::set<exprt> live_lhs;
+  cex_typet cex_type;
 };
 
 
@@ -45,8 +54,10 @@ public:
   }
 
   bool verify(const exprt &expr) override;
+  cext get_cex(const namespacet &ns, const goto_tracet &goto_trace, const source_locationt &loop_entry_loc, cex_typet type);
 
   cext return_cex;
+  exprt checked_pointer;
   exprt dereferenced_object;
   exprt offset;
 

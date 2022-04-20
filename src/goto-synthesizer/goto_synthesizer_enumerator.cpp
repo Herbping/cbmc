@@ -14,12 +14,124 @@ Author: Qinheping Hu
 
 #include "util/expr.h"
 #include "util/irep.h"
+#include <util/run.h>
+#include <util/tempfile.h>
 
 #include <langapi/language_util.h>
 
 #include <fstream>
 #include <iostream>
+#include <chrono>
 #include <memory>
+
+size_t smt_time;
+float sum_rate = 0;
+size_t num_rate = 0;
+
+size_t count_smt_reject = 0;
+size_t count_cbmc_reject = 0;
+
+std::string expr2smtstring(const exprt &expr)
+{
+  std::string result = "UNDEFINED_OP";
+  if(expr.id() == ID_and){
+    result = "(and " + expr2smtstring(expr.operands()[0]) + " " + expr2smtstring(expr.operands()[1]) + ")";
+  }
+  if(expr.id() == ID_constant){
+    result = id2string(to_constant_expr(expr).get_value());
+  }
+  if(expr.id() == ID_symbol){
+    result = from_expr(expr);
+  }
+  if(expr.id() == ID_pointer_offset){
+    result = "OFFSET_"+expr2smtstring(expr.operands()[0]);
+  }
+  if(expr.id() == ID_object_size){
+    result = "SIZE_"+expr2smtstring(expr.operands()[0]);
+  }
+  if(expr.id() == ID_le){
+    result = "(<= " + expr2smtstring(expr.operands()[0]) + " " + expr2smtstring(expr.operands()[1]) + ")";
+  }
+  if(expr.id() == ID_ge){
+    result = "(>= " + expr2smtstring(expr.operands()[0]) + " " + expr2smtstring(expr.operands()[1]) + ")";
+  }
+  if(expr.id() == ID_lt){
+    result = "(< " + expr2smtstring(expr.operands()[0]) + " " + expr2smtstring(expr.operands()[1]) + ")";
+  }
+  if(expr.id() == ID_gt){
+    result = "(> " + expr2smtstring(expr.operands()[0]) + " " + expr2smtstring(expr.operands()[1]) + ")";
+  }
+  if(expr.id() == ID_equal){
+    result = "(= " + expr2smtstring(expr.operands()[0]) + " " + expr2smtstring(expr.operands()[1]) + ")";
+  }
+  return result;
+}
+
+std::string get_decls(const cext &cex)
+{
+  std::string result = "";
+  for(auto expr: cex.live_lhs){
+    if(expr.type().id() == ID_pointer){
+      result += "(declare-fun OFFSET_"+ from_expr(expr)+" () Int)\n";
+      result += "(assert (= OFFSET_"+ from_expr(expr)+ " " + cex.pointer_offsets.at(from_expr(expr)) + "))\n";
+      result += "(declare-fun SIZE_"+ from_expr(expr)+" () Int)\n";
+      result += "(assert (= SIZE_"+ from_expr(expr)+ " " + cex.object_sizes.at(from_expr(expr)) + "))\n";
+    }else
+    {
+      result += "(declare-fun "+ from_expr(expr)+" () Int)\n";
+      result += "(assert (= "+ from_expr(expr)+ " " + cex.lhs_eval.at(expr) + "))\n";
+    }
+  }
+  return result;
+}
+
+bool simple_enumeratort::quick_verify(const exprt &candidate, const cext &cex)
+{
+  count_smt_reject++;
+  std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+  std::string smtstring = expr2smtstring(candidate);
+  std::string declstring = get_decls(cex);
+  std::string query = declstring + "(assert (not "+ smtstring +"))\n(check-sat)";
+  if(smtstring.find("UNDEFINED_OP") != std::string::npos)
+    return false;
+  
+  //std::cout<< "Candidate for quick check: " << from_expr(candidate) <<"\n";
+  temporary_filet temp_file_problem("smt2_dec_problem_", ""),
+    temp_file_stdout("smt2_dec_stdout_", ""),
+    temp_file_stderr("smt2_dec_stderr_", "");
+
+  const auto write_problem_to_file = [&](std::ofstream problem_out) {
+    problem_out << query;
+  };
+  write_problem_to_file(std::ofstream(
+    temp_file_problem(), std::ios_base::out | std::ios_base::trunc));
+
+  std::vector<std::string> argv;
+  std::string stdin_filename;
+
+  argv = {"cvc4", "-L", "smt2", temp_file_problem()};
+
+  int res = run(argv[0], argv, stdin_filename, temp_file_stdout(), temp_file_stderr());
+
+  if(res <0)
+    return false;
+
+  // Create a text string, which is used to output the text file
+  std::string myText;
+  std::ifstream MyReadFile(temp_file_stdout());
+
+
+  std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+  smt_time =  std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+  // Use a while loop together with the getline() function to read the file line by line
+  while (getline (MyReadFile, myText)) {
+    // Output the text from the file
+    return (myText.find("unsat") != std::string::npos);
+  }
+  return false;
+}
 
 exprt simple_enumeratort::eterm(int size)
 {
@@ -124,10 +236,6 @@ bool simple_enumeratort::enumerate()
 
   // number of clauses in the invariant
   // depth of each clause
-
-  // nonterminal_S = copy_exprt(nonterminal_S);
-  // nonterminal_E = copy_exprt(nonterminal_E);
-
   int num_clauses = 0;
   int size_eterm = 0; 
 
@@ -139,7 +247,7 @@ bool simple_enumeratort::enumerate()
       size_eterm++;
     for(int i = 0; i <= num_clauses; i++)
     {
-      exprt skeleton = true_exprt();
+      exprt skeleton = first_candidate;
       for(int j = 0; j < num_clauses; j++)
       {
         if(i > j)
@@ -172,9 +280,22 @@ bool simple_enumeratort::enumerate()
         }
         else
         {
-          if(!is_partial(partial_term) && parse_option.call_back(partial_term))
+          if(!is_partial(partial_term))
           {
-            return true;
+            if(quick_verify(partial_term, neg_test))
+              continue;
+
+            
+            std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+            if(parse_option.call_back(partial_term))
+            {
+              return true;
+            }
+            count_cbmc_reject++;
+
+            std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+            sum_rate += (float)(std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count())/(float)smt_time;
+            num_rate++;
           }
           // TODO delete here later
           //return true;
