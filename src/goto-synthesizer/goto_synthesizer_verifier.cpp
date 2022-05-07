@@ -86,8 +86,9 @@ cext simple_verifiert::get_cex(const namespacet &ns, const goto_tracet &goto_tra
   trace_optionst trace_options(options);
 
   std::string next_object_size = "";
-  bool have_seen_entry = false;
-  bool after_entry = false;
+  bool have_seen_entry = false; // false if haven't touched the loop head
+  bool after_entry = false; // true if have touched the first lone of the loop body
+
   // for tmp_post case, the checked pointer is the late seen alive variable
   exprt last_lhs;
 
@@ -142,14 +143,24 @@ cext simple_verifiert::get_cex(const namespacet &ns, const goto_tracet &goto_tra
               && (step.full_lhs.type().id() == ID_unsignedbv || step.full_lhs.type().id() == ID_pointer) 
               && (lhs.find("(") == std::string::npos))
           {
+            std::cout << "lhs : " << lhs << "\n";
             // for tmp_post
             last_lhs = step.full_lhs;
             if(lhs != "a" && lhs != "b" && lhs != "c")
               live_lhs.insert(step.full_lhs);
             
+          }
+
+          // record the evaluation and the loop_entry value
+          if(have_seen_entry && !after_entry)
+          {
+            std::cout << "     eval : " << rhs << "\n";
+            lhs_eval[step.full_lhs] = rhs;
+
             // if an existing object is assigned to a pointer
             if(rhs.find("dynamic_object") != std::string::npos)
             {
+              std::cout << "     is a pointer" << "\n";
               // get the binary representation of object_id :: pointer_offset 
               const irep_idt value = to_constant_expr(step.full_lhs_value).get_value();
               const typet &type = to_constant_expr(step.full_lhs_value).type();
@@ -171,14 +182,16 @@ cext simple_verifiert::get_cex(const namespacet &ns, const goto_tracet &goto_tra
               object_sizes[lhs] = object_sizes[rhs.substr(left, right-left)];
             }
           }
-
-          // record the evaluation and the loop_entry value
-          lhs_eval[step.full_lhs] = rhs;
-          if(!have_seen_entry)
+          
+          if (!have_seen_entry)
           {
+            std::cout << "     loop_entry : " << rhs << "\n";
             loop_entry_eval[lhs] = rhs;
             if(step.full_lhs.type().id() == ID_pointer)
+            {
               loop_entry_offsets[lhs] = pointer_offsets[lhs];
+              std::cout << "     is a pointer" << "\n";
+            }
           }
           
           // needed when we check tmp_post
