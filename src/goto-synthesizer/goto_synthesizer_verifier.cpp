@@ -78,6 +78,8 @@ cext simple_verifiert::get_cex(const namespacet &ns, const goto_tracet &goto_tra
   std::map<exprt, std::string> lhs_eval;
   std::map<std::string, std::string> object_sizes;
   std::map<std::string, std::string> pointer_offsets;
+  std::map<std::string, std::string> loop_entry_eval;
+  std::map<std::string, std::string> loop_entry_offsets;
   std::set<exprt> live_lhs;
 
   optionst options;
@@ -102,7 +104,7 @@ cext simple_verifiert::get_cex(const namespacet &ns, const goto_tracet &goto_tra
         have_seen_entry = true;
       }
       else{
-        if(have_seen_entry)
+        if(have_seen_entry && !step.hidden)
           after_entry = true;
       }
     }
@@ -125,39 +127,69 @@ cext simple_verifiert::get_cex(const namespacet &ns, const goto_tracet &goto_tra
         {
           std::string lhs = from_expr(ns, identifier, step.full_lhs);
           std::string rhs = from_expr(ns, identifier, step.full_lhs_value);
-          if(rhs.find("ul") != std::string::npos)
+          
+          // make the rhs pure number
+          if(rhs.length() > 2 && rhs.find("ul") == rhs.length() - 2 && isdigit(rhs.at(rhs.length()-3)))
             rhs = rhs.substr(0, rhs.length()-2);
-          lhs_eval[step.full_lhs] =  rhs;
-          if(step.pc->source_location().get_function() == loop_entry_loc.get_function() && !after_entry && !step.hidden)
+          if(rhs.length() > 1 && rhs.find("u") == rhs.length() - 1 && isdigit(rhs.at(rhs.length()-2)))
+            rhs = rhs.substr(0, rhs.length()-1);
+
+          // update the alive varaibles
+          // std::cout << lhs << " = " << rhs << " | " << after_entry << " | " << step.hidden << " @ " << step.pc->source_location().pretty() << "\n";
+          if(step.pc->source_location().get_function() == loop_entry_loc.get_function() 
+              && !after_entry 
+              && !step.hidden 
+              && (step.full_lhs.type().id() == ID_unsignedbv || step.full_lhs.type().id() == ID_pointer) 
+              && (lhs.find("(") == std::string::npos))
           {
+            // for tmp_post
             last_lhs = step.full_lhs;
-            live_lhs.insert(step.full_lhs);
+            if(lhs != "a" && lhs != "b" && lhs != "c")
+              live_lhs.insert(step.full_lhs);
+            
+            // if an existing object is assigned to a pointer
             if(rhs.find("dynamic_object") != std::string::npos)
             {
+              // get the binary representation of object_id :: pointer_offset 
               const irep_idt value = to_constant_expr(step.full_lhs_value).get_value();
               const typet &type = to_constant_expr(step.full_lhs_value).type();
               const auto width = to_pointer_type(type).get_width();
               mp_integer int_value = bvrep2integer(value, width, false);
+
+              // mask out object id
               mp_integer mask = string2integer("72057594037927935");
 
               pointer_offsets[lhs] = integer2string(bitwise_and(mask, int_value));
               
+              // get the object_size
               size_t left = rhs.find("dynamic_object") + 14;
               size_t right = left;
               while(rhs[right] != ' ')
               {
                 right++;
               }
-
               object_sizes[lhs] = object_sizes[rhs.substr(left, right-left)];
             }
           }
 
+          // record the evaluation and the loop_entry value
+          lhs_eval[step.full_lhs] = rhs;
+          if(!have_seen_entry)
+          {
+            loop_entry_eval[lhs] = rhs;
+            if(step.full_lhs.type().id() == ID_pointer)
+              loop_entry_offsets[lhs] = pointer_offsets[lhs];
+          }
+          
+          // needed when we check tmp_post
           if(!step.hidden)
           {
             last_lhs = step.full_lhs;
           }
-
+          
+          // store the object_size of dynamic_object by its index
+          // Example:
+          //    object_sizes[5] is the size of dynamic_object5
           if(rhs.find("dynamic_object") != std::string::npos  && next_object_size != "")
           {
             size_t left = rhs.find("dynamic_object") + 14;
@@ -169,7 +201,6 @@ cext simple_verifiert::get_cex(const namespacet &ns, const goto_tracet &goto_tra
             object_sizes[rhs.substr(left, right-left)] = next_object_size;
             next_object_size = "";
           }
-
           if(lhs.find("malloc_size") != std::string::npos ){
             next_object_size = rhs;
           }
@@ -202,10 +233,11 @@ cext simple_verifiert::get_cex(const namespacet &ns, const goto_tracet &goto_tra
         UNREACHABLE;
     }
   }
+  // for tmp_post
   if(live_lhs.find(checked_pointer) == live_lhs.end())
     checked_pointer = last_lhs;
 
-  return cext(lhs_eval, object_sizes, pointer_offsets, live_lhs, type);
+  return cext(lhs_eval, object_sizes, pointer_offsets, loop_entry_eval, loop_entry_offsets, live_lhs, type);
 }
 
 exprt get_object(exprt range_predicate)
@@ -215,7 +247,7 @@ exprt get_object(exprt range_predicate)
 
 exprt get_index(exprt range_predicate)
 {
-  return range_predicate.operands()[1].operands()[1];
+  return range_predicate.operands()[0].operands()[0];
 }
 
 exprt get_checked_pointer(exprt range_predicate)
@@ -254,12 +286,12 @@ bool simple_verifiert::verify(const exprt &expr)
     target_loop_end = loop_end;
     target_loop_head = loop.first;
   }
-
   exprt condition = target_loop_end->get_condition();
-  condition.add(ID_C_spec_loop_invariant) = expr;// binary_exprt(unary_exprt(ID_not , guard), ID_or, expr);
+  condition.add(ID_C_spec_loop_invariant) =  and_exprt(true_exprt(), or_exprt(guard, expr));
   target_loop_end->set_condition(condition);
 
   // exprt invariant = static_cast<const exprt &>(target_loop_end->get_condition().find(ID_C_spec_loop_invariant));
+  // std::cout<< from_expr(invariant) << "\n";
 
   code_contractst cont(parse_option.goto_model, null_log);
   cont.apply_loop_contracts();
@@ -284,12 +316,16 @@ bool simple_verifiert::verify(const exprt &expr)
   // Other default
   options.set_option("arrays-uf", "auto");
   options.set_option("depth", UINT32_MAX);
+  // Options for process_goto_program
+  options.set_option("rewrite-union", true);  // transform self loops to assumptions
+  options.set_option(
+    "self-loops-to-assumptions", true);
 
   link_to_library(
     parse_option.goto_model, ui_message_handler, cprover_cpp_library_factory);
   link_to_library(
     parse_option.goto_model, ui_message_handler, cprover_c_library_factory);
-  process_goto_program(parse_option.goto_model,options,null_log);
+  process_goto_program(parse_option.goto_model, options, null_log);
   remove_skip(parse_option.goto_model);
   label_properties(parse_option.goto_model);
 
@@ -322,7 +358,8 @@ bool simple_verifiert::verify(const exprt &expr)
         cex_typet cex_type;
         if((property_it->second.description.find("pointer outside object bounds") != std::string::npos))
         {
-          offset = get_index(property_it->second.pc->condition());
+          //offset = get_index(property_it->second.pc->condition());
+          offset = property_it->second.pc->condition();
           dereferenced_object = get_object(property_it->second.pc->condition());
           cex_type = cex_oob;
         }
@@ -332,8 +369,18 @@ bool simple_verifiert::verify(const exprt &expr)
           cex_type = cex_null_pointer;
           checked_pointer = get_checked_pointer(property_it->second.pc->condition());
         }
+        
+        if(property_it->second.description.find("preserved") != std::string::npos)
+        {
+          cex_type = cex_not_preserved;
+        }
+
         return_cex = get_cex(verifier->get_traces().get_namespace(), verifier->get_traces()[property_it->first], target_loop_head->source_location(), cex_type);
- 
+        return_cex.checked_pointer = checked_pointer;
+        return_cex.dereferenced_object = dereferenced_object;
+        return_cex.offset = offset;
+        // std::cout << "failure type : " << (int)property_it->second.status << "\n";
+
         return false;
       }
     }

@@ -119,75 +119,18 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
       t->is_goto() && t->get_target() == loop_head &&
       t->location_number > loop_end->location_number)
       loop_end = t;
-
-    /*
-    if(t->is_assign())
-    {
-      extract_exprt(t->assign_lhs());
-      extract_exprt(t->assign_rhs());
-    }
-
-    if(t->has_condition())
-    {
-      extract_exprt(t->get_condition());
-    }
-    */
   }
-
-  // add the constant 0 to terminal_symbols
-
-  simple_verifiert v(*this, this->ui_message_handler);
-  log.status() << "Candidate :" << from_expr(true_exprt()) << messaget::eom;
-  if(v.verify(true_exprt()))
-  {
-    log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
-    return;
-  }
-  else
-  {
-    log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
-  }
-
-  typet idx_type;
-  log.result() << "start to construct \n";
-  for(exprt lhs: v.return_cex.live_lhs)
-  {
-    if(lhs.type().id() == ID_unsignedbv)
-    { 
-      terminal_symbols.push_back(lhs);
-      idx_type = lhs.type();
-    }
-    if((lhs.type().id() == ID_pointer))
-    {
-      terminal_symbols.push_back(unary_exprt(ID_object_size, lhs, size_type()));
-      terminal_symbols.push_back(unary_exprt(ID_pointer_offset, lhs, size_type()));
-      if(lhs.type().subtype().id() == ID_unsignedbv){
-        //TODO terminal_symbols.push_back(dereference_exprt(lhs));
-      }
-    }
-  }
-  exprt one = from_integer(1, idx_type);
-  exprt zero = from_integer(0, idx_type);
-  terminal_symbols.push_back(one);
   
-  exprt first_candidate = true_exprt();
+  exprt current_candidate = true_exprt();
+  exprt one = from_integer(1, size_type());
+  exprt zero = from_integer(0, size_type());
+  //terminal_symbols.push_back(one);
 
-  if(v.return_cex.cex_type == cex_null_pointer)
+  while (true)
   {
-    exprt original_checked_pointer = v.checked_pointer;
-    first_candidate = same_object(original_checked_pointer , unary_exprt(ID_loop_entry, original_checked_pointer));
-  }
-
-  if(deductive)
-  {
-    exprt offset = v.offset;
-    exprt deref_object = v.dereferenced_object;
-
-    std::cout << "=============\n";
-    std::cout << from_expr(and_exprt(less_than_or_equal_exprt(one, offset), less_than_exprt(offset, unary_exprt(ID_object_size, deref_object)))) << "\n";
-    
-    simple_verifiert v2(*this, this->ui_message_handler);
-    if(v2.verify(and_exprt(less_than_or_equal_exprt(zero, offset), less_than_exprt(offset, plus_exprt(zero, unary_exprt(ID_object_size, deref_object,size_type()))))))
+  
+    simple_verifiert v(*this, this->ui_message_handler);
+    if(v.verify(current_candidate))
     {
       log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
       return;
@@ -196,27 +139,55 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
     {
       log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
     }
-  }
-  else if(hybrid)
-  {
-    for(exprt candidate : terminal_symbols)
+
+    if(terminal_symbols.empty())
     {
-      simple_verifiert v2(*this, this->ui_message_handler);
-      if(v2.verify(and_exprt(less_than_or_equal_exprt(zero, candidate), less_than_exprt(candidate, plus_exprt(zero, v.dereferenced_object,size_type())))))
+      log.result() << "start to construct \n";
+      for(exprt lhs: v.return_cex.live_lhs)
       {
-        log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
-        return;
-      }
-      else
-      {
-        log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
+
+        std::cout << "live1 : " << from_expr(lhs) << "\n";
+        if(lhs.type().id() == ID_unsignedbv)
+        { 
+          terminal_symbols.push_back(lhs);
+          terminal_symbols.push_back(unary_exprt(ID_loop_entry, lhs, size_type()));
+          //idx_type = lhs.type();
+        }
+        if((lhs.type().id() == ID_pointer))
+        {
+          // terminal_symbols.push_back(unary_exprt(ID_object_size, lhs, size_type()));
+          terminal_symbols.push_back(unary_exprt(ID_pointer_offset, lhs, size_type()));
+          terminal_symbols.push_back(unary_exprt(ID_pointer_offset, unary_exprt(ID_loop_entry, lhs, lhs.type()), size_type()));
+          if(lhs.type().subtype().id() == ID_unsignedbv){
+            //TODO terminal_symbols.push_back(dereference_exprt(lhs));
+          }
+        }
       }
     }
-  }
-  else
-  {
-    simple_enumeratort enumerator(*this, first_candidate, v.return_cex);  
-    enumerator.enumerate();
+
+
+    if(v.return_cex.cex_type == cex_null_pointer)
+    {
+      exprt original_checked_pointer = v.checked_pointer;
+      current_candidate = and_exprt(current_candidate, same_object(original_checked_pointer , unary_exprt(ID_loop_entry, original_checked_pointer)));
+    }
+    else if(deductive && v.return_cex.cex_type == cex_oob)
+    {
+      exprt offset = v.offset;
+      exprt deref_object = v.dereferenced_object;
+
+      // TODO: modify this!
+      exprt four = from_integer(0, size_type());
+    
+      //current_candidate = and_exprt(current_candidate, and_exprt(less_than_or_equal_exprt(zero, offset), less_than_or_equal_exprt(offset, deref_object)));
+      current_candidate = and_exprt(current_candidate, offset);
+    } 
+    else
+    {
+      simple_enumeratort enumerator(*this, current_candidate, v.return_cex);  
+      if(enumerator.enumerate())
+        break;
+    } 
   }
 }
 
