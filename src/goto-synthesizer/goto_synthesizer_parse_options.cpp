@@ -72,7 +72,6 @@ bool goto_synthesizer_parse_optionst::call_back(const exprt &expr)
   else
   {
     //log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
-
     return false;
   }
 }
@@ -184,7 +183,7 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
     } 
     else
     {
-      simple_enumeratort enumerator(*this, current_candidate, v.return_cex);  
+      simple_enumeratort enumerator(*this, current_candidate, v.return_cex, ui_message_handler);  
       if(enumerator.enumerate())
         break;
     } 

@@ -87,7 +87,6 @@ std::string get_decls(const cext &cex, size_t index_postfix)
 {
   std::string result = "";
   for(auto expr: cex.live_lhs){
-    std::cout << "live : " << from_expr(expr) << "\n";
     if(expr.type().id() == ID_pointer){
       result += "(declare-fun OFFSET_"+ from_expr(expr) + "_" + std::to_string(index_postfix) + " () Int)\n";
       result += "(assert (= OFFSET_"+ from_expr(expr) + "_" + std::to_string(index_postfix) + " " + cex.pointer_offsets.at(from_expr(expr)) + "))\n";
@@ -108,12 +107,50 @@ std::string get_decls(const cext &cex, size_t index_postfix)
   return result;
 }
 
+std::string get_loop_entry_decls(const cext &cex, size_t index_postfix)
+{
+  std::string result = "";
+  for(auto expr: cex.live_lhs){
+    if(expr.type().id() == ID_pointer){
+      result += "(declare-fun OFFSET_"+ from_expr(expr) + "_" + std::to_string(index_postfix) + " () Int)\n";
+      result += "(assert (= OFFSET_"+ from_expr(expr) + "_" + std::to_string(index_postfix) + " " + cex.loop_entry_offsets.at(from_expr(expr)) + "))\n";
+
+      result += "(declare-fun OFFSET_LOOP_ENTRY_"+ from_expr(expr) + "_" + std::to_string(index_postfix) + " () Int)\n";
+      result += "(assert (= OFFSET_LOOP_ENTRY_"+ from_expr(expr) + "_" + std::to_string(index_postfix) + " " + cex.loop_entry_offsets.at(from_expr(expr)) + "))\n";
+      
+      result += "(declare-fun SIZE_" + from_expr(expr) + "_" + std::to_string(index_postfix) + " () Int)\n";
+      result += "(assert (= SIZE_" + from_expr(expr) + "_" + std::to_string(index_postfix) + " " + cex.object_sizes.at(from_expr(expr)) + "))\n";
+    }else
+    {
+      result += "(declare-fun " + from_expr(expr) + "_" + std::to_string(index_postfix) + " () Int)\n";
+      result += "(assert (= " + from_expr(expr) + "_" + std::to_string(index_postfix) + " " + cex.loop_entry_eval.at(from_expr(expr)) + "))\n";
+      result += "(declare-fun LOOP_ENTRY_" + from_expr(expr) + "_" + std::to_string(index_postfix) + " () Int)\n";
+      result += "(assert (= LOOP_ENTRY_" + from_expr(expr) + "_" + std::to_string(index_postfix) + " " + cex.loop_entry_eval.at(from_expr(expr)) + "))\n";
+    }
+  }
+  return result;
+}
+
 bool simple_enumeratort::quick_verify(const exprt &candidate, const cext &cex)
 {
-  size_t index_cex = 0;
-  std::string smtstring = expr2smtstring(candidate, index_cex);
-  std::string declstring = get_decls(cex, index_cex);
-  std::string query = declstring + "(assert (not "+ smtstring +"))\n(check-sat)";
+  size_t index_cex = 1;
+
+  std::string declstring = "";
+  std::string smtstring = ""; 
+  for (cext neg_test : neg_tests)
+  {
+    if (index_cex == 1)
+    {
+      declstring += get_loop_entry_decls(neg_test, 0);
+      smtstring += "(assert " + expr2smtstring(candidate, 0) + ")\n";
+    }
+
+    declstring += get_decls(neg_test, index_cex);
+    smtstring += "(assert (not " + expr2smtstring(candidate, index_cex) + "))\n";
+    index_cex++;
+  }
+
+  std::string query = declstring + smtstring + "(check-sat)";
   //std::cout<< "Candidate for quick check: " << from_expr(candidate) <<"\n";
   std::cout<< query <<"\n";
   if(smtstring.find("UNDEFINED_OP") != std::string::npos)
@@ -364,10 +401,22 @@ bool simple_enumeratort::enumerate()
         continue;
       }
 
-      if(parse_option.call_back(candidate))
+      cext new_cex;
+
+      simple_verifiert v(parse_option, ui_message_handler);
+      if(v.verify(candidate))
       {
+        std::cout << "Candidate: " << from_expr(candidate) <<"\n";
+        std::cout <<  "result : " << "PASS" << "\n";
+
         return true;
       }
+      else
+      {
+        new_cex = v.return_cex;
+      }
+
+      neg_tests.push_back(new_cex);
       count_cbmc_reject++;
       std::cout << "rate : " << count_smt_reject << " / " << seen_terms << "\n";
     }
@@ -435,6 +484,7 @@ bool simple_enumeratort::enumerate_unused()
 
             
             std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+            cext new_cex;
             if(parse_option.call_back(partial_term))
             {
               return true;

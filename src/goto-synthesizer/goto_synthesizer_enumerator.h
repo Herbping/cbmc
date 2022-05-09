@@ -19,6 +19,7 @@ Author: Qinheping Hu
 
 
 typedef std::list<exprt> exprst;
+typedef std::list<cext> cexst;
 typedef std::list<size_t> sizest;
 class generator_baset
 {
@@ -482,9 +483,11 @@ public:
 class simple_enumeratort : public goto_synthesizer_enumeratort
 {
 public:
-  simple_enumeratort(goto_synthesizer_parse_optionst &po, exprt fc, cext & c)
-    : parse_option(po), first_candidate(fc), neg_test(c)
+  simple_enumeratort(goto_synthesizer_parse_optionst &po, exprt fc, cext & c, ui_message_handlert & uimh)
+    : parse_option(po), first_candidate(fc), neg_test(c), ui_message_handler(uimh)
   {
+    neg_tests = cexst();
+    neg_tests.push_back(c);
   }
 
   bool enumerate() override;
@@ -495,6 +498,7 @@ protected:
 
   exprt nonterminal_S = exprt(dstringt("ND_S"));
   exprt nonterminal_E = exprt(dstringt("ND_E"));
+
 
   exprt first_candidate;
   
@@ -508,7 +512,9 @@ protected:
   std::queue<exprt> expand_with_terminals(std::queue<exprt> &expr);
 
   cext neg_test;
+  cexst neg_tests;
   bool quick_verify(const exprt &candidate, const cext &cex);
+  ui_message_handlert & ui_message_handler;
 };
 
 #endif // CPROVER_GOTO_CHECKER_GOTO_SYNTHESIZER_ENUMERATOR_H
