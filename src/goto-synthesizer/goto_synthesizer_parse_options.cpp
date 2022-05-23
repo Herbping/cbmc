@@ -9,30 +9,27 @@ Author: Qinheping Hu, qinhh@amazon.com
 /// \file
 /// Command Line Parsing
 #include "goto_synthesizer_parse_options.h"
-#include "goto_synthesizer_enumerator.h"
-#include "goto_synthesizer_verifier.h"
 
-#include <fstream>
-#include <iostream>
-#include <memory>
-
-#include <util/config.h>
-#include <util/version.h>
-#include <util/exit_codes.h>
 #include <util/c_types.h>
+#include <util/config.h>
+#include <util/exit_codes.h>
+#include <util/pointer_predicates.h>
 #include <util/range.h>
 #include <util/string_constant.h>
 #include <util/unicode.h>
-#include <util/pointer_predicates.h>
+#include <util/version.h>
 
 #include <ansi-c/c_expr.h>
-
 #include <langapi/language_util.h>
+
+#include "goto_synthesizer_enumerator.h"
+#include "goto_synthesizer_verifier.h"
 
 #ifdef _MSC_VER
 #endif
 
-
+#include <goto-programs/goto_function.h>
+#include <goto-programs/goto_program.h>
 #include <goto-programs/initialize_goto_model.h>
 #include <goto-programs/link_to_library.h>
 #include <goto-programs/loop_ids.h>
@@ -40,18 +37,17 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <goto-programs/show_goto_functions.h>
 #include <goto-programs/show_properties.h>
 #include <goto-programs/show_symbol_table.h>
-#include <goto-programs/goto_function.h>
-#include <goto-programs/goto_program.h>
-
-#include <langapi/mode.h>
 
 #include <ansi-c/ansi_c_language.h>
-#include <cpp/cpp_language.h>
-
-#include <goto-instrument/loop_utils.h>
-#include <goto-instrument/contracts/contracts.h>
-
 #include <cbmc/cbmc_parse_options.h>
+#include <cpp/cpp_language.h>
+#include <goto-instrument/contracts/contracts.h>
+#include <goto-instrument/loop_utils.h>
+#include <langapi/mode.h>
+
+#include <fstream>
+#include <iostream>
+#include <memory>
 
 void goto_synthesizer_parse_optionst::register_languages()
 {
@@ -59,116 +55,140 @@ void goto_synthesizer_parse_optionst::register_languages()
   register_language(new_cpp_language);
 }
 
-bool goto_synthesizer_parse_optionst::call_back(const exprt &expr)
+loop_templatet<goto_programt::targett>
+goto_synthesizer_parse_optionst::get_loop(const invariant_idt inv_id)
 {
-  simple_verifiert v(*this, this->ui_message_handler);
-  if(v.verify(expr))
-  {
-    std::cout<< "Candidate: " << from_expr(expr) <<"\n";
-    log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
+  goto_functionst::function_mapt &function_map =
+    goto_model.goto_functions.function_map;
 
-    return true;
-  }
-  else
+  natural_loops_mutablet natural_loops(function_map[inv_id.func_name].body);
+
+  size_t loop_id = 0;
+  for(const auto &loop : natural_loops.loop_map)
   {
-    //log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
-    return false;
+    if(loop_id == inv_id.loop_id)
+      return loop.second;
+    loop_id++;
   }
+  UNREACHABLE;
 }
 
-void goto_synthesizer_parse_optionst::extract_exprt(const exprt &expr)
+goto_programt::targett
+goto_synthesizer_parse_optionst::get_loop_end(const invariant_idt inv_id)
 {
-  if(expr.operands().size() != 0)
+  goto_functionst::function_mapt &function_map =
+    goto_model.goto_functions.function_map;
+
+  natural_loops_mutablet natural_loops(function_map[inv_id.func_name].body);
+
+  size_t loop_id = 0;
+  for(const auto &loop_p : natural_loops.loop_map)
   {
-    for(const auto &operand : expr.operands())
+    if(loop_id == inv_id.loop_id)
     {
-      extract_exprt(operand);
+      const goto_programt::targett loop_head = loop_p.first;
+      goto_programt::targett loop_end = loop_p.first;
+      const loopt &loop = loop_p.second;
+      for(const auto &t : loop)
+      {
+        if(
+          t->is_goto() && t->get_target() == loop_head &&
+          t->location_number > loop_end->location_number)
+          loop_end = t;
+      }
+      return loop_end;
     }
+    loop_id++;
   }
-  else
+  UNREACHABLE;
+}
+
+goto_programt::targett
+goto_synthesizer_parse_optionst::get_loop_head(const invariant_idt inv_id)
+{
+  goto_functionst::function_mapt &function_map =
+    goto_model.goto_functions.function_map;
+
+  natural_loops_mutablet natural_loops(function_map[inv_id.func_name].body);
+
+  size_t loop_id = 0;
+  for(const auto &loop : natural_loops.loop_map)
   {
-    for(const auto &symbol : terminal_symbols)
-    {
-      if(expr == symbol)
-        return;
-    }
-    // log.status() << from_expr(expr) << messaget::eom;
-    // log.status() << expr.type().pretty() << messaget::eom;
-    if(expr.type() == bitvector_typet(ID_signedbv,32) || expr.type() == bitvector_typet(ID_unsignedbv,32))
-      terminal_symbols.push_back(expr);
+    if(loop_id == inv_id.loop_id)
+      return loop.first;
+    loop_id++;
   }
+  UNREACHABLE;
 }
 
 void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
   const irep_idt &function_name,
   goto_functionst::goto_functiont &goto_function,
   const goto_programt::targett loop_head,
-  const loopt &loop
-)
+  const loopt &loop)
 {
   PRECONDITION(!loop.empty());
 
   target_function_name = function_name;
 
-  // find the last back edge
-  goto_programt::targett loop_end = loop_head;
-  for(const auto &t : loop)
-  {
-    if(
-      t->is_goto() && t->get_target() == loop_head &&
-      t->location_number > loop_end->location_number)
-      loop_end = t;
-  }
-  
   exprt current_candidate = true_exprt();
   exprt one = from_integer(1, size_type());
   exprt zero = from_integer(0, size_type());
   //terminal_symbols.push_back(one);
 
-  while (true)
+  while(true)
   {
-  
     simple_verifiert v(*this, this->ui_message_handler);
     if(v.verify(current_candidate))
     {
-      log.result() << "result : " << log.green << "PASS" << messaget::eom << log.reset;
+      log.result() << "result : " << log.green << "PASS" << messaget::eom
+                   << log.reset;
       return;
     }
     else
     {
-      log.result() << "result : " << log.red << "FAIL" << messaget::eom << log.reset;
+      log.result() << "result : " << log.red << "FAIL" << messaget::eom
+                   << log.reset;
     }
 
     if(terminal_symbols.empty())
     {
       log.result() << "start to construct \n";
-      for(exprt lhs: v.return_cex.live_lhs)
+      for(exprt lhs : v.return_cex.live_lhs)
       {
-
         std::cout << "live1 : " << from_expr(lhs) << "\n";
         if(lhs.type().id() == ID_unsignedbv)
-        { 
+        {
           terminal_symbols.push_back(lhs);
-          terminal_symbols.push_back(unary_exprt(ID_loop_entry, lhs, size_type()));
+          terminal_symbols.push_back(
+            unary_exprt(ID_loop_entry, lhs, size_type()));
           //idx_type = lhs.type();
         }
         if((lhs.type().id() == ID_pointer))
         {
           // terminal_symbols.push_back(unary_exprt(ID_object_size, lhs, size_type()));
-          terminal_symbols.push_back(unary_exprt(ID_pointer_offset, lhs, size_type()));
-          terminal_symbols.push_back(unary_exprt(ID_pointer_offset, unary_exprt(ID_loop_entry, lhs, lhs.type()), size_type()));
-          if(lhs.type().subtype().id() == ID_unsignedbv){
+          terminal_symbols.push_back(
+            unary_exprt(ID_pointer_offset, lhs, size_type()));
+          terminal_symbols.push_back(unary_exprt(
+            ID_pointer_offset,
+            unary_exprt(ID_loop_entry, lhs, lhs.type()),
+            size_type()));
+          if(lhs.type().subtype().id() == ID_unsignedbv)
+          {
             //TODO terminal_symbols.push_back(dereference_exprt(lhs));
           }
         }
       }
     }
 
-
     if(v.return_cex.cex_type == cex_null_pointer)
     {
       exprt original_checked_pointer = v.checked_pointer;
-      current_candidate = and_exprt(current_candidate, same_object(original_checked_pointer , unary_exprt(ID_loop_entry, original_checked_pointer)));
+      current_candidate = and_exprt(
+        current_candidate,
+        same_object(
+          original_checked_pointer,
+          unary_exprt(ID_loop_entry, original_checked_pointer)));
     }
     else if(deductive && v.return_cex.cex_type == cex_oob)
     {
@@ -177,41 +197,81 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
 
       // TODO: modify this!
       exprt four = from_integer(0, size_type());
-    
+
       //current_candidate = and_exprt(current_candidate, and_exprt(less_than_or_equal_exprt(zero, offset), less_than_or_equal_exprt(offset, deref_object)));
       current_candidate = and_exprt(current_candidate, offset);
-    } 
+    }
     else
     {
-      simple_enumeratort enumerator(*this, current_candidate, v.return_cex, ui_message_handler);  
+      simple_enumeratort enumerator(
+        *this, current_candidate, v.return_cex, ui_message_handler);
       if(enumerator.enumerate())
         break;
-    } 
+    }
   }
 }
 
-void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
+void goto_synthesizer_parse_optionst::preprocess(
   const irep_idt &function_name,
   goto_functionst::goto_functiont &goto_function)
 {
   natural_loops_mutablet natural_loops(goto_function.body);
 
-  // Iterate over the (natural) loops in the function,
-  // and syntehsize loop invaraints.
+  // build the map from tmp_post to their original variables
+  for(const auto &instruction : goto_function.body.instructions)
+  {
+    if(instruction.type() == goto_program_instruction_typet::ASSIGN)
+    {
+      if(
+        from_expr(instruction.assign_lhs()).find("tmp_post") !=
+        std::string::npos)
+      {
+        std::cout << from_expr(instruction.assign_lhs()) << " = "
+                  << from_expr(instruction.assign_rhs()) << "\n";
+        tmp_post_map[instruction.assign_lhs()] = instruction.assign_rhs();
+      }
+    }
+  }
+
+  size_t loop_id = 0;
+  // Annotate all unannotated loop with true
   for(const auto &loop : natural_loops.loop_map)
   {
-    synthesize_loop_contracts(
-      function_name,
-      goto_function,
-      loop.first,
-      loop.second);
+    invariant_idt new_id = {
+      .func_name = loop.first->source_location().get_function(),
+      .loop_id = loop_id};
+    goto_programt::targett loop_end = get_loop_end(new_id);
+    if(loop_end->get_condition().find(ID_C_spec_loop_invariant).is_nil())
+    {
+      invariant_map[new_id] = true_exprt();
+    }
+    loop_id++;
   }
 }
 
-void goto_synthesizer_parse_optionst::synthesize_loop_contracts(goto_functionst &goto_functions)
+void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
+  goto_functionst &goto_functions)
 {
-  for(auto &goto_function : goto_functions.function_map){
-    synthesize_loop_contracts(goto_function.first, goto_function.second);
+  for(auto &goto_function : goto_functions.function_map)
+  {
+    preprocess(goto_function.first, goto_function.second);
+  }
+
+  while(true)
+  {
+    simple_verifiert v(*this, this->ui_message_handler);
+    // verify the current invariants_map
+    if(v.verify())
+    {
+      log.result() << "result : " << log.green << "PASS" << messaget::eom
+                   << log.reset;
+      return;
+    }
+    else
+    {
+      log.result() << "result : " << log.red << "FAIL" << messaget::eom
+                   << log.reset;
+    }
   }
 }
 
@@ -224,12 +284,14 @@ int goto_synthesizer_parse_optionst::doit()
     return CPROVER_EXIT_SUCCESS;
   }
 
-  if(cmdline.args.size()!=1 && cmdline.args.size()!=2 && cmdline.args.size()!=3)
+  if(
+    cmdline.args.size() != 1 && cmdline.args.size() != 2 &&
+    cmdline.args.size() != 3)
   {
     help();
     return CPROVER_EXIT_USAGE_ERROR;
   }
-  
+
   messaget::eval_verbosity(
     cmdline.get_value("verbosity"), messaget::M_STATISTICS, ui_message_handler);
 
@@ -251,14 +313,13 @@ int goto_synthesizer_parse_optionst::doit()
         }
       }
       log.status() << "Model is valid" << messaget::eom;
-
     }
 
     symbol_table = goto_model.symbol_table;
 
     if(cmdline.isset("deductive"))
       deductive = true;
-    
+
     if(cmdline.isset("hybrid"))
       hybrid = true;
 
@@ -269,8 +330,6 @@ int goto_synthesizer_parse_optionst::doit()
   help();
   return CPROVER_EXIT_USAGE_ERROR;
 }
-
-
 
 void goto_synthesizer_parse_optionst::get_goto_program()
 {
