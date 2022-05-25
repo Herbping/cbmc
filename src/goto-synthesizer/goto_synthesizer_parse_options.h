@@ -86,7 +86,7 @@ public:
 
   goto_programt::targett get_loop_head(const invariant_idt);
   goto_programt::targett get_loop_end(const invariant_idt);
-  loop_templatet<goto_programt::targett> get_loop(const invariant_idt);
+  loopt get_loop(const invariant_idt);
 
 protected:
   void register_languages();

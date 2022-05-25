@@ -13,22 +13,6 @@ Date: February 2016
 
 #include "contracts.h"
 
-#include <algorithm>
-#include <map>
-
-#include <analyses/local_bitvector_analysis.h>
-#include <analyses/local_may_alias.h>
-
-#include <ansi-c/c_expr.h>
-
-#include <goto-instrument/havoc_utils.h>
-
-#include <goto-programs/goto_inline.h>
-#include <goto-programs/goto_program.h>
-#include <goto-programs/remove_skip.h>
-
-#include <langapi/language_util.h>
-
 #include <util/c_types.h>
 #include <util/expr_util.h>
 #include <util/find_symbols.h>
@@ -43,10 +27,23 @@ Date: February 2016
 #include <util/replace_symbol.h>
 #include <util/std_code.h>
 
+#include <goto-programs/goto_inline.h>
+#include <goto-programs/goto_program.h>
+#include <goto-programs/remove_skip.h>
+
+#include <analyses/local_bitvector_analysis.h>
+#include <analyses/local_may_alias.h>
+#include <ansi-c/c_expr.h>
+#include <goto-instrument/havoc_utils.h>
+#include <langapi/language_util.h>
+
 #include "havoc_assigns_clause_targets.h"
 #include "instrument_spec_assigns.h"
 #include "memory_predicates.h"
 #include "utils.h"
+
+#include <algorithm>
+#include <map>
 
 /// Decorator for \ref message_handlert that keeps track of warnings
 /// occuring when inlining a function.
@@ -153,6 +150,8 @@ void code_contractst::check_apply_loop_contracts(
       t->location_number > loop_end->location_number)
       loop_end = t;
 
+  unsigned loop_number = loop_end->loop_number;
+
   // check for assigns, invariant, and decreases clauses
   auto assigns_clause = static_cast<const exprt &>(
     loop_end->get_condition().find(ID_C_spec_assigns));
@@ -213,7 +212,8 @@ void code_contractst::check_apply_loop_contracts(
 
   // process quantified variables correctly (introduce a fresh temporary)
   // and return a copy of the invariant
-  const auto &invariant_expr = [&]() {
+  const auto &invariant_expr = [&]()
+  {
     auto invariant_copy = invariant;
     replace_symbolt replace;
     code_contractst::add_quantified_variable(invariant_copy, replace, mode);
@@ -327,7 +327,7 @@ void code_contractst::check_apply_loop_contracts(
     cfg_empty_info);
 
   // insert havocing code
-  havoc_assigns_targetst havoc_gen(to_havoc, ns);
+  havoc_assigns_targetst havoc_gen(to_havoc, ns, loop_number);
   havoc_gen.append_full_havoc_code(
     loop_head->source_location(), generated_code);
 
@@ -422,8 +422,8 @@ void code_contractst::check_apply_loop_contracts(
   {
     for(size_t i = 0; i < old_decreases_vars.size(); i++)
     {
-      code_assignt old_decreases_assignment{old_decreases_vars[i],
-                                            decreases_clause_exprs[i]};
+      code_assignt old_decreases_assignment{
+        old_decreases_vars[i], decreases_clause_exprs[i]};
       old_decreases_assignment.add_source_location() =
         loop_head->source_location();
       converter.goto_convert(old_decreases_assignment, generated_code, mode);
@@ -450,8 +450,8 @@ void code_contractst::check_apply_loop_contracts(
   {
     for(size_t i = 0; i < new_decreases_vars.size(); i++)
     {
-      code_assignt new_decreases_assignment{new_decreases_vars[i],
-                                            decreases_clause_exprs[i]};
+      code_assignt new_decreases_assignment{
+        new_decreases_vars[i], decreases_clause_exprs[i]};
       new_decreases_assignment.add_source_location() =
         loop_head->source_location();
       converter.goto_convert(new_decreases_assignment, generated_code, mode);
@@ -865,9 +865,8 @@ void code_contractst::apply_loop_contract(
   const bool may_have_loops = std::any_of(
     goto_function.body.instructions.begin(),
     goto_function.body.instructions.end(),
-    [](const goto_programt::instructiont &instruction) {
-      return instruction.is_backwards_goto();
-    });
+    [](const goto_programt::instructiont &instruction)
+    { return instruction.is_backwards_goto(); });
 
   if(!may_have_loops)
     return;

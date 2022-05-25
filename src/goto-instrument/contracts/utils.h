@@ -11,18 +11,18 @@ Date: September 2021
 #ifndef CPROVER_GOTO_INSTRUMENT_CONTRACTS_UTILS_H
 #define CPROVER_GOTO_INSTRUMENT_CONTRACTS_UTILS_H
 
-#include <vector>
-
-#include <analyses/dirty.h>
-#include <analyses/locals.h>
-
-#include <goto-instrument/havoc_utils.h>
-
 #include <goto-programs/goto_convert_class.h>
-#include <goto-programs/goto_model.h>
 
 #include <util/expr_cast.h>
 #include <util/message.h>
+
+#include <goto-programs/goto_model.h>
+
+#include <analyses/dirty.h>
+#include <analyses/locals.h>
+#include <goto-instrument/havoc_utils.h>
+
+#include <vector>
 
 /// \brief A class that overrides the low-level havocing functions in the base
 ///        utility class, to havoc only when expressions point to valid memory,
@@ -30,8 +30,11 @@ Date: September 2021
 class havoc_if_validt : public havoc_utilst
 {
 public:
-  havoc_if_validt(const assignst &mod, const namespacet &ns)
-    : havoc_utilst(mod), ns(ns)
+  havoc_if_validt(
+    const assignst &mod,
+    const namespacet &ns,
+    const unsigned loop_number)
+    : havoc_utilst(mod, loop_number), ns(ns)
   {
   }
 
@@ -54,8 +57,11 @@ protected:
 class havoc_assigns_targetst : public havoc_if_validt
 {
 public:
-  havoc_assigns_targetst(const assignst &mod, const namespacet &ns)
-    : havoc_if_validt(mod, ns)
+  havoc_assigns_targetst(
+    const assignst &mod,
+    const namespacet &ns,
+    const unsigned loop_number)
+    : havoc_if_validt(mod, ns, loop_number)
   {
   }
 

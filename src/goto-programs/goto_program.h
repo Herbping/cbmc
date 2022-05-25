@@ -12,17 +12,17 @@ Author: Daniel Kroening, kroening@kroening.com
 #ifndef CPROVER_GOTO_PROGRAMS_GOTO_PROGRAM_H
 #define CPROVER_GOTO_PROGRAMS_GOTO_PROGRAM_H
 
-#include "goto_instruction_code.h"
-
-#include <iosfwd>
-#include <set>
-#include <limits>
-#include <string>
-
 #include <util/deprecate.h>
 #include <util/invariant.h>
 #include <util/namespace.h>
 #include <util/source_location.h>
+
+#include "goto_instruction_code.h"
+
+#include <iosfwd>
+#include <limits>
+#include <set>
+#include <string>
 
 class code_gotot;
 enum class validation_modet;
@@ -52,6 +52,13 @@ enum goto_program_instruction_typet
   INCOMPLETE_GOTO = 19   // goto where target is yet to be determined
 };
 
+/// The type of an instruction in a GOTO program.
+enum goto_program_instruction_assign_typet
+{
+  STATE = 0,
+  LOOP_HAVOC = 1
+};
+
 std::ostream &operator<<(std::ostream &, goto_program_instruction_typet);
 
 /// A generic container class for the GOTO intermediate representation of one
@@ -73,8 +80,8 @@ class goto_programt
 {
 public:
   /// Copying is deleted as this class contains pointers that cannot be copied
-  goto_programt(const goto_programt &)=delete;
-  goto_programt &operator=(const goto_programt &)=delete;
+  goto_programt(const goto_programt &) = delete;
+  goto_programt &operator=(const goto_programt &) = delete;
 
   // Move operations need to be explicitly enabled as they are deleted with the
   // copy operations
@@ -82,14 +89,14 @@ public:
   //  explicitly (see https://msdn.microsoft.com/en-us/library/hh567368.aspx
   //  under "Defaulted and Deleted Functions")
 
-  goto_programt(goto_programt &&other):
-    instructions(std::move(other.instructions))
+  goto_programt(goto_programt &&other)
+    : instructions(std::move(other.instructions))
   {
   }
 
   goto_programt &operator=(goto_programt &&other)
   {
-    instructions=std::move(other.instructions);
+    instructions = std::move(other.instructions);
     return *this;
   }
 
@@ -345,10 +352,24 @@ public:
       return _type;
     }
 
+    void set_assign_type(goto_program_instruction_assign_typet __assign_type)
+    {
+      PRECONDITION(is_assign() || is_other());
+      _assign_type = __assign_type;
+    }
+
+    bool is_loop_havoc() const
+    {
+      PRECONDITION(is_assign() || is_other());
+      return _assign_type == goto_program_instruction_assign_typet::LOOP_HAVOC;
+    }
+
   protected:
     // Use type() to access. To prevent malformed instructions, no non-const
     // access method is provided.
     goto_program_instruction_typet _type;
+
+    goto_program_instruction_assign_typet _assign_type;
 
   public:
     /// Guard for gotos, assume, assert
@@ -406,7 +427,7 @@ public:
     /// target
     targett get_target() const
     {
-      PRECONDITION(targets.size()==1);
+      PRECONDITION(targets.size() == 1);
       return targets.front();
     }
 
@@ -432,14 +453,16 @@ public:
 
     /// Is this node a branch target?
     bool is_target() const
-    { return target_number!=nil_target; }
+    {
+      return target_number != nil_target;
+    }
 
     /// Clear the node
     void clear(goto_program_instruction_typet __type)
     {
       _type = __type;
       targets.clear();
-      guard=true_exprt();
+      guard = true_exprt();
       code.make_nil();
     }
 
@@ -490,8 +513,8 @@ public:
     bool is_incomplete_goto () const { return _type == INCOMPLETE_GOTO;  }
     // clang-format on
 
-    instructiont():
-      instructiont(NO_INSTRUCTION_TYPE) // NOLINT(runtime/explicit)
+    instructiont()
+      : instructiont(NO_INSTRUCTION_TYPE) // NOLINT(runtime/explicit)
     {
     }
 
@@ -516,6 +539,7 @@ public:
         guard(std::move(_guard)),
         targets(std::move(_targets))
     {
+      _assign_type = goto_program_instruction_assign_typet::STATE;
     }
 
     /// Swap two instructions
@@ -531,8 +555,7 @@ public:
     }
 
     /// Uniquely identify an invalid target or location
-    static const unsigned nil_target=
-      std::numeric_limits<unsigned>::max();
+    static const unsigned nil_target = std::numeric_limits<unsigned>::max();
 
     /// A globally unique number to identify a program location.
     /// It's guaranteed to be ordered in program order within
@@ -553,7 +576,7 @@ public:
         return false;
 
       for(const auto &t : targets)
-        if(t->location_number<=location_number)
+        if(t->location_number <= location_number)
           return true;
 
       return false;
@@ -618,8 +641,8 @@ public:
   /// Insertion that preserves jumps to "target".
   void insert_before_swap(targett target)
   {
-    PRECONDITION(target!=instructions.end());
-    const auto next=std::next(target);
+    PRECONDITION(target != instructions.end());
+    const auto next = std::next(target);
     instructions.insert(next, instructiont())->swap(*target);
   }
 
@@ -649,15 +672,13 @@ public:
 
   /// Insertion that preserves jumps to "target".
   /// The program p is destroyed.
-  void insert_before_swap(
-    targett target,
-    goto_programt &p)
+  void insert_before_swap(targett target, goto_programt &p)
   {
-    PRECONDITION(target!=instructions.end());
+    PRECONDITION(target != instructions.end());
     if(p.instructions.empty())
       return;
     insert_before_swap(target, p.instructions.front());
-    auto next=std::next(target);
+    auto next = std::next(target);
     p.instructions.erase(p.instructions.begin());
     instructions.splice(next, p.instructions);
   }
@@ -697,15 +718,12 @@ public:
   /// Appends the given program `p` to `*this`. `p` is destroyed.
   void destructive_append(goto_programt &p)
   {
-    instructions.splice(instructions.end(),
-                        p.instructions);
+    instructions.splice(instructions.end(), p.instructions);
   }
 
   /// Inserts the given program `p` before `target`.
   /// The program `p` is destroyed.
-  void destructive_insert(
-    const_targett target,
-    goto_programt &p)
+  void destructive_insert(const_targett target, goto_programt &p)
   {
     instructions.splice(target, p.instructions);
   }
@@ -759,14 +777,14 @@ public:
       INVARIANT(
         nr != std::numeric_limits<unsigned>::max(),
         "Too many location numbers assigned");
-      i.location_number=nr++;
+      i.location_number = nr++;
     }
   }
 
   /// Compute location numbers
   void compute_location_numbers()
   {
-    unsigned nr=0;
+    unsigned nr = 0;
     compute_location_numbers(nr);
   }
 
@@ -816,9 +834,9 @@ public:
   targett get_end_function()
   {
     PRECONDITION(!instructions.empty());
-    const auto end_function=std::prev(instructions.end());
-    DATA_INVARIANT(end_function->is_end_function(),
-                   "goto program ends on END_FUNCTION");
+    const auto end_function = std::prev(instructions.end());
+    DATA_INVARIANT(
+      end_function->is_end_function(), "goto program ends on END_FUNCTION");
     return end_function;
   }
 
@@ -827,9 +845,9 @@ public:
   const_targett get_end_function() const
   {
     PRECONDITION(!instructions.empty());
-    const auto end_function=std::prev(instructions.end());
-    DATA_INVARIANT(end_function->is_end_function(),
-                   "goto program ends on END_FUNCTION");
+    const auto end_function = std::prev(instructions.end());
+    DATA_INVARIANT(
+      end_function->is_end_function(), "goto program ends on END_FUNCTION");
     return end_function;
   }
 
@@ -880,43 +898,27 @@ public:
   make_skip(const source_locationt &l = source_locationt::nil())
   {
     return instructiont(
-      static_cast<const codet &>(get_nil_irep()),
-      l,
-      SKIP,
-      nil_exprt(),
-      {});
+      static_cast<const codet &>(get_nil_irep()), l, SKIP, nil_exprt(), {});
   }
 
   static instructiont make_location(const source_locationt &l)
   {
     return instructiont(
-      static_cast<const codet &>(get_nil_irep()),
-      l,
-      LOCATION,
-      nil_exprt(),
-      {});
+      static_cast<const codet &>(get_nil_irep()), l, LOCATION, nil_exprt(), {});
   }
 
   static instructiont
   make_throw(const source_locationt &l = source_locationt::nil())
   {
     return instructiont(
-      static_cast<const codet &>(get_nil_irep()),
-      l,
-      THROW,
-      nil_exprt(),
-      {});
+      static_cast<const codet &>(get_nil_irep()), l, THROW, nil_exprt(), {});
   }
 
   static instructiont
   make_catch(const source_locationt &l = source_locationt::nil())
   {
     return instructiont(
-      static_cast<const codet &>(get_nil_irep()),
-      l,
-      CATCH,
-      nil_exprt(),
-      {});
+      static_cast<const codet &>(get_nil_irep()), l, CATCH, nil_exprt(), {});
   }
 
   static instructiont make_assertion(
@@ -924,11 +926,7 @@ public:
     const source_locationt &l = source_locationt::nil())
   {
     return instructiont(
-      static_cast<const codet &>(get_nil_irep()),
-      l,
-      ASSERT,
-      exprt(g),
-      {});
+      static_cast<const codet &>(get_nil_irep()), l, ASSERT, exprt(g), {});
   }
 
   static instructiont make_assumption(
@@ -944,6 +942,17 @@ public:
     const source_locationt &l = source_locationt::nil())
   {
     return instructiont(_code, l, OTHER, nil_exprt(), {});
+  }
+
+  static instructiont make_other_loop_havoc(
+    const codet &_code,
+    const unsigned ln,
+    const source_locationt &l = source_locationt::nil())
+  {
+    instructiont result = make_other(_code, l);
+    result.loop_number = ln;
+    result.set_assign_type(goto_program_instruction_assign_typet::LOOP_HAVOC);
+    return result;
   }
 
   static instructiont make_decl(
@@ -1039,11 +1048,7 @@ public:
     const source_locationt &l = source_locationt::nil())
   {
     return instructiont(
-      static_cast<const codet &>(get_nil_irep()),
-      l,
-      GOTO,
-      g,
-      {_target});
+      static_cast<const codet &>(get_nil_irep()), l, GOTO, g, {_target});
   }
 
   /// Create an assignment instruction
@@ -1062,6 +1067,19 @@ public:
   {
     return instructiont(
       code_assignt(std::move(lhs), std::move(rhs)), l, ASSIGN, nil_exprt(), {});
+  }
+
+  /// Create an assignment instruction
+  static instructiont make_assignment_loop_havoc(
+    exprt lhs,
+    exprt rhs,
+    const unsigned ln,
+    const source_locationt &l = source_locationt::nil())
+  {
+    instructiont result = make_assignment(lhs, rhs, l);
+    result.loop_number = ln;
+    result.set_assign_type(goto_program_instruction_assign_typet::LOOP_HAVOC);
+    return result;
   }
 
   static instructiont make_decl(
@@ -1108,15 +1126,14 @@ public:
 /// \return List of control-flow successors of the pointed-to goto program
 ///   instruction
 template <typename Target>
-std::list<Target> goto_programt::get_successors(
-  Target target) const
+std::list<Target> goto_programt::get_successors(Target target) const
 {
-  if(target==instructions.end())
+  if(target == instructions.end())
     return std::list<Target>();
 
-  const auto next=std::next(target);
+  const auto next = std::next(target);
 
-  const instructiont &i=*target;
+  const instructiont &i = *target;
 
   if(i.is_goto())
   {
@@ -1132,7 +1149,7 @@ std::list<Target> goto_programt::get_successors(
   {
     std::list<Target> successors(i.targets.begin(), i.targets.end());
 
-    if(next!=instructions.end())
+    if(next != instructions.end())
       successors.push_back(next);
 
     return successors;
@@ -1157,7 +1174,7 @@ std::list<Target> goto_programt::get_successors(
              : std::list<Target>();
   }
 
-  if(next!=instructions.end())
+  if(next != instructions.end())
   {
     return std::list<Target>{next};
   }
@@ -1169,16 +1186,15 @@ inline bool order_const_target(
   const goto_programt::const_targett i1,
   const goto_programt::const_targett i2)
 {
-  const goto_programt::instructiont &_i1=*i1;
-  const goto_programt::instructiont &_i2=*i2;
-  return &_i1<&_i2;
+  const goto_programt::instructiont &_i1 = *i1;
+  const goto_programt::instructiont &_i2 = *i2;
+  return &_i1 < &_i2;
 }
 
 // NOLINTNEXTLINE(readability/identifiers)
 struct const_target_hash
 {
-  std::size_t operator()(
-    const goto_programt::const_targett t) const
+  std::size_t operator()(const goto_programt::const_targett t) const
   {
     using hash_typet = decltype(&(*t));
     return std::hash<hash_typet>{}(&(*t));
@@ -1220,15 +1236,17 @@ void for_each_instruction(GotoFunctionT &&goto_function, HandlerT handler)
     goto_function, [](const iterator_t &) { return true; }, handler);
 }
 
-#define forall_goto_program_instructions(it, program) \
-  for(goto_programt::instructionst::const_iterator \
-      it=(program).instructions.begin(); \
-      it!=(program).instructions.end(); it++)
+#define forall_goto_program_instructions(it, program)                          \
+  for(goto_programt::instructionst::const_iterator it =                        \
+        (program).instructions.begin();                                        \
+      it != (program).instructions.end();                                      \
+      it++)
 
-#define Forall_goto_program_instructions(it, program) \
-  for(goto_programt::instructionst::iterator \
-      it=(program).instructions.begin(); \
-      it!=(program).instructions.end(); it++)
+#define Forall_goto_program_instructions(it, program)                          \
+  for(goto_programt::instructionst::iterator it =                              \
+        (program).instructions.begin();                                        \
+      it != (program).instructions.end();                                      \
+      it++)
 
 inline bool operator<(
   const goto_programt::const_targett &i1,
@@ -1237,11 +1255,10 @@ inline bool operator<(
   return order_const_target(i1, i2);
 }
 
-inline bool operator<(
-  const goto_programt::targett &i1,
-  const goto_programt::targett &i2)
+inline bool
+operator<(const goto_programt::targett &i1, const goto_programt::targett &i2)
 {
-  return &(*i1)<&(*i2);
+  return &(*i1) < &(*i2);
 }
 
 std::list<exprt> objects_read(const goto_programt::instructiont &);

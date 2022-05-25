@@ -14,11 +14,11 @@ Date: July 2021
 #ifndef CPROVER_GOTO_INSTRUMENT_HAVOC_UTILS_H
 #define CPROVER_GOTO_INSTRUMENT_HAVOC_UTILS_H
 
-#include <set>
+#include <util/expr_util.h>
 
 #include <goto-programs/goto_program.h>
 
-#include <util/expr_util.h>
+#include <set>
 
 typedef std::set<exprt> assignst;
 
@@ -47,7 +47,8 @@ protected:
 class havoc_utilst
 {
 public:
-  explicit havoc_utilst(const assignst &mod) : assigns(mod), is_constant(mod)
+  explicit havoc_utilst(const assignst &mod, const unsigned loop_number = 0)
+    : assigns(mod), is_constant(mod), loop_number(loop_number)
   {
   }
 
@@ -101,6 +102,7 @@ public:
 protected:
   const assignst &assigns;
   const havoc_utils_is_constantt is_constant;
+  const unsigned loop_number;
 };
 
 #endif // CPROVER_GOTO_INSTRUMENT_HAVOC_UTILS_H
