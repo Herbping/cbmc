@@ -225,7 +225,7 @@ std::string expr2ct::convert_rec(
   c_qualifierst &new_qualifiers = dynamic_cast<c_qualifierst &>(*clone);
   new_qualifiers.read(src);
 
-  std::string q=new_qualifiers.as_string();
+  std::string q = new_qualifiers.as_string();
 
   std::string d = declarator.empty() ? declarator : " " + declarator;
 
@@ -4021,6 +4021,7 @@ optionalt<std::string> expr2ct::convert_function(const exprt &src)
     {ID_object_size, "OBJECT_SIZE"},
     {ID_pointer_object, "POINTER_OBJECT"},
     {ID_pointer_offset, "POINTER_OFFSET"},
+    {ID_loop_entry, "loop_entry"},
     {ID_saturating_minus, CPROVER_PREFIX "saturating_minus"},
     {ID_saturating_plus, CPROVER_PREFIX "saturating_plus"},
     {ID_r_ok, "R_OK"},
