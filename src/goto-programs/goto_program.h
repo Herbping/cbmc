@@ -364,12 +364,12 @@ public:
              _assign_type == goto_program_instruction_assign_typet::LOOP_HAVOC;
     }
 
+
   protected:
     // Use type() to access. To prevent malformed instructions, no non-const
     // access method is provided.
     goto_program_instruction_typet _type;
-
-    goto_program_instruction_assign_typet _assign_type;
+    goto_program_instruction_assign_typet _assign_type =  goto_program_instruction_assign_typet::STATE;
 
   public:
     /// Guard for gotos, assume, assert
@@ -539,7 +539,6 @@ public:
         guard(std::move(_guard)),
         targets(std::move(_targets))
     {
-      _assign_type = goto_program_instruction_assign_typet::STATE;
     }
 
     /// Swap two instructions
