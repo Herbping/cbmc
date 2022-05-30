@@ -360,8 +360,8 @@ public:
 
     bool is_loop_havoc() const
     {
-      PRECONDITION(is_assign() || is_other());
-      return _assign_type == goto_program_instruction_assign_typet::LOOP_HAVOC;
+      return (is_assign() || is_other()) &&
+             _assign_type == goto_program_instruction_assign_typet::LOOP_HAVOC;
     }
 
   protected:
