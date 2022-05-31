@@ -33,8 +33,9 @@ public:
   havoc_if_validt(
     const assignst &mod,
     const namespacet &ns,
-    const unsigned loop_number)
-    : havoc_utilst(mod, loop_number), ns(ns)
+    const unsigned loop_number = 0,
+    const bool is_loop_havoc = false)
+    : havoc_utilst(mod, loop_number, is_loop_havoc), ns(ns)
   {
   }
 
@@ -60,8 +61,9 @@ public:
   havoc_assigns_targetst(
     const assignst &mod,
     const namespacet &ns,
-    const unsigned loop_number)
-    : havoc_if_validt(mod, ns, loop_number)
+    const unsigned loop_number = 0,
+    const bool is_loop_havoc = false)
+    : havoc_if_validt(mod, ns, loop_number, is_loop_havoc)
   {
   }
 

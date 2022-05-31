@@ -51,7 +51,11 @@ void havoc_utilst::append_object_havoc_code_for_expr(
   codet havoc(ID_havoc_object);
   havoc.add_source_location() = location;
   havoc.add_to_operands(expr);
-  dest.add(goto_programt::make_other_loop_havoc(havoc, loop_number, location));
+  if(is_loop_havoc)
+    dest.add(
+      goto_programt::make_other_loop_havoc(havoc, loop_number, location));
+  else
+    dest.add(goto_programt::make_other(havoc, location));
 }
 
 void havoc_utilst::append_scalar_havoc_code_for_expr(
@@ -60,7 +64,12 @@ void havoc_utilst::append_scalar_havoc_code_for_expr(
   goto_programt &dest) const
 {
   side_effect_expr_nondett rhs(expr.type(), location);
-  goto_programt::targett t = dest.add(goto_programt::make_assignment_loop_havoc(
-    expr, std::move(rhs), loop_number, location));
+  goto_programt::targett t;
+  if(is_loop_havoc)
+    t = dest.add(goto_programt::make_assignment_loop_havoc(
+      expr, std::move(rhs), loop_number, location));
+  else
+    t =
+      dest.add(goto_programt::make_assignment(expr, std::move(rhs), location));
   t->code_nonconst().add_source_location() = location;
 }

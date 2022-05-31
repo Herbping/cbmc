@@ -47,8 +47,14 @@ protected:
 class havoc_utilst
 {
 public:
-  explicit havoc_utilst(const assignst &mod, const unsigned loop_number = 0)
-    : assigns(mod), is_constant(mod), loop_number(loop_number)
+  explicit havoc_utilst(
+    const assignst &mod,
+    const unsigned loop_number = 0,
+    bool is_loop_havoc = false)
+    : assigns(mod),
+      is_constant(mod),
+      loop_number(loop_number),
+      is_loop_havoc(is_loop_havoc)
   {
   }
 
@@ -103,6 +109,7 @@ protected:
   const assignst &assigns;
   const havoc_utils_is_constantt is_constant;
   const unsigned loop_number;
+  const bool is_loop_havoc;
 };
 
 #endif // CPROVER_GOTO_INSTRUMENT_HAVOC_UTILS_H

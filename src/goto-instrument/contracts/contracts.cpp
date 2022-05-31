@@ -327,7 +327,7 @@ void code_contractst::check_apply_loop_contracts(
     cfg_empty_info);
 
   // insert havocing code
-  havoc_assigns_targetst havoc_gen(to_havoc, ns, loop_number);
+  havoc_assigns_targetst havoc_gen(to_havoc, ns, loop_number, true);
   havoc_gen.append_full_havoc_code(
     loop_head->source_location(), generated_code);
 
