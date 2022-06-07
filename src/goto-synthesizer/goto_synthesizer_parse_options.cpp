@@ -24,6 +24,7 @@ Author: Qinheping Hu, qinhh@amazon.com
 
 #include "goto_synthesizer_enumerator.h"
 #include "goto_synthesizer_verifier.h"
+#include "synthesizer_utils.h"
 
 #ifdef _MSC_VER
 #endif
@@ -55,73 +56,13 @@ void goto_synthesizer_parse_optionst::register_languages()
   register_language(new_cpp_language);
 }
 
-loop_templatet<goto_programt::targett>
-goto_synthesizer_parse_optionst::get_loop(const invariant_idt inv_id)
+exprt goto_synthesizer_parse_optionst::synthesize_range_predicate_simple(
+  exprt violated_predicate)
 {
-  goto_functionst::function_mapt &function_map =
-    goto_model.goto_functions.function_map;
-
-  natural_loops_mutablet natural_loops(function_map[inv_id.func_name].body);
-
-  size_t loop_id = 0;
-  for(const auto &loop : natural_loops.loop_map)
-  {
-    if(loop_id == inv_id.loop_id)
-      return loop.second;
-    loop_id++;
-  }
-  UNREACHABLE;
+  return violated_predicate;
 }
 
-goto_programt::targett
-goto_synthesizer_parse_optionst::get_loop_end(const invariant_idt inv_id)
-{
-  goto_functionst::function_mapt &function_map =
-    goto_model.goto_functions.function_map;
-
-  natural_loops_mutablet natural_loops(function_map[inv_id.func_name].body);
-
-  size_t loop_id = 0;
-  for(const auto &loop_p : natural_loops.loop_map)
-  {
-    if(loop_id == inv_id.loop_id)
-    {
-      const goto_programt::targett loop_head = loop_p.first;
-      goto_programt::targett loop_end = loop_p.first;
-      const loopt &loop = loop_p.second;
-      for(const auto &t : loop)
-      {
-        if(
-          t->is_goto() && t->get_target() == loop_head &&
-          t->location_number > loop_end->location_number)
-          loop_end = t;
-      }
-      return loop_end;
-    }
-    loop_id++;
-  }
-  UNREACHABLE;
-}
-
-goto_programt::targett
-goto_synthesizer_parse_optionst::get_loop_head(const invariant_idt inv_id)
-{
-  goto_functionst::function_mapt &function_map =
-    goto_model.goto_functions.function_map;
-
-  natural_loops_mutablet natural_loops(function_map[inv_id.func_name].body);
-
-  size_t loop_id = 0;
-  for(const auto &loop : natural_loops.loop_map)
-  {
-    if(loop_id == inv_id.loop_id)
-      return loop.first;
-    loop_id++;
-  }
-  UNREACHABLE;
-}
-
-void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
+void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
   const irep_idt &function_name,
   goto_functionst::goto_functiont &goto_function,
   const goto_programt::targett loop_head,
@@ -181,7 +122,7 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
       }
     }
 
-    if(v.return_cex.cex_type == cex_null_pointer)
+    if(v.return_cex.cex_type == cext::cex_typet::cex_null_pointer)
     {
       exprt original_checked_pointer = v.checked_pointer;
       current_candidate = and_exprt(
@@ -190,10 +131,10 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
           original_checked_pointer,
           unary_exprt(ID_loop_entry, original_checked_pointer)));
     }
-    else if(deductive && v.return_cex.cex_type == cex_oob)
+    else if(deductive && v.return_cex.cex_type == cext::cex_typet::cex_oob)
     {
-      exprt offset = v.offset;
-      exprt deref_object = v.dereferenced_object;
+      exprt offset = v.offset_deprecated;
+      exprt deref_object = v.dereferenced_object_deprecated;
 
       // TODO: modify this!
       exprt four = from_integer(0, size_type());
@@ -226,30 +167,32 @@ void goto_synthesizer_parse_optionst::preprocess(
         from_expr(instruction.assign_lhs()).find("tmp_post") !=
         std::string::npos)
       {
-        std::cout << from_expr(instruction.assign_lhs()) << " = "
-                  << from_expr(instruction.assign_rhs()) << "\n";
         tmp_post_map[instruction.assign_lhs()] = instruction.assign_rhs();
       }
     }
   }
 
-  size_t loop_id = 0;
-  // Annotate all unannotated loop with true
+  size_t loop_number = 0;
+  // first candidatge invairant for unannotated loop is true
   for(const auto &loop : natural_loops.loop_map)
   {
-    invariant_idt new_id = {
+    loop_idt new_id = {
       .func_name = loop.first->source_location().get_function(),
-      .loop_id = loop_id};
-    goto_programt::targett loop_end = get_loop_end(new_id);
+      .loop_number = loop_number};
+    goto_programt::targett loop_end = get_loop_end(
+      new_id.func_name,
+      new_id.loop_number,
+      goto_model.goto_functions.function_map);
     if(loop_end->get_condition().find(ID_C_spec_loop_invariant).is_nil())
     {
       invariant_map[new_id] = true_exprt();
+      post_invariant_map[new_id] = true_exprt();
     }
-    loop_id++;
+    loop_number++;
   }
 }
 
-void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
+void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
   goto_functionst &goto_functions)
 {
   for(auto &goto_function : goto_functions.function_map)
@@ -257,9 +200,12 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
     preprocess(goto_function.first, goto_function.second);
   }
 
+  cext prev_cex;
+
   while(true)
   {
     simple_verifiert v(*this, this->ui_message_handler);
+
     // verify the current invariants_map
     if(v.verify())
     {
@@ -272,6 +218,39 @@ void goto_synthesizer_parse_optionst::synthesize_loop_contracts(
       log.result() << "result : " << log.red << "FAIL" << messaget::eom
                    << log.reset;
     }
+
+    cext::cex_typet violation_type = v.return_cex.cex_type;
+    exprt new_clasue = true_exprt();
+
+    switch(violation_type)
+    {
+    case cext::cex_typet::cex_null_pointer:
+
+    case cext::cex_typet::cex_oob:
+      // TODO create a new member variable violated_predicate
+      new_clasue =
+        synthesize_range_predicate_simple(v.return_cex.violated_predicate);
+      break;
+
+    case cext::cex_typet::cex_not_preserved:
+
+    case cext::cex_typet::cex_ERROR:
+      INVARIANT(true, "unsupported violation type");
+      break;
+    }
+
+    // store the previous cex
+    prev_cex = v.return_cex;
+    prev_cex.cause_loop_id.func_name = v.return_cex.cause_loop_id.func_name;
+    prev_cex.cause_loop_id.loop_number = v.return_cex.cause_loop_id.loop_number;
+
+    // add the new cluase to the candidate invairants
+    if(v.return_cex.is_violation_in_loop)
+      invariant_map[prev_cex.cause_loop_id] =
+        and_exprt(invariant_map[prev_cex.cause_loop_id], new_clasue);
+    else
+      post_invariant_map[prev_cex.cause_loop_id] =
+        and_exprt(post_invariant_map[prev_cex.cause_loop_id], new_clasue);
   }
 }
 
@@ -315,15 +294,13 @@ int goto_synthesizer_parse_optionst::doit()
       log.status() << "Model is valid" << messaget::eom;
     }
 
-    symbol_table = goto_model.symbol_table;
-
     if(cmdline.isset("deductive"))
       deductive = true;
 
     if(cmdline.isset("hybrid"))
       hybrid = true;
 
-    synthesize_loop_contracts(goto_model.goto_functions);
+    synthesize_loop_invariants(goto_model.goto_functions);
     return CPROVER_EXIT_SUCCESS;
   }
 

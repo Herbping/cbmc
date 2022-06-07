@@ -23,6 +23,8 @@ Author: Qinheping Hu
 #include <cpp/cprover_library.h>
 #include <langapi/language_util.h>
 
+#include "synthesizer_utils.h"
+
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -46,6 +48,7 @@ Author: Qinheping Hu
 #include <goto-programs/show_properties.h>
 #include <goto-programs/show_symbol_table.h>
 
+#include <analyses/dependence_graph.h>
 #include <ansi-c/ansi_c_language.h>
 #include <cbmc/cbmc_parse_options.h>
 #include <cpp/cpp_language.h>
@@ -67,11 +70,77 @@ Author: Qinheping Hu
 #include <goto-instrument/loop_utils.h>
 #include <langapi/mode.h>
 
+goto_synthesizer_parse_optionst::loop_idt simple_verifiert::get_cause_loop_id(
+  const goto_tracet &goto_trace,
+  const goto_programt::const_targett violation)
+{
+  goto_synthesizer_parse_optionst::loop_idt result;
+  result.loop_number = -1;
+
+  // build the dependence graph
+  const namespacet ns(parse_option.goto_model.symbol_table);
+  dependence_grapht dependence_graph(ns);
+  dependence_graph(parse_option.goto_model);
+
+  for(const auto &step : goto_trace.steps)
+  {
+    if(step.pc->is_loop_havoc())
+    {
+      goto_programt::const_targett from;
+      goto_programt::const_targett to;
+
+      // get `from` a loop havoc instruction
+      for(goto_programt::const_targett it =
+            parse_option.goto_model
+              .get_goto_function(step.pc->source_location().get_function())
+              .body.instructions.begin();
+          it != parse_option.goto_model
+                  .get_goto_function(step.pc->source_location().get_function())
+                  .body.instructions.end();
+          ++it)
+      {
+        if(it->location_number == step.pc->location_number)
+        {
+          from = it;
+        }
+      }
+
+      // get `to` the instruction where violation happens
+      for(goto_programt::const_targett it =
+            parse_option.goto_model
+              .get_goto_function(violation->source_location().get_function())
+              .body.instructions.begin();
+          it !=
+          parse_option.goto_model
+            .get_goto_function(violation->source_location().get_function())
+            .body.instructions.end();
+          ++it)
+      {
+        if(it->location_number == violation->location_number)
+        {
+          to = it;
+        }
+      }
+
+      // the violation is caused by the loop havoc
+      // if it is dependent on the loop havoc
+      if(dependence_graph.is_flow_depedent(from, to))
+      {
+        result.func_name = step.pc->source_location().get_function();
+        result.loop_number = step.pc->loop_number;
+      }
+    }
+  }
+  INVARIANT(
+    result.loop_number >= 0, "the violation is nothing about loop invariants!");
+  return result;
+}
+
 cext simple_verifiert::get_cex(
   const namespacet &ns,
   const goto_tracet &goto_trace,
   const source_locationt &loop_entry_loc,
-  cex_typet type)
+  cext::cex_typet type)
 {
   std::map<exprt, std::string> lhs_eval;
   std::map<std::string, std::string> object_sizes;
@@ -79,9 +148,6 @@ cext simple_verifiert::get_cex(
   std::map<std::string, std::string> loop_entry_eval;
   std::map<std::string, std::string> loop_entry_offsets;
   std::set<exprt> live_lhs;
-
-  optionst options;
-  trace_optionst trace_options(options);
 
   std::string next_object_size = "";
   bool have_seen_entry = false; // false if haven't touched the loop head
@@ -141,7 +207,6 @@ cext simple_verifiert::get_cex(
           rhs = rhs.substr(0, rhs.length() - 1);
 
         // update the alive varaibles
-        // std::cout << lhs << " = " << rhs << " | " << after_entry << " | " << step.hidden << " @ " << step.pc->source_location().pretty() << "\n";
         if(
           step.pc->source_location().get_function() ==
             loop_entry_loc.get_function() &&
@@ -150,8 +215,9 @@ cext simple_verifiert::get_cex(
            step.full_lhs.type().id() == ID_pointer) &&
           (lhs.find("(") == std::string::npos))
         {
-          // for tmp_post
           last_lhs = step.full_lhs;
+          // FIXME^^ for tmp_post
+
           if(lhs != "a" && lhs != "b" && lhs != "c")
             live_lhs.insert(step.full_lhs);
         }
@@ -204,7 +270,7 @@ cext simple_verifiert::get_cex(
 
         // store the object_size of dynamic_object by its index
         // Example:
-        //    object_sizes[5] is the size of dynamic_object5
+        //   object_sizes[5] is the size of dynamic_object5
         if(
           rhs.find("dynamic_object") != std::string::npos &&
           next_object_size != "")
@@ -315,6 +381,8 @@ bool simple_verifiert::verify()
   ui_message_handlert ui_null_message_handler(null_message_handler);
   messaget null_log(ui_null_message_handler);
 
+  // show_goto_functions(parse_option.goto_model, ui_message_handler, false);
+
   // store the original functions
   // and then annoate the invariants
   goto_functionst::function_mapt &function_map =
@@ -323,13 +391,27 @@ bool simple_verifiert::verify()
   {
     irep_idt fun_name = invariant_map_entry.first.func_name;
     original_functions[fun_name].copy_from(function_map[fun_name].body);
-    exprt guard =
-      parse_option.get_loop_head(invariant_map_entry.first)->condition();
-    goto_programt::targett loop_end =
-      parse_option.get_loop_end(invariant_map_entry.first);
+    exprt guard = get_loop_head(
+                    invariant_map_entry.first.func_name,
+                    invariant_map_entry.first.loop_number,
+                    function_map)
+                    ->condition();
+    goto_programt::targett loop_end = get_loop_end(
+      invariant_map_entry.first.func_name,
+      invariant_map_entry.first.loop_number,
+      function_map);
     exprt condition = loop_end->get_condition();
-    condition.add(ID_C_spec_loop_invariant) =
-      and_exprt(or_exprt(guard, invariant_map_entry.second), true_exprt());
+    //  The invariant is
+    //   (inv || !guard) && (!guard -> pos_inv)
+    condition.add(ID_C_spec_loop_invariant) = and_exprt(
+      or_exprt(guard, invariant_map_entry.second),
+      implies_exprt(
+        guard, parse_option.post_invariant_map[invariant_map_entry.first]));
+
+    std::cout << "Candidate :"
+              << from_expr(static_cast<const exprt &>(
+                   condition.find(ID_C_spec_loop_invariant)))
+              << "\n";
     loop_end->set_condition(condition);
   }
 
@@ -353,56 +435,73 @@ bool simple_verifiert::verify()
       options, ui_message_handler, parse_option.goto_model);
 
   const resultt result = (*verifier)();
+  // show_goto_functions(parse_option.goto_model, ui_message_handler, false);
   verifier->report();
-
-  // restore the unnotated loops
-  for(const auto &invariant_map_entry : parse_option.invariant_map)
-  {
-    irep_idt fun_name = invariant_map_entry.first.func_name;
-    parse_option.goto_model.goto_functions.function_map[fun_name].body.swap(
-      original_functions[fun_name]);
-  }
 
   if(result != resultt::PASS)
   {
     const auto sorted_properties =
       get_sorted_properties(verifier->get_properties());
-    const auto &property_it = sorted_properties.front();
-    if(property_it->second.status == property_statust::FAIL)
+
+    for(const auto &property_it : sorted_properties)
     {
-      cex_typet cex_type;
+      // find the first violation
+      if(property_it->second.status != property_statust::FAIL)
+        continue;
+
+      exprt violated_predicate = property_it->second.pc->condition();
+      cext::cex_typet cex_type;
       if((property_it->second.description.find(
             "pointer outside object bounds") != std::string::npos))
       {
-        //offset = get_index(property_it->second.pc->condition());
-        offset = property_it->second.pc->condition();
-        dereferenced_object = get_object(property_it->second.pc->condition());
-        cex_type = cex_oob;
+        cex_type = cext::cex_typet::cex_oob;
       }
 
       if(
         property_it->second.description.find("pointer NULL") !=
         std::string::npos)
       {
-        cex_type = cex_null_pointer;
+        cex_type = cext::cex_typet::cex_null_pointer;
         checked_pointer =
           get_checked_pointer(property_it->second.pc->condition());
       }
 
       if(property_it->second.description.find("preserved") != std::string::npos)
       {
-        cex_type = cex_not_preserved;
+        cex_type = cext::cex_typet::cex_not_preserved;
+      }
+
+      // compute the cause loop
+      goto_synthesizer_parse_optionst::loop_idt cause_loop_id =
+        get_cause_loop_id(
+          verifier->get_traces()[property_it->first], property_it->second.pc);
+
+      bool is_violation_in_loop = check_violation_in_loop(
+        cause_loop_id.func_name,
+        cause_loop_id.loop_number,
+        function_map,
+        property_it->second.pc->location_number);
+
+      // restore the unnotated loops
+      for(const auto &invariant_map_entry : parse_option.invariant_map)
+      {
+        irep_idt fun_name = invariant_map_entry.first.func_name;
+        parse_option.goto_model.goto_functions.function_map[fun_name].body.swap(
+          original_functions[fun_name]);
       }
 
       return_cex = get_cex(
         verifier->get_traces().get_namespace(),
         verifier->get_traces()[property_it->first],
-        target_loop_head->source_location(),
+        get_loop_head(
+          cause_loop_id.func_name, cause_loop_id.loop_number, function_map)
+          ->source_location(),
         cex_type);
       return_cex.checked_pointer = checked_pointer;
-      return_cex.dereferenced_object = dereferenced_object;
-      return_cex.offset = offset;
-      // std::cout << "failure type : " << (int)property_it->second.status << "\n";
+      return_cex.violated_predicate = violated_predicate;
+      return_cex.cause_loop_id.func_name = cause_loop_id.func_name;
+      return_cex.cause_loop_id.loop_number = cause_loop_id.loop_number;
+      return_cex.is_violation_in_loop = is_violation_in_loop;
 
       return false;
     }
@@ -419,9 +518,10 @@ bool simple_verifiert::verify(const exprt &expr)
   ui_message_handlert ui_null_message_handler(null_message_handler);
   messaget null_log(ui_null_message_handler);
 
-  original_program.copy_from(parse_option.goto_model.goto_functions
-                               .function_map[parse_option.target_function_name]
-                               .body);
+  original_program_old.copy_from(
+    parse_option.goto_model.goto_functions
+      .function_map[parse_option.target_function_name]
+      .body);
 
   natural_loops_mutablet natural_loops(
     parse_option.goto_model.goto_functions
@@ -442,13 +542,13 @@ bool simple_verifiert::verify(const exprt &expr)
         t->location_number > loop_end->location_number)
         loop_end = t;
     }
-    target_loop_end = loop_end;
-    target_loop_head = loop.first;
+    target_loop_end_old = loop_end;
+    target_loop_head_old = loop.first;
   }
-  exprt condition = target_loop_end->get_condition();
+  exprt condition = target_loop_end_old->get_condition();
   condition.add(ID_C_spec_loop_invariant) =
     and_exprt(true_exprt(), or_exprt(guard, expr));
-  target_loop_end->set_condition(condition);
+  target_loop_end_old->set_condition(condition);
 
   // exprt invariant = static_cast<const exprt &>(target_loop_end->get_condition().find(ID_C_spec_loop_invariant));
   // std::cout<< from_expr(invariant) << "\n";
@@ -466,7 +566,7 @@ bool simple_verifiert::verify(const exprt &expr)
   remove_skip(parse_option.goto_model);
   label_properties(parse_option.goto_model);
 
-  //show_goto_functions(parse_option.goto_model, ui_message_handler, false);
+  // show_goto_functions(parse_option.goto_model, ui_message_handler, false);
 
   std::unique_ptr<
     all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>
@@ -485,7 +585,7 @@ bool simple_verifiert::verify(const exprt &expr)
 
   parse_option.goto_model.goto_functions
     .function_map[parse_option.target_function_name]
-    .body.swap(original_program);
+    .body.swap(original_program_old);
 
   if(result != resultt::PASS)
   {
@@ -495,21 +595,22 @@ bool simple_verifiert::verify(const exprt &expr)
     {
       if(property_it->second.status == property_statust::FAIL)
       {
-        cex_typet cex_type;
+        cext::cex_typet cex_type;
         if((property_it->second.description.find(
               "pointer outside object bounds") != std::string::npos))
         {
           //offset = get_index(property_it->second.pc->condition());
-          offset = property_it->second.pc->condition();
-          dereferenced_object = get_object(property_it->second.pc->condition());
-          cex_type = cex_oob;
+          offset_deprecated = property_it->second.pc->condition();
+          dereferenced_object_deprecated =
+            get_object(property_it->second.pc->condition());
+          cex_type = cext::cex_typet::cex_oob;
         }
 
         if(
           property_it->second.description.find("pointer NULL") !=
           std::string::npos)
         {
-          cex_type = cex_null_pointer;
+          cex_type = cext::cex_typet::cex_null_pointer;
           checked_pointer =
             get_checked_pointer(property_it->second.pc->condition());
         }
@@ -518,17 +619,18 @@ bool simple_verifiert::verify(const exprt &expr)
           property_it->second.description.find("preserved") !=
           std::string::npos)
         {
-          cex_type = cex_not_preserved;
+          cex_type = cext::cex_typet::cex_not_preserved;
         }
 
         return_cex = get_cex(
           verifier->get_traces().get_namespace(),
           verifier->get_traces()[property_it->first],
-          target_loop_head->source_location(),
+          target_loop_head_old->source_location(),
           cex_type);
         return_cex.checked_pointer = checked_pointer;
-        return_cex.dereferenced_object = dereferenced_object;
-        return_cex.offset = offset;
+        return_cex.dereferenced_object_deprecated =
+          dereferenced_object_deprecated;
+        return_cex.offset_deprecated = offset_deprecated;
         // std::cout << "failure type : " << (int)property_it->second.status << "\n";
 
         return false;

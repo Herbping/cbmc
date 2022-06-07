@@ -44,29 +44,30 @@ public:
   virtual int doit();
   virtual void help();
 
-  struct invariant_idt
+  struct loop_idt
   {
     irep_idt func_name;
-    size_t loop_id;
+    size_t loop_number;
 
-    bool operator=(const invariant_idt &o) const
+    bool operator=(const loop_idt &o) const
     {
-      return func_name == o.func_name && loop_id == o.loop_id;
+      return func_name == o.func_name && loop_number == o.loop_number;
     }
 
-    bool operator<(const invariant_idt &o) const
+    bool operator<(const loop_idt &o) const
     {
       return func_name < o.func_name ||
-             (func_name == o.func_name && loop_id < o.loop_id);
+             (func_name == o.func_name && loop_number < o.loop_number);
     }
   };
 
-  typedef std::map<invariant_idt, exprt> invariantst;
+  typedef std::map<loop_idt, exprt> invariantst;
 
   std::vector<exprt> terminal_symbols = {};
   goto_modelt goto_model;
   irep_idt target_function_name;
   invariantst invariant_map;
+  invariantst post_invariant_map;
 
   goto_synthesizer_parse_optionst(int argc, const char **argv)
     : parse_options_baset(
@@ -74,51 +75,49 @@ public:
         argc,
         argv,
         "goto-synthesizer"),
-      function_pointer_removal_done(false),
-      partial_inlining_done(false),
-      remove_returns_done(false),
       deductive(false),
       hybrid(false)
   {
     tmp_post_map = expr_mapt();
     invariant_map = invariantst();
+    post_invariant_map = invariantst();
   }
-
-  goto_programt::targett get_loop_head(const invariant_idt);
-  goto_programt::targett get_loop_end(const invariant_idt);
-  loopt get_loop(const invariant_idt);
 
 protected:
   void register_languages();
 
   void get_goto_program();
 
-  void synthesize_loop_contracts(goto_functionst &goto_functions);
-  void synthesize_loop_contracts(
+  void synthesize_loop_invariants(goto_functionst &goto_functions);
+  void synthesize_loop_invariants(
     const irep_idt &function_name,
     goto_functionst::goto_functiont &goto_function);
   void preprocess(
     const irep_idt &function_name,
     goto_functionst::goto_functiont &goto_function);
-  void synthesize_loop_contracts(
+  void synthesize_loop_invariants(
     const irep_idt &function_name,
     goto_functionst::goto_functiont &goto_function,
     const goto_programt::targett loop_head,
     const loopt &loop);
-  void extract_exprt(const exprt &expr);
 
-  bool function_pointer_removal_done;
-  bool partial_inlining_done;
-  bool remove_returns_done;
+  // synthesize and annotate a range predicate to the loop `loop_id`
+  exprt synthesize_range_predicate_simple(exprt violated_predicate);
+
+  // synthesize and annotate a same_object predicate to the loop `loop_id`
+  exprt
+  synthesize_same_object_predicate(loop_idt loop_id, exprt checked_pointer);
+
+  // synthesize and annotate a strengthening clause
+  // to make the current invariants inductive
+  exprt synthesize_strengthening_clause(loop_idt loop_id);
 
   bool deductive;
   bool hybrid;
 
-  typedef std::unordered_map<irep_idt, symbolt> symbolst;
   typedef std::map<exprt, exprt> expr_mapt;
 
   expr_mapt tmp_post_map;
-  symbol_tablet symbol_table;
 };
 
 #endif // CPROVER_GOTO_SYNTHESIZER_GOTO_SYNTHESIZER_PARSE_OPTIONS_H
