@@ -220,15 +220,17 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
     }
 
     cext::cex_typet violation_type = v.return_cex.cex_type;
-    exprt new_clasue = true_exprt();
+    exprt new_clause = true_exprt();
 
     switch(violation_type)
     {
     case cext::cex_typet::cex_null_pointer:
+      new_clause = same_object(
+        v.return_cex.checked_pointer,
+        unary_exprt(ID_loop_entry, v.return_cex.checked_pointer));
 
     case cext::cex_typet::cex_oob:
-      // TODO create a new member variable violated_predicate
-      new_clasue =
+      new_clause =
         synthesize_range_predicate_simple(v.return_cex.violated_predicate);
       break;
 
@@ -247,10 +249,10 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
     // add the new cluase to the candidate invairants
     if(v.return_cex.is_violation_in_loop)
       invariant_map[prev_cex.cause_loop_id] =
-        and_exprt(invariant_map[prev_cex.cause_loop_id], new_clasue);
+        and_exprt(invariant_map[prev_cex.cause_loop_id], new_clause);
     else
       post_invariant_map[prev_cex.cause_loop_id] =
-        and_exprt(post_invariant_map[prev_cex.cause_loop_id], new_clasue);
+        and_exprt(post_invariant_map[prev_cex.cause_loop_id], new_clause);
   }
 }
 
