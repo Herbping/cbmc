@@ -83,6 +83,9 @@ public:
     post_invariant_map = invariantst();
   }
 
+  typedef std::map<exprt, exprt> expr_mapt;
+  expr_mapt tmp_post_map;
+
 protected:
   void register_languages();
 
@@ -101,12 +104,14 @@ protected:
     const goto_programt::targett loop_head,
     const loopt &loop);
 
+  // substitute all tmp_post variables with their origins in `expr`
+  void substitute_tmp_post(exprt &expr);
+
   // synthesize and annotate a range predicate to the loop `loop_id`
-  exprt synthesize_range_predicate_simple(exprt violated_predicate);
+  exprt synthesize_range_predicate_simple(const exprt &violated_predicate);
 
   // synthesize and annotate a same_object predicate to the loop `loop_id`
-  exprt
-  synthesize_same_object_predicate(loop_idt loop_id, exprt checked_pointer);
+  exprt synthesize_same_object_predicate_simple(const exprt &checked_pointer);
 
   // synthesize and annotate a strengthening clause
   // to make the current invariants inductive
@@ -114,10 +119,6 @@ protected:
 
   bool deductive;
   bool hybrid;
-
-  typedef std::map<exprt, exprt> expr_mapt;
-
-  expr_mapt tmp_post_map;
 };
 
 #endif // CPROVER_GOTO_SYNTHESIZER_GOTO_SYNTHESIZER_PARSE_OPTIONS_H

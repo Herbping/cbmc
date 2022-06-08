@@ -223,7 +223,7 @@ cext simple_verifiert::get_cex(
         }
 
         // if an existing object is assigned to a pointer
-        if(rhs.find("dynamic_object") != std::string::npos)
+        if(!step.hidden && rhs.find("dynamic_object") != std::string::npos)
         {
           // get the binary representation of object_id :: pointer_offset
           const irep_idt value =
@@ -318,8 +318,8 @@ cext simple_verifiert::get_cex(
     }
   }
   // for tmp_post
-  if(live_lhs.find(checked_pointer) == live_lhs.end())
-    checked_pointer = last_lhs;
+  if(live_lhs.find(checked_pointer_deprecated) == live_lhs.end())
+    checked_pointer_deprecated = last_lhs;
 
   return cext(
     lhs_eval,
@@ -450,6 +450,7 @@ bool simple_verifiert::verify()
         continue;
 
       exprt violated_predicate = property_it->second.pc->condition();
+      exprt checked_pointer;
       cext::cex_typet cex_type;
       if((property_it->second.description.find(
             "pointer outside object bounds") != std::string::npos))
@@ -611,7 +612,7 @@ bool simple_verifiert::verify(const exprt &expr)
           std::string::npos)
         {
           cex_type = cext::cex_typet::cex_null_pointer;
-          checked_pointer =
+          checked_pointer_deprecated =
             get_checked_pointer(property_it->second.pc->condition());
         }
 
@@ -627,7 +628,7 @@ bool simple_verifiert::verify(const exprt &expr)
           verifier->get_traces()[property_it->first],
           target_loop_head_old->source_location(),
           cex_type);
-        return_cex.checked_pointer = checked_pointer;
+        return_cex.checked_pointer = checked_pointer_deprecated;
         return_cex.dereferenced_object_deprecated =
           dereferenced_object_deprecated;
         return_cex.offset_deprecated = offset_deprecated;

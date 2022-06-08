@@ -57,9 +57,16 @@ void goto_synthesizer_parse_optionst::register_languages()
 }
 
 exprt goto_synthesizer_parse_optionst::synthesize_range_predicate_simple(
-  exprt violated_predicate)
+  const exprt &violated_predicate)
 {
   return violated_predicate;
+}
+
+exprt goto_synthesizer_parse_optionst::synthesize_same_object_predicate_simple(
+  const exprt &checked_pointer)
+{
+  return same_object(
+    checked_pointer, unary_exprt(ID_loop_entry, checked_pointer));
 }
 
 void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
@@ -124,7 +131,7 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
 
     if(v.return_cex.cex_type == cext::cex_typet::cex_null_pointer)
     {
-      exprt original_checked_pointer = v.checked_pointer;
+      exprt original_checked_pointer = v.checked_pointer_deprecated;
       current_candidate = and_exprt(
         current_candidate,
         same_object(
@@ -225,9 +232,9 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
     switch(violation_type)
     {
     case cext::cex_typet::cex_null_pointer:
-      new_clause = same_object(
-        v.return_cex.checked_pointer,
-        unary_exprt(ID_loop_entry, v.return_cex.checked_pointer));
+      new_clause =
+        synthesize_same_object_predicate_simple(v.return_cex.checked_pointer);
+      break;
 
     case cext::cex_typet::cex_oob:
       new_clause =
@@ -240,6 +247,8 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
       INVARIANT(true, "unsupported violation type");
       break;
     }
+    INVARIANT(
+      new_clause != true_exprt(), "failed to synthesized meaningful clause");
 
     // store the previous cex
     prev_cex = v.return_cex;

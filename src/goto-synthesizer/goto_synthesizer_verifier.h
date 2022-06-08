@@ -101,7 +101,7 @@ public:
   bool verify();
 
   cext return_cex;
-  exprt checked_pointer;
+  exprt checked_pointer_deprecated;
   exprt dereferenced_object_deprecated;
   exprt offset_deprecated;
 
