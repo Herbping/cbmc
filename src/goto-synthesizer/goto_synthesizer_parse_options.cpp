@@ -187,8 +187,9 @@ void goto_synthesizer_parse_optionst::preprocess(
     if(instruction.type() == goto_program_instruction_typet::ASSIGN)
     {
       if(
+        instruction.assign_lhs().id() == ID_symbol &&
         from_expr(instruction.assign_lhs()).find("tmp_post") !=
-        std::string::npos)
+          std::string::npos)
       {
         tmp_post_map[instruction.assign_lhs()] = instruction.assign_rhs();
       }
@@ -197,11 +198,9 @@ void goto_synthesizer_parse_optionst::preprocess(
 
   size_t loop_number = 0;
   // first candidatge invairant for unannotated loop is true
-  for(const auto &loop : natural_loops.loop_map)
+  while(loop_number < natural_loops.loop_map.size())
   {
-    loop_idt new_id = {
-      .func_name = loop.first->source_location().get_function(),
-      .loop_number = loop_number};
+    loop_idt new_id = {.func_name = function_name, .loop_number = loop_number};
     goto_programt::targett loop_end = get_loop_end(
       new_id.func_name,
       new_id.loop_number,
@@ -242,10 +241,10 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
                    << log.reset;
     }
 
-    cext::cex_typet violation_type = v.return_cex.cex_type;
     exprt new_clause = true_exprt();
 
-    switch(violation_type)
+    // synthsize the new_clause
+    switch(v.return_cex.cex_type)
     {
     case cext::cex_typet::cex_null_pointer:
       new_clause =
