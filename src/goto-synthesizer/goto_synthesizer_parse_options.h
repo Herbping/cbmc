@@ -104,9 +104,6 @@ protected:
     const goto_programt::targett loop_head,
     const loopt &loop);
 
-  // substitute all tmp_post variables with their origins in `expr`
-  void substitute_tmp_post(exprt &expr);
-
   // synthesize and annotate a range predicate to the loop `loop_id`
   exprt synthesize_range_predicate_simple(const exprt &violated_predicate);
 

@@ -56,6 +56,22 @@ void goto_synthesizer_parse_optionst::register_languages()
   register_language(new_cpp_language);
 }
 
+// substitute all tmp_post variables with their origins in `expr`
+void substitute_tmp_post_rec(
+  exprt &dest,
+  const goto_synthesizer_parse_optionst::expr_mapt &tmp_post_map)
+{
+  if(dest.id() != ID_address_of)
+    Forall_operands(it, dest)
+      substitute_tmp_post_rec(*it, tmp_post_map);
+
+  // possibly substitute?
+  if(dest.id() == ID_symbol && tmp_post_map.count(dest))
+  {
+    dest = tmp_post_map.at(dest);
+  }
+}
+
 exprt goto_synthesizer_parse_optionst::synthesize_range_predicate_simple(
   const exprt &violated_predicate)
 {
@@ -249,6 +265,9 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
     }
     INVARIANT(
       new_clause != true_exprt(), "failed to synthesized meaningful clause");
+
+    // take care of tmp_post
+    substitute_tmp_post_rec(new_clause, tmp_post_map);
 
     // store the previous cex
     prev_cex = v.return_cex;
