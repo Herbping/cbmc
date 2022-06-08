@@ -85,7 +85,7 @@ irep_idt convert_static_function_name(const source_locationt &source_location)
     return ("__CPROVER_file_local_" + name + "_" + ext + "_") +
            source_location.get_function().c_str();
   }
-  return source_location.get_file();
+  return source_location.get_function();
 }
 
 goto_synthesizer_parse_optionst::loop_idt simple_verifiert::get_cause_loop_id(
@@ -110,6 +110,7 @@ goto_synthesizer_parse_optionst::loop_idt simple_verifiert::get_cause_loop_id(
       // get `from` a loop havoc instruction
       irep_idt from_fun_name =
         convert_static_function_name(step.pc->source_location());
+
       for(goto_programt::const_targett it =
             parse_option.goto_model.get_goto_function(from_fun_name)
               .body.instructions.begin();
