@@ -388,26 +388,29 @@ bool simple_verifiert::verify()
     parse_option.goto_model.goto_functions.function_map;
   for(const auto &invariant_map_entry : parse_option.invariant_map)
   {
-    irep_idt fun_name = invariant_map_entry.first.func_name;
+    goto_synthesizer_parse_optionst::loop_idt loop_id =
+      invariant_map_entry.first;
+    irep_idt fun_name = loop_id.func_name;
+    size_t loop_number = loop_id.loop_number;
+
+    // store the origianl function
     original_functions[fun_name].copy_from(function_map[fun_name].body);
-    exprt guard = get_loop_head(
-                    invariant_map_entry.first.func_name,
-                    invariant_map_entry.first.loop_number,
-                    function_map)
-                    ->condition();
-    goto_programt::targett loop_end = get_loop_end(
-      invariant_map_entry.first.func_name,
-      invariant_map_entry.first.loop_number,
-      function_map);
+
+    // get the loop guard and the loop end
+    exprt guard =
+      get_loop_head(fun_name, loop_number, function_map)->condition();
+    goto_programt::targett loop_end =
+      get_loop_end(fun_name, loop_number, function_map);
     exprt condition = loop_end->get_condition();
+
     //  The invariant is
     //   (inv || !guard) && (!guard -> pos_inv)
     condition.add(ID_C_spec_loop_invariant) = and_exprt(
       or_exprt(guard, invariant_map_entry.second),
-      implies_exprt(
-        guard, parse_option.post_invariant_map[invariant_map_entry.first]));
+      implies_exprt(guard, parse_option.post_invariant_map[loop_id]));
 
-    std::cout << "Candidate :"
+    std::cout << "Candidate for loop " << loop_number << " in function "
+              << fun_name << " : "
               << from_expr(static_cast<const exprt &>(
                    condition.find(ID_C_spec_loop_invariant)))
               << "\n";
