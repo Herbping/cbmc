@@ -12,6 +12,20 @@ Date: May 2022
 
 #include <langapi/language_util.h>
 
+size_t
+get_loop_number(const loopt &loop, const goto_programt::targett &loop_head)
+{
+  goto_programt::targett loop_end = loop_head;
+  for(const auto &t : loop)
+  {
+    if(
+      t->is_goto() && t->get_target() == loop_head &&
+      t->location_number > loop_end->location_number)
+      loop_end = t;
+  }
+  return loop_end->loop_number;
+}
+
 goto_programt::targett get_loop_end(
   const irep_idt &fun_name,
   const size_t target_loop_number,
@@ -56,9 +70,9 @@ goto_programt::targett get_loop_head(
         t->is_goto() && t->get_target() == loop_head &&
         t->location_number > loop_end->location_number)
         loop_end = t;
-      if(loop_end->loop_number == target_loop_number)
-        return loop_head;
     }
+    if(loop_end->loop_number == target_loop_number)
+      return loop_head;
   }
   UNREACHABLE;
 }
