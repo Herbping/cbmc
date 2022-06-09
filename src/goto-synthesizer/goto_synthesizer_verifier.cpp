@@ -383,18 +383,21 @@ bool simple_verifiert::verify()
   // show_goto_functions(parse_option.goto_model, ui_message_handler, false);
 
   // store the original functions
-  // and then annoate the invariants
   goto_functionst::function_mapt &function_map =
     parse_option.goto_model.goto_functions.function_map;
+  for(const auto &fun_entry : function_map)
+  {
+    // store the origianl function
+    original_functions[fun_entry.first].copy_from(function_map[fun_entry.first].body);
+  }
+
+  // annoate current invariant candidates
   for(const auto &invariant_map_entry : parse_option.invariant_map)
   {
     goto_synthesizer_parse_optionst::loop_idt loop_id =
       invariant_map_entry.first;
     irep_idt fun_name = loop_id.func_name;
     size_t loop_number = loop_id.loop_number;
-
-    // store the origianl function
-    original_functions[fun_name].copy_from(function_map[fun_name].body);
 
     // get the loop guard and the loop end
     exprt guard =
@@ -486,9 +489,9 @@ bool simple_verifiert::verify()
         property_it->second.pc->location_number);
 
       // restore the unnotated loops
-      for(const auto &invariant_map_entry : parse_option.invariant_map)
+      for(const auto &fun_entry : function_map)
       {
-        irep_idt fun_name = invariant_map_entry.first.func_name;
+        irep_idt fun_name = fun_entry.first;
         parse_option.goto_model.goto_functions.function_map[fun_name].body.swap(
           original_functions[fun_name]);
       }
