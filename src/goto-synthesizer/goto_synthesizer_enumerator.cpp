@@ -257,106 +257,6 @@ bool simple_enumeratort::quick_verify(const exprt &candidate, const cext &cex)
   return false;
 }
 
-exprt simple_enumeratort::eterm(int size)
-{
-  if(size == 1)
-  {
-    return nonterminal_E;
-  }
-
-  return plus_exprt(nonterminal_E, eterm(size - 1));
-}
-
-exprt simple_enumeratort::sterm(const irep_idt &id, int size)
-{
-  return binary_relation_exprt(eterm(size), id, eterm(size));
-}
-
-exprt simple_enumeratort::copy_exprt(const exprt &expr)
-{
-  exprt result(expr.id(), expr.type());
-  for(const auto &operand : expr.operands())
-  {
-    result.add_to_operands(operand);
-  }
-  return result;
-}
-
-bool simple_enumeratort::contain_E(const exprt &expr)
-{
-  if(expr == nonterminal_E)
-  {
-    return true;
-  }
-
-  for(const auto &operand : expr.operands())
-  {
-    if(contain_E(operand))
-      return true;
-  }
-  return false;
-}
-
-bool simple_enumeratort::is_partial(const exprt &expr)
-{
-  if(expr == nonterminal_S || expr == nonterminal_E)
-  {
-    return true;
-  }
-
-  for(const auto &operand : expr.operands())
-  {
-    if(is_partial(operand))
-      return true;
-  }
-  return false;
-}
-
-bool simple_enumeratort::expand_with_symbol(exprt &expr, const exprt &symbol)
-{
-  if(expr == nonterminal_E)
-  {
-    expr = symbol;
-    return true;
-  }
-  for(auto &operand : expr.operands())
-  {
-    if(expand_with_symbol(operand, symbol))
-    {
-      return true;
-    }
-  }
-  return false;
-}
-
-std::queue<exprt>
-simple_enumeratort::expand_with_terminals(std::queue<exprt> &exprs)
-{
-  std::queue<exprt> result;
-
-  while(!exprs.empty())
-  {
-    exprt current_expr = exprs.front();
-
-    if(contain_E(current_expr))
-    {
-      for(const auto &symbol : parse_option.terminal_symbols)
-      {
-        exprt new_expr = copy_exprt(current_expr);
-        expand_with_symbol(new_expr, symbol);
-        exprs.push(new_expr);
-      }
-    }
-    else
-    {
-      result.push(current_expr);
-    }
-
-    exprs.pop();
-  }
-  return result;
-}
-
 void recursive_generator_placeholdert::set_size(size_t new_size)
 {
   if(new_size > 0)
@@ -416,6 +316,10 @@ void simple_enumeratort::test_geneartors(size_t num_var, size_t size_term)
 }
 
 bool simple_enumeratort::enumerate()
+{
+  return true;
+}
+bool simple_enumeratort::enumerate_deprecated()
 {
   recursive_geneartor_factoryt factory = recursive_geneartor_factoryt();
   recursive_generator_placeholdert start_bool_ph =

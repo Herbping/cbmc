@@ -242,7 +242,8 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
     }
 
     exprt new_clause = true_exprt();
-
+    simple_enumeratort enumerator(
+      *this, true_exprt(), v.return_cex, ui_message_handler);
     // synthsize the new_clause
     switch(v.return_cex.cex_type)
     {
@@ -257,9 +258,11 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
       break;
 
     case cext::cex_typet::cex_not_preserved:
+      enumerator.enumerate();
+      break;
 
     case cext::cex_typet::cex_ERROR:
-      INVARIANT(true, "unsupported violation type");
+      INVARIANT(false, "unsupported violation type");
       break;
     }
     INVARIANT(

@@ -524,40 +524,29 @@ class simple_enumeratort : public goto_synthesizer_enumeratort
 {
 public:
   simple_enumeratort(
-    goto_synthesizer_parse_optionst &po,
-    exprt fc,
-    cext &c,
-    ui_message_handlert &uimh)
-    : parse_option(po),
-      first_candidate(fc),
-      neg_test(c),
-      ui_message_handler(uimh)
+    goto_synthesizer_parse_optionst &parse_option,
+    const exprt first_candidate,
+    const cext &neg_test,
+    ui_message_handlert &ui_message_handler)
+    : parse_option(parse_option),
+      first_candidate(first_candidate),
+      neg_test(neg_test),
+      ui_message_handler(ui_message_handler)
   {
     neg_tests = cexst();
-    neg_tests.push_back(c);
+    neg_tests.push_back(neg_test);
   }
   static void test_geneartors(size_t num_var, size_t size_term);
 
   bool enumerate() override;
+  bool enumerate_deprecated();
 
 protected:
   goto_synthesizer_parse_optionst &parse_option;
 
-  exprt nonterminal_S = exprt(dstringt("ND_S"));
-  exprt nonterminal_E = exprt(dstringt("ND_E"));
+  const exprt first_candidate;
 
-  exprt first_candidate;
-
-  exprt eterm(int size);
-  exprt sterm(const irep_idt &id, int size);
-  exprt copy_exprt(const exprt &expr);
-
-  bool contain_E(const exprt &expr);
-  bool is_partial(const exprt &expr);
-  bool expand_with_symbol(exprt &expr, const exprt &symbol);
-  std::queue<exprt> expand_with_terminals(std::queue<exprt> &expr);
-
-  cext neg_test;
+  const cext neg_test;
   cexst neg_tests;
   bool quick_verify(const exprt &candidate, const cext &cex);
   ui_message_handlert &ui_message_handler;
