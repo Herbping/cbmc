@@ -102,3 +102,53 @@ bool check_violation_in_loop(
   }
   UNREACHABLE;
 }
+
+irep_idt convert_static_function_name(const source_locationt &source_location)
+{
+  std::string path = source_location.get_file().c_str();
+  std::string base_filename = path.substr(path.find_last_of("/\\") + 1);
+
+  size_t dot = base_filename.find_last_of(".");
+  std::string name = base_filename.substr(0, dot);
+  std::string ext = base_filename.substr(dot + 1, base_filename.size() - dot);
+
+  // are there more ext for static file?
+  if(ext == "inl")
+  {
+    return ("__CPROVER_file_local_" + name + "_" + ext + "_") +
+           source_location.get_function().c_str();
+  }
+  return source_location.get_function();
+}
+
+bool check_same_line(
+  const goto_programt::const_targett &in1,
+  const goto_programt::const_targett &in2)
+{
+  return in1->source_location().get_line() == in2->source_location().get_line();
+}
+
+goto_programt::const_targett get_original_instruction(
+  const goto_functiont &function,
+  goto_programt::const_targett instruction)
+{
+  for(goto_programt::const_targett it = function.body.instructions.begin();
+      it != function.body.instructions.end();
+      it++)
+  {
+    if(it->is_assert() && instruction->is_assert())
+    {
+      if(it->get_condition().full_eq(instruction->get_condition()))
+        return it;
+    }
+
+    if(it->is_loop_havoc() && instruction->is_loop_havoc())
+    {
+      if(
+        it->assign_lhs().full_eq(instruction->assign_lhs()) &&
+        check_same_line(it, instruction))
+        return it;
+    }
+  }
+  UNREACHABLE;
+}

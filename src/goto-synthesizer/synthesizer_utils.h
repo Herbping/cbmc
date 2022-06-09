@@ -37,4 +37,15 @@ bool check_violation_in_loop(
   goto_functionst::function_mapt &function_map,
   const size_t violation_location_number);
 
+irep_idt convert_static_function_name(const source_locationt &source_location);
+
+// find the original instruction of an possibly inlined instruction
+goto_programt::const_targett get_original_instruction(
+  const goto_functiont &function,
+  goto_programt::const_targett instruction);
+
+bool check_same_line(
+  const goto_programt::const_targett &in1,
+  const goto_programt::const_targett &in2);
+
 #endif // CPROVER_GOTO_SYNTHESIZER_SYNTHESIZER_UTILS_H

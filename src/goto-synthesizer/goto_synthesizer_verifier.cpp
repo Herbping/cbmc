@@ -70,24 +70,6 @@ Author: Qinheping Hu
 #include <goto-instrument/loop_utils.h>
 #include <langapi/mode.h>
 
-irep_idt convert_static_function_name(const source_locationt &source_location)
-{
-  std::string path = source_location.get_file().c_str();
-  std::string base_filename = path.substr(path.find_last_of("/\\") + 1);
-
-  size_t dot = base_filename.find_last_of(".");
-  std::string name = base_filename.substr(0, dot);
-  std::string ext = base_filename.substr(dot + 1, base_filename.size() - dot);
-
-  // are there more ext for static file?
-  if(ext == "inl")
-  {
-    return ("__CPROVER_file_local_" + name + "_" + ext + "_") +
-           source_location.get_function().c_str();
-  }
-  return source_location.get_function();
-}
-
 goto_synthesizer_parse_optionst::loop_idt simple_verifiert::get_cause_loop_id(
   const goto_tracet &goto_trace,
   const goto_programt::const_targett violation)
@@ -107,15 +89,13 @@ goto_synthesizer_parse_optionst::loop_idt simple_verifiert::get_cause_loop_id(
       goto_programt::const_targett from;
       goto_programt::const_targett to;
 
-      // get `from` a loop havoc instruction
-      irep_idt from_fun_name =
-        convert_static_function_name(step.pc->source_location());
-
+      // get `from`---a loop havoc instruction
+      irep_idt from_fun_name = step.function_id;
+      const goto_functionst::goto_functiont &from_function =
+        parse_option.goto_model.get_goto_function(from_fun_name);
       for(goto_programt::const_targett it =
-            parse_option.goto_model.get_goto_function(from_fun_name)
-              .body.instructions.begin();
-          it != parse_option.goto_model.get_goto_function(from_fun_name)
-                  .body.instructions.end();
+            from_function.body.instructions.begin();
+          it != from_function.body.instructions.end();
           ++it)
       {
         if(it->location_number == step.pc->location_number)
@@ -124,14 +104,13 @@ goto_synthesizer_parse_optionst::loop_idt simple_verifiert::get_cause_loop_id(
         }
       }
 
-      // get `to` the instruction where violation happens
-      irep_idt to_fun_name =
-        convert_static_function_name(violation->source_location());
+      // get `to`---the instruction where violation happens
+      irep_idt to_fun_name = goto_trace.get_last_step().function_id;
+      const goto_functionst::goto_functiont &to_function =
+        parse_option.goto_model.get_goto_function(to_fun_name);
       for(goto_programt::const_targett it =
-            parse_option.goto_model.get_goto_function(to_fun_name)
-              .body.instructions.begin();
-          it != parse_option.goto_model.get_goto_function(to_fun_name)
-                  .body.instructions.end();
+            to_function.body.instructions.begin();
+          it != to_function.body.instructions.end();
           ++it)
       {
         if(it->location_number == violation->location_number)
@@ -144,13 +123,15 @@ goto_synthesizer_parse_optionst::loop_idt simple_verifiert::get_cause_loop_id(
       // if it is dependent on the loop havoc
       if(dependence_graph.is_flow_depedent(from, to))
       {
-        result.func_name = step.pc->source_location().get_function();
+        result.func_name =
+          convert_static_function_name(step.pc->source_location());
         result.loop_number = step.pc->loop_number;
       }
     }
   }
   INVARIANT(
-    result.loop_number >= 0, "the violation is nothing about loop invariants!");
+    result.loop_number != -1,
+    "the violation is nothing about loop invariants!");
   return result;
 }
 
