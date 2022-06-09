@@ -36,25 +36,22 @@ goto_programt::targett get_loop_end(
 {
   natural_loops_mutablet natural_loops(function_map[fun_name].body);
 
-  size_t loop_number = 0;
   for(const auto &loop_p : natural_loops.loop_map)
   {
-    if(loop_number == target_loop_number)
+    const goto_programt::targett loop_head = loop_p.first;
+    goto_programt::targett loop_end = loop_p.first;
+    const loopt &loop = loop_p.second;
+    for(const auto &t : loop)
     {
-      const goto_programt::targett loop_head = loop_p.first;
-      goto_programt::targett loop_end = loop_p.first;
-      const loopt &loop = loop_p.second;
-      for(const auto &t : loop)
-      {
-        if(
-          t->is_goto() && t->get_target() == loop_head &&
-          t->location_number > loop_end->location_number)
-          loop_end = t;
-      }
-      return loop_end;
+      if(
+        t->is_goto() && t->get_target() == loop_head &&
+        t->location_number > loop_end->location_number)
+        loop_end = t;
     }
-    loop_number++;
+    if(loop_end->loop_number == target_loop_number)
+      return loop_end;
   }
+
   UNREACHABLE;
 }
 
