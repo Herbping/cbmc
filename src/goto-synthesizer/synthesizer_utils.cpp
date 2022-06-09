@@ -12,23 +12,6 @@ Date: May 2022
 
 #include <langapi/language_util.h>
 
-loopt get_loop(
-  const irep_idt &fun_name,
-  const size_t target_loop_number,
-  goto_functionst::function_mapt &function_map)
-{
-  natural_loops_mutablet natural_loops(function_map[fun_name].body);
-
-  size_t loop_number = 0;
-  for(const auto &loop : natural_loops.loop_map)
-  {
-    if(loop_number == target_loop_number)
-      return loop.second;
-    loop_number++;
-  }
-  UNREACHABLE;
-}
-
 goto_programt::targett get_loop_end(
   const irep_idt &fun_name,
   const size_t target_loop_number,
@@ -62,12 +45,20 @@ goto_programt::targett get_loop_head(
 {
   natural_loops_mutablet natural_loops(function_map[fun_name].body);
 
-  size_t loop_number = 0;
-  for(const auto &loop : natural_loops.loop_map)
+  for(const auto &loop_p : natural_loops.loop_map)
   {
-    if(loop_number == target_loop_number)
-      return loop.first;
-    loop_number++;
+    const goto_programt::targett loop_head = loop_p.first;
+    goto_programt::targett loop_end = loop_p.first;
+    const loopt &loop = loop_p.second;
+    for(const auto &t : loop)
+    {
+      if(
+        t->is_goto() && t->get_target() == loop_head &&
+        t->location_number > loop_end->location_number)
+        loop_end = t;
+      if(loop_end->loop_number == target_loop_number)
+        return loop_head;
+    }
   }
   UNREACHABLE;
 }

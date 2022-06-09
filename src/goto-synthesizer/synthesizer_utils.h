@@ -26,11 +26,6 @@ goto_programt::targett get_loop_end(
   const size_t loop_number,
   goto_functionst::function_mapt &function_map);
 
-loopt get_loop(
-  const irep_idt &fun_name,
-  const size_t loop_number,
-  goto_functionst::function_mapt &function_map);
-
 bool check_violation_in_loop(
   const irep_idt &fun_name,
   const size_t loop_number,
