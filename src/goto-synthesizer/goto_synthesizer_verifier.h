@@ -1,6 +1,6 @@
 /*******************************************************************\
 
-Module: Verifier Interface
+Module: Utility functions for loop invariant synthesizer.
 
 Author: Qinheping Hu
 

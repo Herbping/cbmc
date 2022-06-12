@@ -1,6 +1,6 @@
 /*******************************************************************\
 
-Module: Verifier Interface
+Module: Verifier Synthesized Loop Invariant Candidates
 
 Author: Qinheping Hu
 
@@ -81,6 +81,7 @@ goto_synthesizer_parse_optionst::loop_idt simple_verifiert::get_cause_loop_id(
   const namespacet ns(parse_option.goto_model.symbol_table);
   dependence_grapht dependence_graph(ns);
   dependence_graph(parse_option.goto_model);
+  dependence_graph.output(parse_option.goto_model, std::cout);
 
   for(const auto &step : goto_trace.steps)
   {
@@ -388,7 +389,8 @@ bool simple_verifiert::verify()
   for(const auto &fun_entry : function_map)
   {
     // store the origianl function
-    original_functions[fun_entry.first].copy_from(function_map[fun_entry.first].body);
+    original_functions[fun_entry.first].copy_from(
+      function_map[fun_entry.first].body);
   }
 
   // annoate current invariant candidates
