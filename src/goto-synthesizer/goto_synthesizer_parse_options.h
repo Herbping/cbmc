@@ -91,11 +91,19 @@ protected:
 
   void get_goto_program();
 
-  void synthesize_loop_invariants(goto_functionst &goto_functions);
-  void synthesize_loop_invariants(
+  std::set<exprt> compute_flow_dependent_set_in_loop(
+    const loop_idt &cause_loop_id,
+    const std::set<exprt> &to);
+
+  std::set<exprt>
+  compute_requried_variables(const loop_idt &cause_loop_id, exprt &new_clause);
+
+  void preprocess(
     const irep_idt &function_name,
     goto_functionst::goto_functiont &goto_function);
-  void preprocess(
+
+  void synthesize_loop_invariants(goto_functionst &goto_functions);
+  void synthesize_loop_invariants(
     const irep_idt &function_name,
     goto_functionst::goto_functiont &goto_function);
   void synthesize_loop_invariants(

@@ -19,6 +19,7 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <util/unicode.h>
 #include <util/version.h>
 
+#include <analyses/dependence_graph.h>
 #include <ansi-c/c_expr.h>
 #include <langapi/language_util.h>
 
@@ -50,12 +51,6 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <iostream>
 #include <memory>
 
-void goto_synthesizer_parse_optionst::register_languages()
-{
-  register_language(new_ansi_c_language);
-  register_language(new_cpp_language);
-}
-
 // substitute all tmp_post variables with their origins in `expr`
 void substitute_tmp_post_rec(
   exprt &dest,
@@ -70,6 +65,170 @@ void substitute_tmp_post_rec(
   {
     dest = tmp_post_map.at(dest);
   }
+}
+
+// extract symbol exprt from exprt
+void extract_symbol_exprt_rec(const exprt &expr, std::set<exprt> &result)
+{
+  if(expr.id() == ID_object_size)
+    return;
+
+  if(expr.id() == ID_symbol)
+  {
+    result.insert(expr);
+  }
+  else
+  {
+    if((expr).has_operands())
+    {
+      for(exprt::operandst::const_iterator it = (expr).operands().begin();
+          it != (expr).operands().end();
+          ++it)
+      {
+        extract_symbol_exprt_rec(*it, result);
+      }
+    }
+  }
+  return;
+}
+
+void goto_synthesizer_parse_optionst::register_languages()
+{
+  register_language(new_ansi_c_language);
+  register_language(new_cpp_language);
+}
+
+std::set<exprt>
+goto_synthesizer_parse_optionst::compute_flow_dependent_set_in_loop(
+  const loop_idt &cause_loop_id,
+  const std::set<exprt> &to)
+{
+  std::set<exprt> result = std::set<exprt>();
+
+  goto_functiont &cause_function =
+    goto_model.goto_functions.function_map[cause_loop_id.func_name];
+
+  // construct a dummy predicate v1==v1 && ... && vn==vn
+  // we later use it to compute flow dependent set of vi's
+  exprt dummy_predicate = true_exprt();
+  for(const auto &e : to)
+  {
+    dummy_predicate = and_exprt(dummy_predicate, equal_exprt(e, e));
+  }
+
+  // insert the dummy predicate into the goto program
+  goto_programt generated_code;
+  goto_convertt converter(goto_model.symbol_table, ui_message_handler);
+  code_assertt assertion(dummy_predicate);
+  converter.goto_convert(
+    assertion,
+    generated_code,
+    goto_model.symbol_table.lookup_ref(cause_loop_id.func_name).mode);
+  goto_programt::targett loop_end = get_loop_end(
+    cause_loop_id.func_name,
+    cause_loop_id.loop_number,
+    goto_model.goto_functions.function_map);
+  goto_programt::targett loop_head = get_loop_head(
+    cause_loop_id.func_name,
+    cause_loop_id.loop_number,
+    goto_model.goto_functions.function_map);
+  cause_function.body.instructions.insert(
+    loop_end, generated_code.instructions.front());
+
+  // build the dependence graph
+  const namespacet ns(goto_model.symbol_table);
+  dependence_grapht dependence_graph(ns);
+  dependence_graph(goto_model);
+
+  // BFS to search for flow dependent variables
+  std::set<node_indext> visited = std::set<node_indext>();
+  std::queue<goto_programt::const_targett> to_visit =
+    std::queue<goto_programt::const_targett>();
+  to_visit.push(std::prev(loop_end));
+  while(!to_visit.empty())
+  {
+    goto_programt::const_targett current_target = to_visit.front();
+    to_visit.pop();
+    const dep_graph_domaint current_domain = dependence_graph[current_target];
+
+    // `current_domain` is control dependent on what varaibles?
+    for(const auto node : current_domain.get_control_deps())
+    {
+      if(
+        visited.count(dependence_graph[node].get_node_id()) ||
+        node->location_number < loop_head->location_number ||
+        node->location_number > loop_end->location_number)
+        continue;
+
+      visited.insert(dependence_graph[node].get_node_id());
+      to_visit.push(node);
+
+      // add a variable to result if it is in the guard
+      std::set<exprt> extracted_vars = std::set<exprt>();
+      extract_symbol_exprt_rec(node->guard, extracted_vars);
+      result.insert(extracted_vars.begin(), extracted_vars.end());
+    }
+
+    // `current_domain` is data dependent on what varaibles?
+    for(const auto node : current_domain.get_data_deps())
+    {
+      if(
+        visited.count(dependence_graph[node].get_node_id()) ||
+        node->location_number < loop_head->location_number ||
+        node->location_number > loop_end->location_number)
+        continue;
+
+      visited.insert(dependence_graph[node].get_node_id());
+      to_visit.push(node);
+
+      // add a variable to result if it is lhs of assignment
+      if(node->type() == goto_program_instruction_typet::ASSIGN)
+      {
+        result.insert(node->assign_lhs());
+      }
+    }
+  }
+
+  // remove the added dummy predicate
+  cause_function.body.instructions.erase(std::prev(loop_end));
+
+  return result;
+}
+
+std::set<exprt> goto_synthesizer_parse_optionst::compute_requried_variables(
+  const loop_idt &cause_loop_id,
+  exprt &new_clause)
+{
+  // initialize result as Vars(new_clause)
+  std::set<exprt> required_set = std::set<exprt>();
+  extract_symbol_exprt_rec(new_clause, required_set);
+
+  // construct Vars(candidate)
+  std::set<exprt> vars_prev_candidate = std::set<exprt>();
+  exprt prev_candidate = invariant_map[cause_loop_id];
+  extract_symbol_exprt_rec(prev_candidate, vars_prev_candidate);
+
+  size_t old_number_of_required_variables = 0;
+  while(old_number_of_required_variables != required_set.size())
+  {
+    old_number_of_required_variables = required_set.size();
+    std::set<exprt> dependent_set =
+      compute_flow_dependent_set_in_loop(cause_loop_id, required_set);
+
+    required_set.insert(dependent_set.begin(), dependent_set.end());
+
+    std::set<exprt> antidependent_set =
+      compute_flow_dependent_set_in_loop(cause_loop_id, vars_prev_candidate);
+    std::set<exprt> intersect;
+    set_intersection(
+      antidependent_set.begin(),
+      antidependent_set.end(),
+      required_set.begin(),
+      required_set.end(),
+      std::inserter(intersect, intersect.begin()));
+  }
+
+  return required_set;
 }
 
 exprt goto_synthesizer_parse_optionst::synthesize_range_predicate_simple(
@@ -275,6 +434,8 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
     prev_cex = v.return_cex;
     prev_cex.cause_loop_id.func_name = v.return_cex.cause_loop_id.func_name;
     prev_cex.cause_loop_id.loop_number = v.return_cex.cause_loop_id.loop_number;
+
+    compute_requried_variables(prev_cex.cause_loop_id, new_clause);
 
     // add the new cluase to the candidate invairants
     if(v.return_cex.is_violation_in_loop)
