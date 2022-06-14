@@ -59,7 +59,6 @@ Author: Qinheping Hu
 #include <goto-checker/cover_goals_verifier_with_trace_storage.h>
 #include <goto-checker/multi_path_symex_checker.h>
 #include <goto-checker/multi_path_symex_only_checker.h>
-#include <goto-checker/properties.h>
 #include <goto-checker/report_util.cpp>
 #include <goto-checker/single_loop_incremental_symex_checker.h>
 #include <goto-checker/single_path_symex_checker.h>
@@ -316,9 +315,6 @@ cext simple_verifiert::get_cex(
       UNREACHABLE;
     }
   }
-  // for tmp_post
-  if(live_lhs.find(checked_pointer_deprecated) == live_lhs.end())
-    checked_pointer_deprecated = last_lhs;
 
   return cext(
     lhs_eval,
@@ -438,22 +434,24 @@ bool simple_verifiert::verify()
     all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>
     verifier = util_make_unique<
       all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>(
-      options, ui_message_handler, parse_option.goto_model);
+      options, ui_null_message_handler, parse_option.goto_model);
 
   const resultt result = (*verifier)();
   // show_goto_functions(parse_option.goto_model, ui_message_handler, false);
-  verifier->report();
+  // verifier->report();
 
   if(result != resultt::PASS)
   {
-    const auto sorted_properties =
-      get_sorted_properties(verifier->get_properties());
+    properties = verifier->get_properties();
+    const auto sorted_properties = get_sorted_properties(properties);
 
     for(const auto &property_it : sorted_properties)
     {
       // find the first violation
       if(property_it->second.status != property_statust::FAIL)
         continue;
+
+      first_violation = property_it->first;
 
       exprt violated_predicate = property_it->second.pc->condition();
       exprt checked_pointer;
@@ -514,135 +512,13 @@ bool simple_verifiert::verify()
     }
   }
 
-  return (result == resultt::PASS);
-}
-
-bool simple_verifiert::verify(const exprt &expr)
-{
-  std::cout << "Candidate :" << from_expr(expr) << "\n";
-
-  null_message_handlert null_message_handler;
-  ui_message_handlert ui_null_message_handler(null_message_handler);
-  messaget null_log(ui_null_message_handler);
-
-  original_program_old.copy_from(
-    parse_option.goto_model.goto_functions
-      .function_map[parse_option.target_function_name]
-      .body);
-
-  natural_loops_mutablet natural_loops(
-    parse_option.goto_model.goto_functions
-      .function_map[parse_option.target_function_name]
-      .body);
-
-  // Iterate over the (natural) loops in the function,
-  // to find the target loop end
-  exprt guard;
-  for(const auto &loop : natural_loops.loop_map)
+  // restore the unnotated loops
+  for(const auto &fun_entry : function_map)
   {
-    goto_programt::targett loop_end = loop.first;
-    guard = loop_end->condition();
-    for(const auto &t : loop.second)
-    {
-      if(
-        t->is_goto() && t->get_target() == loop.first &&
-        t->location_number > loop_end->location_number)
-        loop_end = t;
-    }
-    target_loop_end_old = loop_end;
-    target_loop_head_old = loop.first;
+    irep_idt fun_name = fun_entry.first;
+    parse_option.goto_model.goto_functions.function_map[fun_name].body.swap(
+      original_functions[fun_name]);
   }
-  exprt condition = target_loop_end_old->get_condition();
-  condition.add(ID_C_spec_loop_invariant) =
-    and_exprt(true_exprt(), or_exprt(guard, expr));
-  target_loop_end_old->set_condition(condition);
 
-  // exprt invariant = static_cast<const exprt &>(target_loop_end->get_condition().find(ID_C_spec_loop_invariant));
-  // std::cout<< from_expr(invariant) << "\n";
-
-  code_contractst cont(parse_option.goto_model, null_log);
-  cont.apply_loop_contracts();
-
-  optionst options = get_options();
-
-  link_to_library(
-    parse_option.goto_model, ui_message_handler, cprover_cpp_library_factory);
-  link_to_library(
-    parse_option.goto_model, ui_message_handler, cprover_c_library_factory);
-  process_goto_program(parse_option.goto_model, options, null_log);
-  remove_skip(parse_option.goto_model);
-  label_properties(parse_option.goto_model);
-
-  // show_goto_functions(parse_option.goto_model, ui_message_handler, false);
-
-  std::unique_ptr<
-    all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>
-    verifier = nullptr;
-  //verifier = util_make_unique<
-  //      all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>(
-  //      options, ui_null_message_handler, parse_option.goto_model);
-
-  verifier = util_make_unique<
-    all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>(
-    options, ui_message_handler, parse_option.goto_model);
-
-  const resultt result = (*verifier)();
-
-  verifier->report();
-
-  parse_option.goto_model.goto_functions
-    .function_map[parse_option.target_function_name]
-    .body.swap(original_program_old);
-
-  if(result != resultt::PASS)
-  {
-    const auto sorted_properties =
-      get_sorted_properties(verifier->get_properties());
-    for(const auto &property_it : sorted_properties)
-    {
-      if(property_it->second.status == property_statust::FAIL)
-      {
-        cext::cex_typet cex_type;
-        if((property_it->second.description.find(
-              "pointer outside object bounds") != std::string::npos))
-        {
-          //offset = get_index(property_it->second.pc->condition());
-          offset_deprecated = property_it->second.pc->condition();
-          dereferenced_object_deprecated =
-            get_object(property_it->second.pc->condition());
-          cex_type = cext::cex_typet::cex_oob;
-        }
-
-        if(
-          property_it->second.description.find("pointer NULL") !=
-          std::string::npos)
-        {
-          cex_type = cext::cex_typet::cex_null_pointer;
-          checked_pointer_deprecated =
-            get_checked_pointer(property_it->second.pc->condition());
-        }
-
-        if(
-          property_it->second.description.find("preserved") !=
-          std::string::npos)
-        {
-          cex_type = cext::cex_typet::cex_not_preserved;
-        }
-
-        return_cex = get_cex(
-          verifier->get_traces().get_namespace(),
-          verifier->get_traces()[property_it->first],
-          target_loop_head_old->source_location(),
-          cex_type);
-        return_cex.checked_pointer = checked_pointer_deprecated;
-        return_cex.dereferenced_object_deprecated =
-          dereferenced_object_deprecated;
-        return_cex.offset_deprecated = offset_deprecated;
-        // std::cout << "failure type : " << (int)property_it->second.status << "\n";
-
-        return false;
-      }
-    }
-  }
   return (result == resultt::PASS);
 }

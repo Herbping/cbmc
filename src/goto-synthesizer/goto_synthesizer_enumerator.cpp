@@ -188,7 +188,7 @@ std::string get_loop_entry_decls(const cext &cex, size_t index_postfix)
   return result;
 }
 
-bool simple_enumeratort::quick_verify(const exprt &candidate, const cext &cex)
+bool simple_enumeratort::quick_verify(const exprt &candidate)
 {
   size_t index_cex = 1;
 
@@ -209,7 +209,6 @@ bool simple_enumeratort::quick_verify(const exprt &candidate, const cext &cex)
   }
 
   std::string query = declstring + smtstring + "(check-sat)";
-  std::cout << query << "\n";
   if(smtstring.find("UNDEFINED_OP") != std::string::npos)
     return false;
 
@@ -240,18 +239,11 @@ bool simple_enumeratort::quick_verify(const exprt &candidate, const cext &cex)
   std::string myText;
   std::ifstream MyReadFile(temp_file_stdout());
 
-  std::cout << (std::chrono::duration_cast<std::chrono::microseconds>(
-                  end - begin)
-                  .count())
-            << "\n";
-
   smt_time =
     std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 
   while(getline(MyReadFile, myText))
   {
-    // Output the text from the file
-    std::cout << myText << "\n";
     return (myText.find("unsat") != std::string::npos);
   }
   return false;
@@ -315,88 +307,104 @@ void simple_enumeratort::test_geneartors(size_t num_var, size_t size_term)
             << start_bool_g.generate().size() << "\n";
 }
 
-bool simple_enumeratort::enumerate()
+exprt simple_enumeratort::enumerate()
 {
-  return true;
-}
-bool simple_enumeratort::enumerate_deprecated()
-{
+  // nonterminals: StartBool and Start
   recursive_geneartor_factoryt factory = recursive_geneartor_factoryt();
   recursive_generator_placeholdert start_bool_ph =
     factory.make_placeholder("StartBool");
   recursive_generator_placeholdert start_ph = factory.make_placeholder("Start");
 
-  exprst leafexprs = exprst();
+  // terminals
+  exprst terminal_symbols_list = exprst();
   for(auto e : parse_option.terminal_symbols)
   {
-    leafexprs.push_back(e);
-    std::cout << from_expr(e) << "\n";
+    terminal_symbols_list.push_back(e);
   }
 
+  // rules for Start
   generatorst start_args = generatorst();
-  leaf_geneartort leaf_g = leaf_geneartort(leafexprs);
+  // Start -> terminals
+  leaf_geneartort leaf_g = leaf_geneartort(terminal_symbols_list);
   start_args.push_back(&leaf_g);
+  // Start -> Start + Start
   binary_functional_generatort plus_g =
     binary_functional_generatort(ID_plus, start_ph, start_ph);
   start_args.push_back(&plus_g);
 
+  // rules for StartBool
   generatorst start_bool_args = generatorst();
+  // StartBool -> StartBool && StartBool
   binary_functional_generatort and_g =
     binary_functional_generatort(ID_and, start_bool_ph, start_bool_ph);
   start_bool_args.push_back(&and_g);
+  // StartBool -> Start == Start
   binary_functional_generatort equal_g =
     binary_functional_generatort(ID_equal, start_ph, start_ph);
   start_bool_args.push_back(&equal_g);
+  // StartBool -> Start <= Start
   binary_functional_generatort le_g =
     binary_functional_generatort(ID_le, start_ph, start_ph);
   start_bool_args.push_back(&le_g);
+  // StartBool -> Start < Start
   binary_functional_generatort lt_g =
     binary_functional_generatort(ID_lt, start_ph, start_ph);
   start_bool_args.push_back(&lt_g);
 
+  // add the two nonterminals to the factory
   recursive_generator_placeholdert start_g =
     factory.make_generator("Start", start_args);
   recursive_generator_placeholdert start_bool_g =
     factory.make_generator("StartBool", start_bool_args);
 
+  // size of candidates we are searching now,
+  // starting from 0
   size_t size_bound = 0;
+
+  // numbers of candidates we have seen,
+  // used for quantitative analysis
   size_t seen_terms = 0;
+
+  // store the current invariant candidate
+  exprt inv_candidate = parse_option.invariant_map[cause_loop_id];
+
   while(true)
   {
     size_bound++;
     start_bool_g.set_size(size_bound);
-    for(auto candidate : start_bool_g.generate())
+
+    // generate candidate and verify
+    for(auto strengthening_candidate : start_bool_g.generate())
     {
       seen_terms++;
-      candidate = and_exprt(first_candidate, candidate);
-      std::cout << "Candidate: " << from_expr(candidate) << "\n";
-      if(quick_verify(candidate, neg_test))
+
+      // add the candidate to the invariant map
+      parse_option.invariant_map[cause_loop_id] =
+        and_exprt(inv_candidate, strengthening_candidate);
+      std::cout << "Candidate strengthening clause: "
+                << from_expr(strengthening_candidate) << "\n";
+      if(quick_verify(parse_option.invariant_map[cause_loop_id]))
       {
         count_smt_reject++;
         continue;
       }
 
-      cext new_cex;
-
       simple_verifiert v(parse_option, ui_message_handler);
-      if(v.verify(candidate))
+      if(
+        v.verify() || (has_goal && v.properties.at(goal_violation).status !=
+                                     property_statust::FAIL))
       {
-        std::cout << "Candidate: " << from_expr(candidate) << "\n";
-        std::cout << "result : "
-                  << "PASS"
-                  << "\n";
+        std::cout << "result : PASS \n";
+        std::cout << "ratio of terms rejected by SMT : " << count_smt_reject
+                  << " / " << seen_terms << "\n";
 
-        return true;
-      }
-      else
-      {
-        new_cex = v.return_cex;
+        parse_option.invariant_map[cause_loop_id] = inv_candidate;
+        return strengthening_candidate;
       }
 
-      neg_tests.push_back(new_cex);
+      neg_tests.push_back(v.return_cex);
       count_cbmc_reject++;
-      std::cout << "rate : " << count_smt_reject << " / " << seen_terms << "\n";
     }
   }
-  return true;
+  UNREACHABLE;
 }

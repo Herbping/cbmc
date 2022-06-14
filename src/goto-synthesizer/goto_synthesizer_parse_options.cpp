@@ -92,6 +92,29 @@ void extract_symbol_exprt_rec(const exprt &expr, std::set<exprt> &result)
   return;
 }
 
+std::vector<exprt> construct_terminal_symbols(std::set<exprt> symbols)
+{
+  std::vector<exprt> result = std::vector<exprt>();
+  for(const auto &e : symbols)
+  {
+    if(e.type().id() == ID_unsignedbv)
+    {
+      result.push_back(e);
+      result.push_back(unary_exprt(ID_loop_entry, e, size_type()));
+    }
+    if((e.type().id() == ID_pointer))
+    {
+      result.push_back(unary_exprt(ID_pointer_offset, e, size_type()));
+      result.push_back(unary_exprt(
+        ID_pointer_offset,
+        unary_exprt(ID_loop_entry, e, e.type()),
+        size_type()));
+    }
+  }
+  result.push_back(from_integer(1, size_type()));
+  return result;
+}
+
 void goto_synthesizer_parse_optionst::register_languages()
 {
   register_language(new_ansi_c_language);
@@ -244,96 +267,6 @@ exprt goto_synthesizer_parse_optionst::synthesize_same_object_predicate_simple(
     checked_pointer, unary_exprt(ID_loop_entry, checked_pointer));
 }
 
-void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
-  const irep_idt &function_name,
-  goto_functionst::goto_functiont &goto_function,
-  const goto_programt::targett loop_head,
-  const loopt &loop)
-{
-  PRECONDITION(!loop.empty());
-
-  target_function_name = function_name;
-
-  exprt current_candidate = true_exprt();
-  exprt one = from_integer(1, size_type());
-  exprt zero = from_integer(0, size_type());
-  //terminal_symbols.push_back(one);
-
-  while(true)
-  {
-    simple_verifiert v(*this, this->ui_message_handler);
-    if(v.verify(current_candidate))
-    {
-      log.result() << "result : " << log.green << "PASS" << messaget::eom
-                   << log.reset;
-      return;
-    }
-    else
-    {
-      log.result() << "result : " << log.red << "FAIL" << messaget::eom
-                   << log.reset;
-    }
-
-    if(terminal_symbols.empty())
-    {
-      log.result() << "start to construct \n";
-      for(exprt lhs : v.return_cex.live_lhs)
-      {
-        std::cout << "live1 : " << from_expr(lhs) << "\n";
-        if(lhs.type().id() == ID_unsignedbv)
-        {
-          terminal_symbols.push_back(lhs);
-          terminal_symbols.push_back(
-            unary_exprt(ID_loop_entry, lhs, size_type()));
-          //idx_type = lhs.type();
-        }
-        if((lhs.type().id() == ID_pointer))
-        {
-          // terminal_symbols.push_back(unary_exprt(ID_object_size, lhs, size_type()));
-          terminal_symbols.push_back(
-            unary_exprt(ID_pointer_offset, lhs, size_type()));
-          terminal_symbols.push_back(unary_exprt(
-            ID_pointer_offset,
-            unary_exprt(ID_loop_entry, lhs, lhs.type()),
-            size_type()));
-          if(lhs.type().subtype().id() == ID_unsignedbv)
-          {
-            //TODO terminal_symbols.push_back(dereference_exprt(lhs));
-          }
-        }
-      }
-    }
-
-    if(v.return_cex.cex_type == cext::cex_typet::cex_null_pointer)
-    {
-      exprt original_checked_pointer = v.checked_pointer_deprecated;
-      current_candidate = and_exprt(
-        current_candidate,
-        same_object(
-          original_checked_pointer,
-          unary_exprt(ID_loop_entry, original_checked_pointer)));
-    }
-    else if(deductive && v.return_cex.cex_type == cext::cex_typet::cex_oob)
-    {
-      exprt offset = v.offset_deprecated;
-      exprt deref_object = v.dereferenced_object_deprecated;
-
-      // TODO: modify this!
-      exprt four = from_integer(0, size_type());
-
-      //current_candidate = and_exprt(current_candidate, and_exprt(less_than_or_equal_exprt(zero, offset), less_than_or_equal_exprt(offset, deref_object)));
-      current_candidate = and_exprt(current_candidate, offset);
-    }
-    else
-    {
-      simple_enumeratort enumerator(
-        *this, current_candidate, v.return_cex, ui_message_handler);
-      if(enumerator.enumerate())
-        break;
-    }
-  }
-}
-
 void goto_synthesizer_parse_optionst::preprocess(
   const irep_idt &function_name,
   goto_functionst::goto_functiont &goto_function)
@@ -382,6 +315,7 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
   }
 
   cext prev_cex;
+  std::set<exprt> required_set = std::set<exprt>();
 
   while(true)
   {
@@ -396,13 +330,13 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
     }
     else
     {
-      log.result() << "result : " << log.red << "FAIL" << messaget::eom
-                   << log.reset;
+      log.result() << "result : FAIL with violation number "
+                   << v.first_violation << messaget::eom << log.reset;
     }
 
     exprt new_clause = true_exprt();
     simple_enumeratort enumerator(
-      *this, true_exprt(), v.return_cex, ui_message_handler);
+      *this, v.return_cex.cause_loop_id, v.return_cex, ui_message_handler);
     // synthsize the new_clause
     switch(v.return_cex.cex_type)
     {
@@ -417,7 +351,9 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
       break;
 
     case cext::cex_typet::cex_not_preserved:
-      enumerator.enumerate();
+      terminal_symbols = construct_terminal_symbols(required_set);
+      enumerator.set_goal_violation(v.first_violation);
+      new_clause = enumerator.enumerate();
       break;
 
     case cext::cex_typet::cex_ERROR:
@@ -435,7 +371,8 @@ void goto_synthesizer_parse_optionst::synthesize_loop_invariants(
     prev_cex.cause_loop_id.func_name = v.return_cex.cause_loop_id.func_name;
     prev_cex.cause_loop_id.loop_number = v.return_cex.cause_loop_id.loop_number;
 
-    compute_requried_variables(prev_cex.cause_loop_id, new_clause);
+    required_set =
+      compute_requried_variables(prev_cex.cause_loop_id, new_clause);
 
     // add the new cluase to the candidate invairants
     if(v.return_cex.is_violation_in_loop)

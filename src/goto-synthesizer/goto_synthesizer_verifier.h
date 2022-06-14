@@ -14,13 +14,15 @@ Author: Qinheping Hu
 
 #include <goto-programs/goto_trace.h>
 
+#include <goto-checker/properties.h>
+
 #include "goto_synthesizer_parse_options.h"
 
 class goto_synthesizer_verifiert
 {
 public:
   virtual ~goto_synthesizer_verifiert() = default;
-  virtual bool verify(const exprt &expr) = 0;
+  virtual bool verify() = 0;
 };
 
 class cext
@@ -57,8 +59,6 @@ public:
   exprt checked_pointer;
 
   exprt violated_predicate;
-  exprt dereferenced_object_deprecated;
-  exprt offset_deprecated;
   goto_synthesizer_parse_optionst::loop_idt cause_loop_id;
 
   // true if the violation happens in the cause loop
@@ -97,13 +97,11 @@ public:
     original_functions = std::map<irep_idt, goto_programt>();
   }
 
-  bool verify(const exprt &expr) override;
-  bool verify();
+  bool verify() override;
 
   cext return_cex;
-  exprt checked_pointer_deprecated;
-  exprt dereferenced_object_deprecated;
-  exprt offset_deprecated;
+  propertiest properties;
+  irep_idt first_violation;
 
 protected:
   cext get_cex(

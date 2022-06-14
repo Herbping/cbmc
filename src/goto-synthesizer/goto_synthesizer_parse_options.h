@@ -106,11 +106,6 @@ protected:
   void synthesize_loop_invariants(
     const irep_idt &function_name,
     goto_functionst::goto_functiont &goto_function);
-  void synthesize_loop_invariants(
-    const irep_idt &function_name,
-    goto_functionst::goto_functiont &goto_function,
-    const goto_programt::targett loop_head,
-    const loopt &loop);
 
   // synthesize and annotate a range predicate to the loop `loop_id`
   exprt synthesize_range_predicate_simple(const exprt &violated_predicate);

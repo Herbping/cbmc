@@ -517,7 +517,7 @@ class goto_synthesizer_enumeratort
 {
 public:
   virtual ~goto_synthesizer_enumeratort() = default;
-  virtual bool enumerate() = 0;
+  virtual exprt enumerate() = 0;
 };
 
 class simple_enumeratort : public goto_synthesizer_enumeratort
@@ -525,12 +525,11 @@ class simple_enumeratort : public goto_synthesizer_enumeratort
 public:
   simple_enumeratort(
     goto_synthesizer_parse_optionst &parse_option,
-    const exprt first_candidate,
+    const goto_synthesizer_parse_optionst::loop_idt &cause_loop,
     const cext &neg_test,
     ui_message_handlert &ui_message_handler)
     : parse_option(parse_option),
-      first_candidate(first_candidate),
-      neg_test(neg_test),
+      cause_loop_id(cause_loop),
       ui_message_handler(ui_message_handler)
   {
     neg_tests = cexst();
@@ -538,17 +537,25 @@ public:
   }
   static void test_geneartors(size_t num_var, size_t size_term);
 
-  bool enumerate() override;
-  bool enumerate_deprecated();
+  exprt enumerate() override;
+
+  void set_goal_violation(irep_idt violation)
+  {
+    goal_violation = violation;
+    has_goal = true;
+  }
 
 protected:
   goto_synthesizer_parse_optionst &parse_option;
 
-  const exprt first_candidate;
+  goto_synthesizer_parse_optionst::loop_idt cause_loop_id;
 
-  const cext neg_test;
   cexst neg_tests;
-  bool quick_verify(const exprt &candidate, const cext &cex);
+
+  irep_idt goal_violation;
+  bool has_goal = false;
+
+  bool quick_verify(const exprt &candidate);
   ui_message_handlert &ui_message_handler;
 };
 
