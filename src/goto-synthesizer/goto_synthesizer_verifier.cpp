@@ -81,7 +81,6 @@ goto_synthesizer_parse_optionst::loop_idt simple_verifiert::get_cause_loop_id(
   const namespacet ns(parse_option.goto_model.symbol_table);
   dependence_grapht dependence_graph(ns);
   dependence_graph(parse_option.goto_model);
-  dependence_graph.output(parse_option.goto_model, std::cout);
 
   for(const auto &step : goto_trace.steps)
   {
@@ -122,7 +121,7 @@ goto_synthesizer_parse_optionst::loop_idt simple_verifiert::get_cause_loop_id(
 
       // the violation is caused by the loop havoc
       // if it is dependent on the loop havoc
-      if(dependence_graph.is_flow_depedent(from, to))
+      if(dependence_graph.is_flow_dependent(from, to))
       {
         result.func_name =
           convert_static_function_name(step.pc->source_location());

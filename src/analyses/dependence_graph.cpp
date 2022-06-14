@@ -376,7 +376,7 @@ void dependence_grapht::add_dep(
   nodes[n_to].in[n_from].add(kind);
 }
 
-bool dependence_grapht::is_flow_depedent(
+bool dependence_grapht::is_flow_dependent(
   const goto_programt::const_targett &from,
   const goto_programt::const_targett &to)
 {
@@ -385,10 +385,10 @@ bool dependence_grapht::is_flow_depedent(
     *storage->abstract_state_before(from, *domain_factory));
   const dep_graph_domaint to_domain = static_cast<const dep_graph_domaint &>(
     *storage->abstract_state_before(to, *domain_factory));
-  return is_flow_depedent(from_domain, to_domain, visited);
+  return is_flow_dependent(from_domain, to_domain, visited);
 }
 
-bool dependence_grapht::is_flow_depedent(
+bool dependence_grapht::is_flow_dependent(
   const dep_graph_domaint &from,
   const dep_graph_domaint &to,
   std::set<node_indext> &visited)
@@ -403,7 +403,7 @@ bool dependence_grapht::is_flow_depedent(
 
     if(
       from.get_node_id() == (*this)[node].get_node_id() ||
-      is_flow_depedent(from, (*this)[node], visited))
+      is_flow_dependent(from, (*this)[node], visited))
       return true;
   }
 
@@ -417,14 +417,15 @@ bool dependence_grapht::is_flow_depedent(
 
     if(
       from.get_node_id() == (*this)[node].get_node_id() ||
-      is_flow_depedent(from, (*this)[node], visited))
+      is_flow_dependent(from, (*this)[node], visited))
       return true;
   }
   return false;
 }
 
 void dep_graph_domaint::populate_dep_graph(
-  dependence_grapht &dep_graph, goto_programt::const_targett this_loc) const
+  dependence_grapht &dep_graph, 
+  goto_programt::const_targett this_loc) const
 {
   for(const auto &c_dep : control_deps)
     dep_graph.add_dep(dep_edget::kindt::CTRL, c_dep, this_loc);

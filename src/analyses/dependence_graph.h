@@ -274,12 +274,12 @@ public:
     return rd;
   }
 
-  bool is_flow_depedent(
+  bool is_flow_dependent(
     const dep_graph_domaint &from,
     const dep_graph_domaint &to,
     std::set<node_indext> &visited);
 
-  bool is_flow_depedent(
+  bool is_flow_dependent(
     const goto_programt::const_targett &from,
     const goto_programt::const_targett &to);
 
