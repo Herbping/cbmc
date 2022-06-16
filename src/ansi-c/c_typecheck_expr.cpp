@@ -1035,8 +1035,8 @@ void c_typecheck_baset::typecheck_expr_sizeof(exprt &expr)
     // It is not obvious whether the type or 'e' should be evaluated
     // first.
 
-    exprt comma_expr(ID_comma, expr.type());
-    comma_expr.copy_to_operands(side_effect_expr, expr);
+    binary_exprt comma_expr{
+      std::move(side_effect_expr), ID_comma, expr, expr.type()};
     expr.swap(comma_expr);
   }
 }
@@ -1085,8 +1085,8 @@ void c_typecheck_baset::typecheck_expr_typecast(exprt &expr)
     // It is not obvious whether the type or 'e' should be evaluated
     // first.
 
-    exprt comma_expr(ID_comma, op.type());
-    comma_expr.copy_to_operands(side_effect_expr, op);
+    binary_exprt comma_expr{
+      std::move(side_effect_expr), ID_comma, op, op.type()};
     op.swap(comma_expr);
   }
 
@@ -1602,14 +1602,18 @@ void c_typecheck_baset::typecheck_expr_trinary(if_exprt &expr)
 
     // is one of them void * AND null? Convert that to the other.
     // (at least that's how GCC behaves)
-    if(operands[1].type().subtype().id()==ID_empty &&
-       tmp1.is_constant() &&
-       to_constant_expr(tmp1).get_value()==ID_NULL)
+    if(
+      operands[1].type().subtype().id() == ID_empty && tmp1.is_constant() &&
+      is_null_pointer(to_constant_expr(tmp1)))
+    {
       implicit_typecast(operands[1], operands[2].type());
-    else if(operands[2].type().subtype().id()==ID_empty &&
-            tmp2.is_constant() &&
-            to_constant_expr(tmp2).get_value()==ID_NULL)
+    }
+    else if(
+      operands[2].type().subtype().id() == ID_empty && tmp2.is_constant() &&
+      is_null_pointer(to_constant_expr(tmp2)))
+    {
       implicit_typecast(operands[2], operands[1].type());
+    }
     else if(operands[1].type().subtype().id()!=ID_code ||
             operands[2].type().subtype().id()!=ID_code)
     {
@@ -2359,8 +2363,7 @@ exprt c_typecheck_baset::do_special_functions(
 
     typecheck_function_call_arguments(expr);
 
-    unary_exprt object_size_expr(
-      ID_object_size, expr.arguments()[0], size_type());
+    object_size_exprt object_size_expr(expr.arguments()[0], size_type());
     object_size_expr.add_source_location() = source_location;
 
     return std::move(object_size_expr);
@@ -3088,9 +3091,7 @@ exprt c_typecheck_baset::do_special_functions(
     {
       // clang returns 4 for _Bool, gcc treats these as 'int'.
       type_number =
-        config.ansi_c.preprocessor == configt::ansi_ct::preprocessort::CLANG
-          ? 4u
-          : 1u;
+        config.ansi_c.mode == configt::ansi_ct::flavourt::CLANG ? 4u : 1u;
     }
     else
     {
@@ -3159,7 +3160,7 @@ exprt c_typecheck_baset::do_special_functions(
 
     typecheck_expr_unary_arithmetic(tmp);
 
-    unary_overflow_exprt overflow{ID_unary_minus, tmp.operands().front()};
+    unary_minus_overflow_exprt overflow{tmp.operands().front()};
     overflow.add_source_location() = tmp.source_location();
     return std::move(overflow);
   }

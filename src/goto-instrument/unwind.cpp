@@ -130,6 +130,7 @@ void goto_unwindt::unwind(
   {
     PRECONDITION(
       unwind_strategy == unwind_strategyt::ASSERT_ASSUME ||
+      unwind_strategy == unwind_strategyt::ASSERT_PARTIAL ||
       unwind_strategy == unwind_strategyt::ASSUME);
 
     goto_programt::const_targett t=loop_exit;
@@ -138,17 +139,19 @@ void goto_unwindt::unwind(
 
     exprt exit_cond = false_exprt(); // default is false
 
-    if(!t->get_condition().is_true()) // cond in backedge
+    if(!t->condition().is_true()) // cond in backedge
     {
-      exit_cond = boolean_negate(t->get_condition());
+      exit_cond = boolean_negate(t->condition());
     }
     else if(loop_head->is_goto())
     {
       if(loop_head->get_target()==loop_exit) // cond in forward edge
-        exit_cond = loop_head->get_condition();
+        exit_cond = loop_head->condition();
     }
 
-    if(unwind_strategy == unwind_strategyt::ASSERT_ASSUME)
+    if(
+      unwind_strategy == unwind_strategyt::ASSERT_ASSUME ||
+      unwind_strategy == unwind_strategyt::ASSERT_PARTIAL)
     {
       goto_programt::targett assertion = rest_program.add(
         goto_programt::make_assertion(exit_cond, loop_head->source_location()));
@@ -181,7 +184,7 @@ void goto_unwindt::unwind(
     goto_programt::const_targett t_before=loop_exit;
     t_before--;
 
-    if(!t_before->is_goto() || !t_before->get_condition().is_true())
+    if(!t_before->is_goto() || !t_before->condition().is_true())
     {
       goto_programt::targett t_goto = goto_program.insert_before(
         loop_exit,
@@ -279,10 +282,8 @@ void goto_unwindt::unwind(
       i_it!=goto_program.instructions.end();)
   {
 #ifdef DEBUG
-    symbol_tablet st;
-    namespacet ns(st);
     std::cout << "Instruction:\n";
-    goto_program.output_instruction(ns, function_id, std::cout, *i_it);
+    i_it->output(std::cout);
 #endif
 
     if(!i_it->is_backwards_goto())

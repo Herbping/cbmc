@@ -62,7 +62,7 @@ bool polynomial_acceleratort::accelerate(
       it!=body.end();
       ++it)
   {
-    program.output_instruction(ns, "scratch", std::cout, *it);
+    it->output(std::cout);
   }
 
   std::cout << "Modified:\n";
@@ -730,32 +730,13 @@ void polynomial_acceleratort::stash_polynomials(
 {
   expr_sett modified;
   utils.find_modified(body, modified);
-  stash_variables(program, modified, substitution);
+  utils.stash_variables(program, modified, substitution);
 
   for(std::map<exprt, polynomialt>::iterator it=polynomials.begin();
       it!=polynomials.end();
       ++it)
   {
     it->second.substitute(substitution);
-  }
-}
-
-void polynomial_acceleratort::stash_variables(
-  scratch_programt &program,
-  expr_sett modified,
-  substitutiont &substitution)
-{
-  find_symbols_sett vars =
-    find_symbols_or_nexts(modified.begin(), modified.end());
-  irep_idt loop_counter_name=to_symbol_expr(loop_counter).get_identifier();
-  vars.erase(loop_counter_name);
-
-  for(const irep_idt &id : vars)
-  {
-    const symbolt &orig = symbol_table.lookup_ref(id);
-    symbolt stashed_sym=utils.fresh_symbol("polynomial::stash", orig.type);
-    substitution[orig.symbol_expr()]=stashed_sym.symbol_expr();
-    program.assign(stashed_sym.symbol_expr(), orig.symbol_expr());
   }
 }
 
@@ -799,7 +780,7 @@ exprt polynomial_acceleratort::precondition(patht &path)
     }
     else if(t->is_assume() || t->is_assert())
     {
-      ret = implies_exprt(t->get_condition(), ret);
+      ret = implies_exprt(t->condition(), ret);
     }
     else
     {

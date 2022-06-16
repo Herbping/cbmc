@@ -58,7 +58,11 @@ class multi_ary_exprt;
 class mult_exprt;
 class namespacet;
 class not_exprt;
+class object_size_exprt;
+class overflow_result_exprt;
 class plus_exprt;
+class pointer_object_exprt;
+class pointer_offset_exprt;
 class popcount_exprt;
 class refined_string_exprt;
 class shift_exprt;
@@ -170,8 +174,8 @@ public:
   NODISCARD resultt<> simplify_member(const member_exprt &);
   NODISCARD resultt<> simplify_byte_update(const byte_update_exprt &);
   NODISCARD resultt<> simplify_byte_extract(const byte_extract_exprt &);
-  NODISCARD resultt<> simplify_pointer_object(const unary_exprt &);
-  NODISCARD resultt<> simplify_object_size(const unary_exprt &);
+  NODISCARD resultt<> simplify_pointer_object(const pointer_object_exprt &);
+  NODISCARD resultt<> simplify_object_size(const object_size_exprt &);
   NODISCARD resultt<> simplify_is_dynamic_object(const unary_exprt &);
   NODISCARD resultt<> simplify_is_invalid_pointer(const unary_exprt &);
   NODISCARD resultt<> simplify_good_pointer(const unary_exprt &);
@@ -180,7 +184,7 @@ public:
   NODISCARD resultt<> simplify_unary_plus(const unary_plus_exprt &);
   NODISCARD resultt<> simplify_dereference(const dereference_exprt &);
   NODISCARD resultt<> simplify_address_of(const address_of_exprt &);
-  NODISCARD resultt<> simplify_pointer_offset(const unary_exprt &);
+  NODISCARD resultt<> simplify_pointer_offset(const pointer_offset_exprt &);
   NODISCARD resultt<> simplify_bswap(const bswap_exprt &);
   NODISCARD resultt<> simplify_isinf(const unary_exprt &);
   NODISCARD resultt<> simplify_isnan(const unary_exprt &);
@@ -199,6 +203,12 @@ public:
   /// Simplification will be possible when the operand is constants or the
   /// type of the operand has an infinite domain.
   NODISCARD resultt<> simplify_overflow_unary(const unary_overflow_exprt &);
+
+  /// Try to simplify overflow_result-+, overflow_result-*, overflow_result--,
+  /// overflow_result-shl, overflow_result-unary--.
+  /// Simplification will be possible when the operands are constants or the
+  /// types of the operands have infinite domains.
+  NODISCARD resultt<> simplify_overflow_result(const overflow_result_exprt &);
 
   /// Attempt to simplify mathematical function applications if we have
   /// enough information to do so. Currently focused on constant comparisons.

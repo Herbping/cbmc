@@ -69,7 +69,8 @@ void havoc_assigns_targetst::append_havoc_code_for_expr(
 {
   if(expr.id() == ID_pointer_object)
   {
-    append_object_havoc_code_for_expr(location, expr.operands().front(), dest);
+    append_object_havoc_code_for_expr(
+      location, to_pointer_object_expr(expr).pointer(), dest);
     return;
   }
 
@@ -164,7 +165,7 @@ void simplify_gotos(goto_programt &goto_program, namespacet &ns)
   {
     if(
       instruction.is_goto() &&
-      simplify_expr(instruction.get_condition(), ns).is_false())
+      simplify_expr(instruction.condition(), ns).is_false())
       instruction.turn_into_skip();
   }
 }
@@ -203,16 +204,20 @@ bool is_loop_free(
     auto size = scc_size[scc_id];
     if(size > 1)
     {
-      log.error() << "Found CFG SCC with size " << size << messaget::eom;
-      for(const auto &node_id : node_to_scc)
-      {
-        if(node_to_scc[node_id] == scc_id)
-        {
-          const auto &pc = cfg[node_id].PC;
-          goto_program.output_instruction(ns, "", log.error(), *pc);
-          log.error() << messaget::eom;
-        }
-      }
+      log.conditional_output(
+        log.error(),
+        [&cfg, &node_to_scc, &scc_id, &size](messaget::mstreamt &mstream) {
+          mstream << "Found CFG SCC with size " << size << messaget::eom;
+          for(const auto &node_id : node_to_scc)
+          {
+            if(node_to_scc[node_id] == scc_id)
+            {
+              const auto &pc = cfg[node_id].PC;
+              pc->output(mstream);
+              mstream << messaget::eom;
+            }
+          }
+        });
       return false;
     }
   }

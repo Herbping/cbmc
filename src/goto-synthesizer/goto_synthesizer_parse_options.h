@@ -18,7 +18,6 @@ Author: Qinheping Hu, qinhh@amazon.com
 #include <util/ui_message.h>
 #include <util/validation_interface.h>
 
-#include <analyses/goto_check.h>
 #include <ansi-c/ansi_c_language.h>
 #include <goto-instrument/loop_utils.h>
 

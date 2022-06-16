@@ -875,10 +875,11 @@ simplify_exprt::simplify_typecast(const typecast_exprt &expr)
   {
     const auto &op_plus_expr = to_plus_expr(expr.op());
 
-    if(((op_plus_expr.op0().id() == ID_typecast &&
-         to_typecast_expr(op_plus_expr.op0()).op().is_zero()) ||
-        (op_plus_expr.op0().is_constant() &&
-         to_constant_expr(op_plus_expr.op0()).get_value() == ID_NULL)))
+    if(
+      (op_plus_expr.op0().id() == ID_typecast &&
+       to_typecast_expr(op_plus_expr.op0()).op().is_zero()) ||
+      (op_plus_expr.op0().is_constant() &&
+       is_null_pointer(to_constant_expr(op_plus_expr.op0()))))
     {
       auto sub_size =
         pointer_offset_size(to_pointer_type(op_type).base_type(), ns);
@@ -1746,6 +1747,9 @@ simplify_exprt::simplify_byte_extract(const byte_extract_exprt &expr)
       if(comps.empty() || comps.back().type().id() != ID_array)
         return false;
 
+      if(comps.back().type().get_bool(ID_C_flexible_array_member))
+        return true;
+
       const auto size =
         numeric_cast<mp_integer>(to_array_type(comps.back().type()).size());
       return !size.has_value() || *size <= 1;
@@ -2178,14 +2182,14 @@ simplify_exprt::simplify_overflow_binary(const binary_overflow_exprt &expr)
   // zero.
   if(
     expr.op1().is_zero() ||
-    (expr.op0().is_zero() && expr.id() != ID_overflow_minus))
+    (expr.op0().is_zero() && !can_cast_expr<minus_overflow_exprt>(expr)))
   {
     return false_exprt{};
   }
 
   // One is neutral element for multiplication
   if(
-    expr.id() == ID_overflow_mult &&
+    can_cast_expr<mult_overflow_exprt>(expr) &&
     (expr.op0().is_one() || expr.op1().is_one()))
   {
     return false_exprt{};
@@ -2204,7 +2208,7 @@ simplify_exprt::simplify_overflow_binary(const binary_overflow_exprt &expr)
     return false_exprt{};
   }
 
-  if(op_type_id == ID_natural && expr.id() != ID_overflow_minus)
+  if(op_type_id == ID_natural && !can_cast_expr<minus_overflow_exprt>(expr))
     return false_exprt{};
 
   // we only handle constants over signedbv/unsignedbv for the remaining cases
@@ -2220,13 +2224,13 @@ simplify_exprt::simplify_overflow_binary(const binary_overflow_exprt &expr)
     return unchanged(expr);
 
   mp_integer no_overflow_result;
-  if(expr.id() == ID_overflow_plus)
+  if(can_cast_expr<plus_overflow_exprt>(expr))
     no_overflow_result = *op0_value + *op1_value;
-  else if(expr.id() == ID_overflow_minus)
+  else if(can_cast_expr<minus_overflow_exprt>(expr))
     no_overflow_result = *op0_value - *op1_value;
-  else if(expr.id() == ID_overflow_mult)
+  else if(can_cast_expr<mult_overflow_exprt>(expr))
     no_overflow_result = *op0_value * *op1_value;
-  else if(expr.id() == ID_overflow_shl)
+  else if(can_cast_expr<shl_overflow_exprt>(expr))
     no_overflow_result = *op0_value << *op1_value;
   else
     UNREACHABLE;
@@ -2274,7 +2278,7 @@ simplify_exprt::simplify_overflow_unary(const unary_overflow_exprt &expr)
     return unchanged(expr);
 
   mp_integer no_overflow_result;
-  if(expr.id() == ID_overflow_unary_minus)
+  if(can_cast_expr<unary_minus_overflow_exprt>(expr))
     no_overflow_result = -*op_value;
   else
     UNREACHABLE;
@@ -2289,6 +2293,185 @@ simplify_exprt::simplify_overflow_unary(const unary_overflow_exprt &expr)
   }
   else
     return false_exprt{};
+}
+
+simplify_exprt::resultt<>
+simplify_exprt::simplify_overflow_result(const overflow_result_exprt &expr)
+{
+  if(expr.id() == ID_overflow_result_unary_minus)
+  {
+    // zero is a neutral element
+    if(expr.op0().is_zero())
+      return struct_exprt{{expr.op0(), false_exprt{}}, expr.type()};
+
+    // catch some cases over mathematical types
+    const irep_idt &op_type_id = expr.op0().type().id();
+    if(
+      op_type_id == ID_integer || op_type_id == ID_rational ||
+      op_type_id == ID_real)
+    {
+      return struct_exprt{{expr.op0(), false_exprt{}}, expr.type()};
+    }
+
+    // always an overflow for natural numbers, but the result is not
+    // representable
+    if(op_type_id == ID_natural)
+      return unchanged(expr);
+
+    // we only handle constants over signedbv/unsignedbv for the remaining cases
+    if(op_type_id != ID_signedbv && op_type_id != ID_unsignedbv)
+      return unchanged(expr);
+
+    if(!expr.op0().is_constant())
+      return unchanged(expr);
+
+    const auto op_value = numeric_cast<mp_integer>(expr.op0());
+    if(!op_value.has_value())
+      return unchanged(expr);
+
+    mp_integer no_overflow_result = -*op_value;
+
+    const std::size_t width = to_bitvector_type(expr.op0().type()).get_width();
+    const integer_bitvector_typet bv_type{op_type_id, width};
+    if(
+      no_overflow_result < bv_type.smallest() ||
+      no_overflow_result > bv_type.largest())
+    {
+      return struct_exprt{
+        {from_integer(no_overflow_result, expr.op0().type()), true_exprt{}},
+        expr.type()};
+    }
+    else
+    {
+      return struct_exprt{
+        {from_integer(no_overflow_result, expr.op0().type()), false_exprt{}},
+        expr.type()};
+    }
+  }
+  else
+  {
+    // When one operand is zero, an overflow can only occur for a subtraction
+    // from zero.
+    if(expr.op0().is_zero())
+    {
+      if(
+        expr.id() == ID_overflow_result_plus ||
+        expr.id() == ID_overflow_result_shl)
+      {
+        return struct_exprt{{expr.op1(), false_exprt{}}, expr.type()};
+      }
+      else if(expr.id() == ID_overflow_result_mult)
+      {
+        return struct_exprt{
+          {from_integer(0, expr.op0().type()), false_exprt{}}, expr.type()};
+      }
+    }
+    else if(expr.op1().is_zero())
+    {
+      if(
+        expr.id() == ID_overflow_result_plus ||
+        expr.id() == ID_overflow_result_minus ||
+        expr.id() == ID_overflow_result_shl)
+      {
+        return struct_exprt{{expr.op0(), false_exprt{}}, expr.type()};
+      }
+      else
+      {
+        return struct_exprt{
+          {from_integer(0, expr.op0().type()), false_exprt{}}, expr.type()};
+      }
+    }
+
+    // One is neutral element for multiplication
+    if(
+      expr.id() == ID_overflow_result_mult &&
+      (expr.op0().is_one() || expr.op1().is_one()))
+    {
+      return struct_exprt{
+        {expr.op0().is_one() ? expr.op1() : expr.op0(), false_exprt{}},
+        expr.type()};
+    }
+
+    // we only handle the case of same operand types
+    if(
+      expr.id() != ID_overflow_result_shl &&
+      expr.op0().type() != expr.op1().type())
+    {
+      return unchanged(expr);
+    }
+
+    // catch some cases over mathematical types
+    const irep_idt &op_type_id = expr.op0().type().id();
+    if(
+      expr.id() != ID_overflow_result_shl &&
+      (op_type_id == ID_integer || op_type_id == ID_rational ||
+       op_type_id == ID_real))
+    {
+      irep_idt id =
+        expr.id() == ID_overflow_result_plus
+          ? ID_plus
+          : expr.id() == ID_overflow_result_minus ? ID_minus : ID_mult;
+      return struct_exprt{
+        {simplify_node(binary_exprt{expr.op0(), id, expr.op1()}),
+         false_exprt{}},
+        expr.type()};
+    }
+
+    if(
+      (expr.id() == ID_overflow_result_plus ||
+       expr.id() == ID_overflow_result_mult) &&
+      op_type_id == ID_natural)
+    {
+      return struct_exprt{
+        {simplify_node(binary_exprt{
+           expr.op0(),
+           expr.id() == ID_overflow_result_plus ? ID_plus : ID_mult,
+           expr.op1()}),
+         false_exprt{}},
+        expr.type()};
+    }
+
+    // we only handle constants over signedbv/unsignedbv for the remaining cases
+    if(op_type_id != ID_signedbv && op_type_id != ID_unsignedbv)
+      return unchanged(expr);
+
+    if(!expr.op0().is_constant() || !expr.op1().is_constant())
+      return unchanged(expr);
+
+    const auto op0_value = numeric_cast<mp_integer>(expr.op0());
+    const auto op1_value = numeric_cast<mp_integer>(expr.op1());
+    if(!op0_value.has_value() || !op1_value.has_value())
+      return unchanged(expr);
+
+    mp_integer no_overflow_result;
+    if(expr.id() == ID_overflow_result_plus)
+      no_overflow_result = *op0_value + *op1_value;
+    else if(expr.id() == ID_overflow_result_minus)
+      no_overflow_result = *op0_value - *op1_value;
+    else if(expr.id() == ID_overflow_result_mult)
+      no_overflow_result = *op0_value * *op1_value;
+    else if(expr.id() == ID_overflow_result_shl)
+      no_overflow_result = *op0_value << *op1_value;
+    else
+      UNREACHABLE;
+
+    const std::size_t width = to_bitvector_type(expr.op0().type()).get_width();
+    const integer_bitvector_typet bv_type{op_type_id, width};
+    if(
+      no_overflow_result < bv_type.smallest() ||
+      no_overflow_result > bv_type.largest())
+    {
+      return struct_exprt{
+        {from_integer(no_overflow_result, expr.op0().type()), true_exprt{}},
+        expr.type()};
+    }
+    else
+    {
+      return struct_exprt{
+        {from_integer(no_overflow_result, expr.op0().type()), false_exprt{}},
+        expr.type()};
+    }
+  }
 }
 
 bool simplify_exprt::simplify_node_preorder(exprt &expr)
@@ -2384,7 +2567,7 @@ simplify_exprt::resultt<> simplify_exprt::simplify_node(exprt node)
   }
   else if(expr.id()==ID_pointer_object)
   {
-    r = simplify_pointer_object(to_unary_expr(expr));
+    r = simplify_pointer_object(to_pointer_object_expr(expr));
   }
   else if(expr.id() == ID_is_dynamic_object)
   {
@@ -2394,9 +2577,10 @@ simplify_exprt::resultt<> simplify_exprt::simplify_node(exprt node)
   {
     r = simplify_is_invalid_pointer(to_unary_expr(expr));
   }
-  else if(expr.id()==ID_object_size)
+  else if(
+    const auto object_size = expr_try_dynamic_cast<object_size_exprt>(expr))
   {
-    r = simplify_object_size(to_unary_expr(expr));
+    r = simplify_object_size(*object_size);
   }
   else if(expr.id()==ID_good_pointer)
   {
@@ -2479,7 +2663,7 @@ simplify_exprt::resultt<> simplify_exprt::simplify_node(exprt node)
   }
   else if(expr.id()==ID_pointer_offset)
   {
-    r = simplify_pointer_offset(to_unary_expr(expr));
+    r = simplify_pointer_offset(to_pointer_offset_expr(expr));
   }
   else if(expr.id()==ID_extractbit)
   {
@@ -2543,14 +2727,22 @@ simplify_exprt::resultt<> simplify_exprt::simplify_node(exprt node)
     r = simplify_complex(to_unary_expr(expr));
   }
   else if(
-    expr.id() == ID_overflow_plus || expr.id() == ID_overflow_minus ||
-    expr.id() == ID_overflow_mult || expr.id() == ID_overflow_shl)
+    const auto binary_overflow =
+      expr_try_dynamic_cast<binary_overflow_exprt>(expr))
   {
-    r = simplify_overflow_binary(to_binary_overflow_expr(expr));
+    r = simplify_overflow_binary(*binary_overflow);
   }
-  else if(expr.id() == ID_overflow_unary_minus)
+  else if(
+    const auto unary_overflow =
+      expr_try_dynamic_cast<unary_overflow_exprt>(expr))
   {
-    r = simplify_overflow_unary(to_unary_overflow_expr(expr));
+    r = simplify_overflow_unary(*unary_overflow);
+  }
+  else if(
+    const auto overflow_result =
+      expr_try_dynamic_cast<overflow_result_exprt>(expr))
+  {
+    r = simplify_overflow_result(*overflow_result);
   }
   else if(expr.id() == ID_bitreverse)
   {

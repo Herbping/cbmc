@@ -27,7 +27,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <solvers/strings/string_refinement.h>
 
-#include <java_bytecode/goto_check_java.h>
 #include <java_bytecode/java_bytecode_language.h>
 #include <java_bytecode/java_trace_validation.h>
 
@@ -45,8 +44,8 @@ class optionst;
   OPT_FUNCTIONS \
   "(no-simplify)(full-slice)" \
   OPT_REACHABILITY_SLICER \
-  "(debug-level):(no-propagation)(no-simplify-if)" \
-  "(document-subgoals)(outfile):" \
+  "(no-propagation)(no-simplify-if)" \
+  "(document-subgoals)" \
   "(object-bits):" \
   "(classpath):(cp):" \
   OPT_JAVA_JAR \
@@ -55,10 +54,8 @@ class optionst;
   "(no-assertions)(no-assumptions)" \
   OPT_XML_INTERFACE \
   OPT_JSON_INTERFACE \
-  "(smt1)(smt2)(fpa)(cvc3)(cvc4)(boolector)(yices)(z3)(mathsat)" \
-  "(no-sat-preprocessor)" \
-  "(beautify)" \
-  "(dimacs)(refine)(max-node-refinement):(refine-arrays)(refine-arithmetic)"\
+  "(smt1)" /* rejected, will eventually disappear */ \
+  OPT_SOLVER \
   OPT_STRING_REFINEMENT \
   "(16)(32)(64)(LP64)(ILP64)(LLP64)(ILP32)(LP32)" \
   OPT_SHOW_GOTO_FUNCTIONS \

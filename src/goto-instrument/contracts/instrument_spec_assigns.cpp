@@ -25,6 +25,9 @@ Date: January 2022
 
 #include "utils.h"
 
+/// header for log messages
+static const char LOG_HEADER[] = "assigns clause checking: ";
+
 /// Pragma used to mark assignments to static locals that need to be propagated
 static const char PROPAGATE_STATIC_LOCAL_PRAGMA[] =
   "contracts:propagate-static-local";
@@ -128,7 +131,14 @@ void instrument_spec_assignst::track_heap_allocated(
   const exprt &expr,
   goto_programt &dest)
 {
-  create_snapshot(create_car_from_heap_alloc(expr), dest);
+  // insert in tracking set
+  const auto &car = create_car_from_heap_alloc(expr);
+
+  // generate target validity check for this target.
+  target_validity_assertion(car, true, dest);
+
+  // generate snapshot instructions for this target.
+  create_snapshot(car, dest);
 }
 
 void instrument_spec_assignst::check_inclusion_assignment(
@@ -314,12 +324,15 @@ void instrument_spec_assignst::instrument_instructions(
   goto_programt::targett instruction_it,
   const goto_programt::targett &instruction_end,
   skip_function_paramst skip_function_params,
-  optionalt<cfg_infot> &cfg_info_opt)
+  optionalt<cfg_infot> &cfg_info_opt,
+  const std::function<bool(const goto_programt::targett &)> &pred)
 {
   while(instruction_it != instruction_end)
   {
     // Skip instructions marked as disabled for assigns clause checking
-    if(has_disable_assigns_check_pragma(instruction_it))
+    if(
+      has_disable_assigns_check_pragma(instruction_it) ||
+      (pred && !pred(instruction_it)))
     {
       instruction_it++;
       if(cfg_info_opt.has_value())
@@ -410,7 +423,7 @@ void instrument_spec_assignst::track_spec_target_group(
   cleanert cleaner(st, log.get_message_handler());
   exprt condition(group.condition());
   if(has_subexpr(condition, ID_side_effect))
-    cleaner.clean(condition, dest, st.lookup_ref(function_id).mode);
+    cleaner.clean(condition, dest, mode);
 
   // create conditional address ranges by distributing the condition
   for(const auto &target : group.targets())
@@ -445,8 +458,7 @@ const symbolt instrument_spec_assignst::create_fresh_symbol(
   const typet &type,
   const source_locationt &location) const
 {
-  return new_tmp_symbol(
-    type, location, st.lookup_ref(function_id).mode, st, suffix);
+  return new_tmp_symbol(type, location, mode, st, suffix);
 }
 
 car_exprt instrument_spec_assignst::create_car_expr(
@@ -468,17 +480,58 @@ car_exprt instrument_spec_assignst::create_car_expr(
 
   if(target.id() == ID_pointer_object)
   {
-    const auto &arg = to_unary_expr(target).op();
+    const auto &arg = to_pointer_object_expr(target).pointer();
     return {
       condition,
       target,
       minus_exprt(
         typecast_exprt::conditional_cast(arg, pointer_type(char_type())),
         pointer_offset(arg)),
-      typecast_exprt::conditional_cast(object_size(arg), signed_size_type()),
+      typecast_exprt::conditional_cast(object_size(arg), size_type()),
       valid_var,
       lower_bound_var,
-      upper_bound_var};
+      upper_bound_var,
+      car_havoc_methodt::HAVOC_OBJECT};
+  }
+  else if(can_cast_expr<side_effect_expr_function_callt>(target))
+  {
+    const auto &funcall = to_side_effect_expr_function_call(target);
+    if(can_cast_expr<symbol_exprt>(funcall.function()))
+    {
+      const auto &ident = to_symbol_expr(funcall.function()).get_identifier();
+      if(ident == CPROVER_PREFIX "object_from")
+      {
+        const auto &ptr = funcall.arguments().at(0);
+        return {
+          condition,
+          target,
+          typecast_exprt::conditional_cast(ptr, pointer_type(char_type())),
+          typecast_exprt::conditional_cast(
+            minus_exprt{
+              typecast_exprt::conditional_cast(
+                object_size(ptr), signed_size_type()),
+              pointer_offset(ptr)},
+            size_type()),
+          valid_var,
+          lower_bound_var,
+          upper_bound_var,
+          car_havoc_methodt::HAVOC_SLICE};
+      }
+      if(ident == CPROVER_PREFIX "object_slice")
+      {
+        const auto &ptr = funcall.arguments().at(0);
+        const auto &size = funcall.arguments().at(1);
+        return {
+          condition,
+          target,
+          typecast_exprt::conditional_cast(ptr, pointer_type(char_type())),
+          typecast_exprt::conditional_cast(size, size_type()),
+          valid_var,
+          lower_bound_var,
+          upper_bound_var,
+          car_havoc_methodt::HAVOC_SLICE};
+      }
+    }
   }
   else if(is_assignable(target))
   {
@@ -488,15 +541,17 @@ car_exprt instrument_spec_assignst::create_car_expr(
       size.has_value(),
       "no definite size for lvalue target:\n" + target.pretty());
 
-    return {condition,
-            target,
-            typecast_exprt::conditional_cast(
-              address_of_exprt{target}, pointer_type(char_type())),
-            typecast_exprt::conditional_cast(size.value(), signed_size_type()),
-            valid_var,
-            lower_bound_var,
-            upper_bound_var};
-  };
+    return {
+      condition,
+      target,
+      typecast_exprt::conditional_cast(
+        address_of_exprt{target}, pointer_type(char_type())),
+      typecast_exprt::conditional_cast(size.value(), size_type()),
+      valid_var,
+      lower_bound_var,
+      upper_bound_var,
+      car_havoc_methodt::NONDET_ASSIGN};
+  }
 
   UNREACHABLE;
 }
@@ -541,7 +596,7 @@ exprt instrument_spec_assignst::target_validity_expr(
   // the target's `start_address` pointer satisfies w_ok with the expected size
   // (or is NULL if we allow it explicitly).
   // This assertion will be falsified whenever `start_address` is invalid or
-  // not of the right size (or is NULL if we dot not allow it expliclitly).
+  // not of the right size (or is NULL if we do not allow it explicitly).
   auto result =
     or_exprt{not_exprt{car.condition()},
              w_ok_exprt{car.target_start_address(), car.target_size()}};
@@ -665,12 +720,25 @@ exprt instrument_spec_assignst::inclusion_check_full(
 
   // Build a disjunction over all tracked locations
   exprt::operandst disjuncts;
+  log.debug() << LOG_HEADER << " inclusion check: \n"
+              << from_expr_using_mode(ns, mode, car.target()) << " in {"
+              << messaget::eom;
 
   for(const auto &pair : from_spec_assigns)
+  {
     disjuncts.push_back(inclusion_check_single(car, pair.second));
+    log.debug() << "\t(spec) "
+                << from_expr_using_mode(ns, mode, pair.second.target())
+                << messaget::eom;
+  }
 
-  for(const auto &pair : from_heap_alloc)
-    disjuncts.push_back(inclusion_check_single(car, pair.second));
+  for(const auto &heap_car : from_heap_alloc)
+  {
+    disjuncts.push_back(inclusion_check_single(car, heap_car));
+    log.debug() << "\t(heap) "
+                << from_expr_using_mode(ns, mode, heap_car.target())
+                << messaget::eom;
+  }
 
   if(include_stack_allocated)
   {
@@ -683,16 +751,26 @@ exprt instrument_spec_assignst::inclusion_check_full(
         continue;
 
       disjuncts.push_back(inclusion_check_single(car, pair.second));
+      log.debug() << "\t(stack) "
+                  << from_expr_using_mode(ns, mode, pair.second.target())
+                  << messaget::eom;
     }
 
     // static locals are stack allocated and can never be DEAD
     for(const auto &pair : from_static_local)
+    {
       disjuncts.push_back(inclusion_check_single(car, pair.second));
+      log.debug() << "\t(static) "
+                  << from_expr_using_mode(ns, mode, pair.second.target())
+                  << messaget::eom;
+    }
   }
+  log.debug() << "}" << messaget::eom;
 
   if(allow_null_lhs)
-    return or_exprt{null_pointer(car.target_start_address()),
-                    and_exprt{car.valid_var(), disjunction(disjuncts)}};
+    return or_exprt{
+      null_pointer(car.target_start_address()),
+      and_exprt{car.valid_var(), disjunction(disjuncts)}};
   else
     return and_exprt{car.valid_var(), disjunction(disjuncts)};
 }
@@ -713,6 +791,8 @@ const car_exprt &instrument_spec_assignst::create_car_from_spec_assigns(
   }
   else
   {
+    log.debug() << LOG_HEADER << "creating CAR for assigns clause target "
+                << format(condition) << ": " << format(target) << messaget::eom;
     from_spec_assigns.insert({key, create_car_expr(condition, target)});
     return from_spec_assigns.find(key)->second;
   }
@@ -731,6 +811,8 @@ const car_exprt &instrument_spec_assignst::create_car_from_stack_alloc(
   }
   else
   {
+    log.debug() << LOG_HEADER << "creating CAR for stack-allocated target "
+                << format(target) << messaget::eom;
     from_stack_alloc.insert({target, create_car_expr(true_exprt{}, target)});
     return from_stack_alloc.find(target)->second;
   }
@@ -739,19 +821,10 @@ const car_exprt &instrument_spec_assignst::create_car_from_stack_alloc(
 const car_exprt &
 instrument_spec_assignst::create_car_from_heap_alloc(const exprt &target)
 {
-  const auto &found = from_heap_alloc.find(target);
-  if(found != from_heap_alloc.end())
-  {
-    log.warning() << "Ignored duplicate heap-allocated target '"
-                  << from_expr(ns, target.id(), target) << "' at "
-                  << target.source_location().as_string() << messaget::eom;
-    return found->second;
-  }
-  else
-  {
-    from_heap_alloc.insert({target, create_car_expr(true_exprt{}, target)});
-    return from_heap_alloc.find(target)->second;
-  }
+  log.debug() << LOG_HEADER << "creating CAR for heap-allocated target "
+              << format(target) << messaget::eom;
+  from_heap_alloc.emplace_back(create_car_expr(true_exprt{}, target));
+  return from_heap_alloc.back();
 }
 
 const car_exprt &instrument_spec_assignst::create_car_from_static_local(
@@ -767,6 +840,8 @@ const car_exprt &instrument_spec_assignst::create_car_from_static_local(
   }
   else
   {
+    log.debug() << LOG_HEADER << "creating CAR for static local target "
+                << format(target) << messaget::eom;
     from_static_local.insert({target, create_car_expr(true_exprt{}, target)});
     return from_static_local.find(target)->second;
   }
@@ -796,8 +871,8 @@ void instrument_spec_assignst::invalidate_heap_and_spec_aliases(
   for(const auto &pair : from_spec_assigns)
     invalidate_car(pair.second, freed_car, dest);
 
-  for(const auto &pair : from_heap_alloc)
-    invalidate_car(pair.second, freed_car, dest);
+  for(const auto &car : from_heap_alloc)
+    invalidate_car(car, freed_car, dest);
 }
 
 /// Returns true iff an `ASSIGN lhs := rhs` instruction must be instrumented.
@@ -806,44 +881,107 @@ bool instrument_spec_assignst::must_check_assign(
   skip_function_paramst skip_function_params,
   const optionalt<cfg_infot> cfg_info_opt)
 {
-  if(
-    const auto &symbol_expr =
-      expr_try_dynamic_cast<symbol_exprt>(target->assign_lhs()))
+  log.debug().source_location = target->source_location();
+
+  if(can_cast_expr<symbol_exprt>(target->assign_lhs()))
   {
+    const auto &symbol_expr = to_symbol_expr(target->assign_lhs());
     if(
       skip_function_params == skip_function_paramst::NO &&
-      ns.lookup(symbol_expr->get_identifier()).is_parameter)
+      ns.lookup(symbol_expr.get_identifier()).is_parameter)
     {
+      log.debug() << LOG_HEADER << "checking assignment to function parameter "
+                  << format(symbol_expr) << messaget::eom;
       return true;
     }
 
     if(cfg_info_opt.has_value())
-      return !cfg_info_opt.value().is_local(symbol_expr->get_identifier());
+    {
+      if(cfg_info_opt.value().is_local(symbol_expr.get_identifier()))
+      {
+        log.debug() << LOG_HEADER
+                    << "skipping checking on assignment to local symbol "
+                    << format(symbol_expr) << messaget::eom;
+        return false;
+      }
+      else
+      {
+        log.debug() << LOG_HEADER << "checking assignment to non-local symbol "
+                    << format(symbol_expr) << messaget::eom;
+        return true;
+      }
+    }
+    log.debug() << LOG_HEADER << "checking assignment to symbol "
+                << format(symbol_expr) << messaget::eom;
+    return true;
   }
-
-  return true;
+  else
+  {
+    // This is not a mere symbol.
+    // Since non-dirty locals are not tracked explicitly in the write set,
+    // we need to skip the check if we can verify that the expression describes
+    // an access to a non-dirty local symbol or an input parameter,
+    // otherwise the check will fail.
+    // In addition, the expression shall not contain address_of or dereference
+    // operators, regardless of the base symbol/object on which they apply.
+    // If the expression contains an address_of operation, the assignment gets
+    // checked. If the base object is a local or a parameter, it will also be
+    // flagged as dirty and will be tracked explicitly, and the check will pass.
+    // If the expression contains a dereference operation, the assignment gets
+    // checked. If the dereferenced address was computed from a local object,
+    // from a function parameter or returned by a local malloc,
+    // then the object will be tracked explicitly and the check will pass.
+    // In all other cases (address of a non-local object, or dereference of
+    // a non-locally computed address) the location must be given explicitly
+    // in the assigns clause to be tracked and we must check the assignment.
+    if(
+      cfg_info_opt.has_value() &&
+      cfg_info_opt.value().is_local_composite_access(target->assign_lhs()))
+    {
+      log.debug()
+        << LOG_HEADER
+        << "skipping check on assignment to local composite member expression "
+        << format(target->assign_lhs()) << messaget::eom;
+      return false;
+    }
+    log.debug() << LOG_HEADER << "checking assignment to expression "
+                << format(target->assign_lhs()) << messaget::eom;
+    return true;
+  }
 }
 
-/// Returns true iff a `DECL x` must be added to the local write set.
-///
-/// A variable is called 'dirty' if its address gets taken at some point in
-/// the program.
-///
-/// Assuming the goto program is obtained from a structured C program that
-/// passed C compiler checks, non-dirty variables can only be assigned to
-/// directly by name, cannot escape their lexical scope, and are always safe
-/// to assign. Hence, we only track dirty variables in the write set.
+/// Track the symbol iff we have no cfg_infot, or we have a cfg_infot and the
+/// symbol is not a local or is a dirty local.
+bool instrument_spec_assignst::must_track_decl_or_dead(
+  const irep_idt &ident,
+  const optionalt<cfg_infot> &cfg_info_opt) const
+{
+  return !cfg_info_opt.has_value() ||
+         (cfg_info_opt.has_value() &&
+          cfg_info_opt.value().is_not_local_or_dirty_local(ident));
+}
+
+/// Returns true iff a `DECL x` must be explicitly tracked in the write set.
 bool instrument_spec_assignst::must_track_decl(
   const goto_programt::const_targett &target,
   const optionalt<cfg_infot> &cfg_info_opt) const
 {
-  if(cfg_info_opt.has_value())
+  log.debug().source_location = target->source_location();
+  if(must_track_decl_or_dead(
+       target->decl_symbol().get_identifier(), cfg_info_opt))
   {
-    return cfg_info_opt.value().is_not_local_or_dirty_local(
-      target->decl_symbol().get_identifier());
+    log.debug() << LOG_HEADER << "explicitly tracking "
+                << format(target->decl_symbol()) << " as assignable"
+                << messaget::eom;
+    return true;
   }
-  // Unless proved non-dirty by the CFG analysis we assume it is dirty.
-  return true;
+  else
+  {
+    log.debug() << LOG_HEADER << "implicitly tracking "
+                << format(target->decl_symbol())
+                << " as assignable (non-dirty local)" << messaget::eom;
+    return false;
+  }
 }
 
 /// Returns true iff a `DEAD x` must be processed to upate the local write set.
@@ -852,12 +990,8 @@ bool instrument_spec_assignst::must_track_dead(
   const goto_programt::const_targett &target,
   const optionalt<cfg_infot> &cfg_info_opt) const
 {
-  // Unless proved non-dirty by the CFG analysis we assume it is dirty.
-  if(!cfg_info_opt.has_value())
-    return true;
-
-  return cfg_info_opt.value().is_not_local_or_dirty_local(
-    target->dead_symbol().get_identifier());
+  return must_track_decl_or_dead(
+    target->dead_symbol().get_identifier(), cfg_info_opt);
 }
 
 void instrument_spec_assignst::instrument_assign_statement(
@@ -887,8 +1021,7 @@ void instrument_spec_assignst::instrument_call_statement(
 
   if(callee_name == "malloc")
   {
-    const auto &function_call =
-      to_code_function_call(instruction_it->get_code());
+    const auto &function_call = to_code_function_call(instruction_it->code());
     if(function_call.lhs().is_not_nil())
     {
       // grab the returned pointer from malloc

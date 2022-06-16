@@ -57,6 +57,14 @@ public:
   }
 };
 
+/// method to use to havoc a target
+enum class car_havoc_methodt
+{
+  HAVOC_OBJECT,
+  HAVOC_SLICE,
+  NONDET_ASSIGN
+};
+
 /// Class that represents a normalized conditional address range, with:
 /// - condition expression
 /// - target expression
@@ -73,7 +81,8 @@ public:
     const exprt &_target_size,
     const symbol_exprt &_validity_var,
     const symbol_exprt &_lower_bound_var,
-    const symbol_exprt &_upper_bound_var)
+    const symbol_exprt &_upper_bound_var,
+    const car_havoc_methodt _havoc_method)
     : exprt(
         irep_idt{},
         typet{},
@@ -83,10 +92,14 @@ public:
          _target_size,
          _validity_var,
          _lower_bound_var,
-         _upper_bound_var})
+         _upper_bound_var}),
+      havoc_method(_havoc_method)
   {
     add_source_location() = _target.source_location();
   }
+
+  /// Method to use to havod the target
+  const car_havoc_methodt havoc_method;
 
   /// Condition expression. When this condition holds the target is allowed
   const exprt &condition() const
@@ -196,7 +209,8 @@ public:
       functions(_functions),
       st(_st),
       ns(_st),
-      log(_message_handler)
+      log(_message_handler),
+      mode(st.lookup_ref(function_id).mode)
   {
   }
 
@@ -444,12 +458,39 @@ public:
     optionalt<cfg_infot> &cfg_info_opt,
     goto_programt &dest);
 
+  /// Instruments a sequence of instructions with inclusion checks.
+  ///   If `pred` is not provided,
+  ///     then all instructions are instrumented.
+  ///   If `pred` is provided,
+  ///     then only the instructions that satisfy pred are instrumented.
+  ///
+  /// \param body goto program containing the instructions
+  /// \param instruction_it target to the first instruction of the sequence
+  /// \param instruction_end target to the last instruction of the sequence
+  /// \param skip_function_params the argument to the free operator
+  /// \param cfg_info_opt allows target set pruning if available
+  /// \param pred a predicate on targets to check if they should be instrumented
   void instrument_instructions(
     goto_programt &body,
     goto_programt::targett instruction_it,
     const goto_programt::targett &instruction_end,
     skip_function_paramst skip_function_params,
-    optionalt<cfg_infot> &cfg_info_opt);
+    optionalt<cfg_infot> &cfg_info_opt,
+    const std::function<bool(const goto_programt::targett &)> &pred = {});
+
+  /// Inserts the detected static local symbols into a target container.
+  /// \tparam C The type of the target container
+  /// \param inserter An insert_iterator on the target container
+  template <typename C>
+  void get_static_locals(std::insert_iterator<C> inserter) const
+  {
+    std::transform(
+      from_static_local.cbegin(),
+      from_static_local.cend(),
+      inserter,
+      // can use `const auto &` below once we switch to C++14
+      [](const symbol_exprt_to_car_mapt::value_type &s) { return s.first; });
+  }
 
 protected:
   /// Name of the instrumented function
@@ -466,6 +507,9 @@ protected:
 
   /// Logger
   messaget log;
+
+  /// Language mode
+  const irep_idt &mode;
 
   /// Track and generate snaphsot instructions and target validity
   /// checking assertions for a conditional target group from an assigns clause
@@ -547,23 +591,29 @@ protected:
     const car_exprt &freed_car,
     goto_programt &dest) const;
 
-  /// Returns true iff a `DECL x` must be added to the local write set.
-  ///
-  /// A variable is called 'dirty' if its address gets taken at some point in
-  /// the program.
-  ///
-  /// Assuming the goto program is obtained from a structured C program that
-  /// passed C compiler checks, non-dirty variables can only be assigned to
-  /// directly by name, cannot escape their lexical scope, and are always safe
-  /// to assign. Hence, we only track dirty variables in the write set.
+  /// Returns true iff a `DECL x` must be explicitly added to the write set.
+  /// @see must_track_decl_or_dead.
   bool must_track_decl(
     const goto_programt::const_targett &target,
     const optionalt<cfg_infot> &cfg_info_opt) const;
 
-  /// Returns true iff a `DEAD x` must be processed to update the local write
-  /// set. The conditions are the same than for tracking a `DECL x` instruction.
+  /// Returns true iff a `DEAD x` must be processed to update the write set.
+  /// @see must_track_decl_or_dead.
   bool must_track_dead(
     const goto_programt::const_targett &target,
+    const optionalt<cfg_infot> &cfg_info_opt) const;
+
+  /// \brief Returns true iff a function-local symbol must be tracked.
+  ///
+  /// A local is called 'dirty' if its address gets taken at some point in
+  /// the program.
+  ///
+  /// Assuming the goto program is obtained from a structured C program that
+  /// passed C compiler checks, non-dirty locals can only be assigned to
+  /// directly by name, cannot escape their lexical scope, and are always safe
+  /// to assign. Hence, we only track dirty locals in the write set.
+  bool must_track_decl_or_dead(
+    const irep_idt &ident,
     const optionalt<cfg_infot> &cfg_info_opt) const;
 
   /// Returns true iff an `ASSIGN lhs := rhs` instruction must be instrumented.
@@ -609,8 +659,9 @@ protected:
   using exprt_to_car_mapt =
     std::unordered_map<const exprt, const car_exprt, irep_hash>;
 
-  /// Map from malloc'd symbols to corresponding conditional address ranges.
-  exprt_to_car_mapt from_heap_alloc;
+  /// List of malloc'd conditional address ranges.
+  using car_expr_listt = std::list<car_exprt>;
+  car_expr_listt from_heap_alloc;
 
   const car_exprt &create_car_from_heap_alloc(const exprt &target);
 

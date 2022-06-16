@@ -18,7 +18,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/floatbv_expr.h>
 #include <util/magic.h>
 #include <util/mp_arith.h>
-#include <util/replace_expr.h>
 #include <util/simplify_expr.h>
 #include <util/std_expr.h>
 #include <util/string2int.h>
@@ -122,8 +121,6 @@ bvt boolbvt::convert_bitvector(const exprt &expr)
     return convert_bv_typecast(to_typecast_expr(expr));
   else if(expr.id()==ID_symbol)
     return convert_symbol(to_symbol_expr(expr));
-  else if(expr.id()==ID_bv_literals)
-    return convert_bv_literals(expr);
   else if(expr.id()==ID_plus || expr.id()==ID_minus ||
           expr.id()=="no-overflow-plus" ||
           expr.id()=="no-overflow-minus")
@@ -231,6 +228,12 @@ bvt boolbvt::convert_bitvector(const exprt &expr)
     return convert_bitreverse(to_bitreverse_expr(expr));
   else if(expr.id() == ID_saturating_minus || expr.id() == ID_saturating_plus)
     return convert_saturating_add_sub(to_binary_expr(expr));
+  else if(
+    const auto overflow_with_result =
+      expr_try_dynamic_cast<overflow_result_exprt>(expr))
+  {
+    return convert_overflow_result(*overflow_with_result);
+  }
 
   return conversion_failed(expr);
 }
@@ -239,32 +242,25 @@ bvt boolbvt::convert_array_comprehension(const array_comprehension_exprt &expr)
 {
   std::size_t width=boolbv_width(expr.type());
 
-  if(width==0)
-    return conversion_failed(expr);
-
   const exprt &array_size = expr.type().size();
 
-  const auto size = numeric_cast<mp_integer>(array_size);
-
-  if(!size.has_value())
-    return conversion_failed(expr);
+  const auto size = numeric_cast_v<mp_integer>(to_constant_expr(array_size));
 
   typet counter_type = expr.arg().type();
 
   bvt bv;
   bv.resize(width);
 
-  for(mp_integer i = 0; i < *size; ++i)
+  for(mp_integer i = 0; i < size; ++i)
   {
     exprt counter=from_integer(i, counter_type);
 
-    exprt body = expr.body();
-    replace_expr(expr.arg(), counter, body);
+    exprt body = expr.instantiate({counter});
 
     const bvt &tmp = convert_bv(body);
 
     INVARIANT(
-      *size * tmp.size() == width,
+      size * tmp.size() == width,
       "total bitvector width shall equal the number of operands times the size "
       "per operand");
 
@@ -273,27 +269,6 @@ bvt boolbvt::convert_array_comprehension(const array_comprehension_exprt &expr)
     for(std::size_t j=0; j<tmp.size(); j++)
       bv[offset+j]=tmp[j];
   }
-
-  return bv;
-}
-
-bvt boolbvt::convert_bv_literals(const exprt &expr)
-{
-  std::size_t width=boolbv_width(expr.type());
-
-  if(width==0)
-    return conversion_failed(expr);
-
-  bvt bv;
-  bv.resize(width);
-
-  const irept::subt &bv_sub=expr.find(ID_bv).get_sub();
-
-  if(bv_sub.size()!=width)
-    throw "bv_literals with wrong size";
-
-  for(std::size_t i=0; i<width; i++)
-    bv[i].set(unsafe_string2unsigned(id2string(bv_sub[i].id())));
 
   return bv;
 }
@@ -417,11 +392,16 @@ literalt boolbvt::convert_rest(const exprt &expr)
   else if(expr.id()==ID_onehot || expr.id()==ID_onehot0)
     return convert_onehot(to_unary_expr(expr));
   else if(
-    expr.id() == ID_overflow_plus || expr.id() == ID_overflow_mult ||
-    expr.id() == ID_overflow_minus || expr.id() == ID_overflow_shl ||
-    expr.id() == ID_overflow_unary_minus)
+    const auto binary_overflow =
+      expr_try_dynamic_cast<binary_overflow_exprt>(expr))
   {
-    return convert_overflow(expr);
+    return convert_binary_overflow(*binary_overflow);
+  }
+  else if(
+    const auto unary_overflow =
+      expr_try_dynamic_cast<unary_overflow_exprt>(expr))
+  {
+    return convert_unary_overflow(*unary_overflow);
   }
   else if(expr.id()==ID_isnan)
   {
@@ -527,25 +507,6 @@ void boolbvt::set_to(const exprt &expr, bool value)
   SUB::set_to(expr, value);
 }
 
-exprt boolbvt::make_bv_expr(const typet &type, const bvt &bv)
-{
-  exprt dest(ID_bv_literals, type);
-  irept::subt &bv_sub=dest.add(ID_bv).get_sub();
-  bv_sub.resize(bv.size());
-
-  for(std::size_t i=0; i<bv.size(); i++)
-    bv_sub[i].id(std::to_string(bv[i].get()));
-  return dest;
-}
-
-exprt boolbvt::make_free_bv_expr(const typet &type)
-{
-  const std::size_t width = boolbv_width(type);
-  PRECONDITION(width != 0);
-  bvt bv = prop.new_variables(width);
-  return make_bv_expr(type, bv);
-}
-
 bool boolbvt::is_unbounded_array(const typet &type) const
 {
   if(type.id()!=ID_array)
@@ -554,12 +515,12 @@ bool boolbvt::is_unbounded_array(const typet &type) const
   if(unbounded_array==unbounded_arrayt::U_ALL)
     return true;
 
-  const std::size_t size = boolbv_width(type);
-  if(size == 0)
+  const auto &size_opt = bv_width.get_width_opt(type);
+  if(!size_opt.has_value())
     return true;
 
   if(unbounded_array==unbounded_arrayt::U_AUTO)
-    if(size > MAX_FLATTENED_ARRAY_SIZE)
+    if(*size_opt > MAX_FLATTENED_ARRAY_SIZE)
       return true;
 
   return false;

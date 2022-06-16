@@ -125,22 +125,28 @@ void dep_graph_domaint::control_dependencies(
 }
 
 static bool may_be_def_use_pair(
-  const mp_integer &w_start,
-  const mp_integer &w_end,
-  const mp_integer &r_start,
-  const mp_integer &r_end)
+  const range_spect &w_start,
+  const range_spect &w_end,
+  const range_spect &r_start,
+  const range_spect &r_end)
 {
-  assert(w_start>=0);
-  assert(r_start>=0);
+  PRECONDITION(w_start >= range_spect{0});
+  PRECONDITION(r_start >= range_spect{0});
 
-  if((w_end!=-1 && w_end <= r_start) || // we < rs
-     (r_end!=-1 && w_start >= r_end)) // re < we
+  if(
+    (!w_end.is_unknown() && w_end <= r_start) || // we < rs
+    (!r_end.is_unknown() && w_start >= r_end))   // re < we
+  {
     return false;
+  }
   else if(w_start >= r_start) // rs <= ws < we,re
     return true;
-  else if(w_end==-1 ||
-          (r_end!=-1 && w_end > r_start)) // ws <= rs < we,re
+  else if(
+    w_end.is_unknown() ||
+    (!r_end.is_unknown() && w_end > r_start)) // ws <= rs < we,re
+  {
     return true;
+  }
   else
     return false;
 }
@@ -188,6 +194,24 @@ void dep_graph_domaint::data_dependencies(
 
     dep_graph.reaching_definitions()[to].clear_cache(read_object_entry.first);
   }
+
+  if(to->is_set_return_value())
+  {
+    auto entry = dep_graph.end_function_map.find(function_to);
+    CHECK_RETURN(entry != dep_graph.end_function_map.end());
+
+    goto_programt::const_targett end_function = entry->second;
+
+    dep_graph_domaint *s =
+      dynamic_cast<dep_graph_domaint *>(&(dep_graph.get_state(end_function)));
+    CHECK_RETURN(s != nullptr);
+
+    if(s->is_bottom())
+      s->has_values = tvt::unknown();
+
+    if(s->data_deps.insert(to).second)
+      s->has_changed = true;
+  }
 }
 
 void dep_graph_domaint::transform(
@@ -206,55 +230,38 @@ void dep_graph_domaint::transform(
 
   // We do not propagate control dependencies on function calls, i.e., only the
   // entry point of a function should have a control dependency on the call
-  if(!control_deps.empty())
-  {
-    const goto_programt::const_targett &dep = *control_deps.begin();
-    if(dep->is_function_call())
-    {
-      INVARIANT(
-        std::all_of(
-          std::next(control_deps.begin()),
-          control_deps.end(),
-          [](const goto_programt::const_targett &d) {
-            return d->is_function_call();
-          }),
-        "All entries must be function calls");
-
-      control_deps.clear();
-    }
-  }
+  depst filtered_control_deps;
+  std::copy_if(
+    control_deps.begin(),
+    control_deps.end(),
+    std::inserter(filtered_control_deps, filtered_control_deps.end()),
+    [](goto_programt::const_targett dep) { return !dep->is_function_call(); });
+  control_deps = std::move(filtered_control_deps);
 
   // propagate control dependencies across function calls
-  if(from->is_function_call())
+  if(from->is_function_call() && function_from != function_to)
   {
-    if(function_from == function_to)
+    // edge to function entry point
+    const goto_programt::const_targett next = std::next(from);
+
+    dep_graph_domaint *s =
+      dynamic_cast<dep_graph_domaint *>(&(dep_graph->get_state(next)));
+    CHECK_RETURN(s != nullptr);
+
+    if(s->is_bottom())
     {
-      control_dependencies(function_from, from, to, *dep_graph);
+      s->has_values = tvt::unknown();
+      s->has_changed = true;
     }
-    else
-    {
-      // edge to function entry point
-      const goto_programt::const_targett next = std::next(from);
 
-      dep_graph_domaint *s=
-        dynamic_cast<dep_graph_domaint*>(&(dep_graph->get_state(next)));
-      assert(s!=nullptr);
+    s->has_changed |= util_inplace_set_union(s->control_deps, control_deps);
+    s->has_changed |=
+      util_inplace_set_union(s->control_dep_candidates, control_dep_candidates);
 
-      if(s->is_bottom())
-      {
-        s->has_values = tvt::unknown();
-        s->has_changed = true;
-      }
+    control_deps.clear();
+    control_deps.insert(from);
 
-      s->has_changed |= util_inplace_set_union(s->control_deps, control_deps);
-      s->has_changed |= util_inplace_set_union(
-        s->control_dep_candidates, control_dep_candidates);
-
-      control_deps.clear();
-      control_deps.insert(from);
-
-      control_dep_candidates.clear();
-    }
+    control_dep_candidates.clear();
   }
   else
     control_dependencies(function_from, from, to, *dep_graph);

@@ -120,8 +120,7 @@ void interpretert::show_state()
     output.status() << "End of function '" << function->first << "'\n";
   }
   else
-    function->second.body.output_instruction(
-      ns, function->first, output.status(), *pc);
+    pc->output(output.status());
 
   output.status() << messaget::eom;
 }
@@ -369,7 +368,7 @@ void interpretert::step()
 /// executes a goto instruction
 void interpretert::execute_goto()
 {
-  if(evaluate_boolean(pc->get_condition()))
+  if(evaluate_boolean(pc->condition()))
   {
     if(pc->targets.empty())
       throw "taken goto without target";
@@ -388,15 +387,15 @@ void interpretert::execute_other()
   if(statement==ID_expression)
   {
     DATA_INVARIANT(
-      pc->get_code().operands().size() == 1,
+      pc->code().operands().size() == 1,
       "expression statement expected to have one operand");
-    mp_vectort rhs = evaluate(pc->get_code().op0());
+    mp_vectort rhs = evaluate(pc->code().op0());
   }
   else if(statement==ID_array_set)
   {
-    mp_vectort tmp = evaluate(pc->get_code().op1());
-    mp_integer address = evaluate_address(pc->get_code().op0());
-    mp_integer size = get_size(pc->get_code().op0().type());
+    mp_vectort tmp = evaluate(pc->code().op1());
+    mp_integer address = evaluate_address(pc->code().op0());
+    mp_integer size = get_size(pc->code().op0().type());
     mp_vectort rhs;
     while(rhs.size()<size) rhs.insert(rhs.end(), tmp.begin(), tmp.end());
     if(size!=rhs.size())
@@ -418,7 +417,7 @@ void interpretert::execute_other()
 
 void interpretert::execute_decl()
 {
-  PRECONDITION(pc->get_code().get_statement() == ID_decl);
+  PRECONDITION(pc->code().get_statement() == ID_decl);
 }
 
 /// Retrieves the member at \p offset of an object of type \p object_type.
@@ -720,13 +719,13 @@ void interpretert::assign(
 
 void interpretert::execute_assume()
 {
-  if(!evaluate_boolean(pc->get_condition()))
+  if(!evaluate_boolean(pc->condition()))
     throw "assumption failed";
 }
 
 void interpretert::execute_assert()
 {
-  if(!evaluate_boolean(pc->get_condition()))
+  if(!evaluate_boolean(pc->condition()))
   {
     if(show)
       output.error() << "assertion failed at " << pc->location_number << "\n"

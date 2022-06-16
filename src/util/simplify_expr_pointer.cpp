@@ -40,7 +40,7 @@ static bool is_dereference_integer_object(
     {
       const constant_exprt &constant = to_constant_expr(pointer);
 
-      if(constant.get_value() == ID_NULL && config.ansi_c.NULL_is_zero) // NULL
+      if(is_null_pointer(constant))
       {
         address=0;
         return true;
@@ -245,17 +245,17 @@ simplify_exprt::simplify_address_of(const address_of_exprt &expr)
 }
 
 simplify_exprt::resultt<>
-simplify_exprt::simplify_pointer_offset(const unary_exprt &expr)
+simplify_exprt::simplify_pointer_offset(const pointer_offset_exprt &expr)
 {
-  const exprt &ptr = expr.op();
+  const exprt &ptr = expr.pointer();
 
   if(ptr.id()==ID_if && ptr.operands().size()==3)
   {
     if_exprt if_expr=lift_if(expr, 0);
     if_expr.true_case() =
-      simplify_pointer_offset(to_unary_expr(if_expr.true_case()));
+      simplify_pointer_offset(to_pointer_offset_expr(if_expr.true_case()));
     if_expr.false_case() =
-      simplify_pointer_offset(to_unary_expr(if_expr.false_case()));
+      simplify_pointer_offset(to_pointer_offset_expr(if_expr.false_case()));
     return changed(simplify_if(if_expr));
   }
 
@@ -358,8 +358,8 @@ simplify_exprt::simplify_pointer_offset(const unary_exprt &expr)
       return unchanged(expr);
 
     // this might change the type of the pointer!
-    exprt pointer_offset_expr =
-      simplify_pointer_offset(to_unary_expr(pointer_offset(ptr_expr.front())));
+    exprt pointer_offset_expr = simplify_pointer_offset(
+      to_pointer_offset_expr(pointer_offset(ptr_expr.front())));
 
     exprt sum;
 
@@ -380,8 +380,7 @@ simplify_exprt::simplify_pointer_offset(const unary_exprt &expr)
   {
     const constant_exprt &c_ptr = to_constant_expr(ptr);
 
-    if(c_ptr.get_value()==ID_NULL ||
-       c_ptr.value_is_zero_string())
+    if(is_null_pointer(c_ptr))
     {
       return from_integer(0, expr.type());
     }
@@ -482,7 +481,7 @@ simplify_exprt::resultt<> simplify_exprt::simplify_inequality_pointer_object(
   forall_operands(it, expr)
   {
     PRECONDITION(it->id() == ID_pointer_object);
-    const exprt &op = to_unary_expr(*it).op();
+    const exprt &op = to_pointer_object_expr(*it).pointer();
 
     if(op.id()==ID_address_of)
     {
@@ -517,9 +516,9 @@ simplify_exprt::resultt<> simplify_exprt::simplify_inequality_pointer_object(
 }
 
 simplify_exprt::resultt<>
-simplify_exprt::simplify_pointer_object(const unary_exprt &expr)
+simplify_exprt::simplify_pointer_object(const pointer_object_exprt &expr)
 {
-  const exprt &op = expr.op();
+  const exprt &op = expr.pointer();
 
   auto op_result = simplify_object(op);
 
@@ -575,7 +574,7 @@ simplify_exprt::simplify_is_dynamic_object(const unary_exprt &expr)
   }
 
   // NULL is not dynamic
-  if(op.id() == ID_constant && op.get(ID_value) == ID_NULL)
+  if(op.id() == ID_constant && is_null_pointer(to_constant_expr(op)))
     return false_exprt();
 
   // &something depends on the something
@@ -623,7 +622,7 @@ simplify_exprt::simplify_is_invalid_pointer(const unary_exprt &expr)
   }
 
   // NULL is not invalid
-  if(op.id()==ID_constant && op.get(ID_value)==ID_NULL)
+  if(op.id() == ID_constant && is_null_pointer(to_constant_expr(op)))
   {
     return false_exprt();
   }
@@ -641,11 +640,11 @@ simplify_exprt::simplify_is_invalid_pointer(const unary_exprt &expr)
 }
 
 simplify_exprt::resultt<>
-simplify_exprt::simplify_object_size(const unary_exprt &expr)
+simplify_exprt::simplify_object_size(const object_size_exprt &expr)
 {
   auto new_expr = expr;
   bool no_change = true;
-  exprt &op = new_expr.op();
+  exprt &op = new_expr.pointer();
   auto op_result = simplify_object(op);
 
   if(op_result.has_changed())

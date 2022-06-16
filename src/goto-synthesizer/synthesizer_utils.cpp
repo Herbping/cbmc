@@ -140,7 +140,7 @@ goto_programt::const_targett get_original_instruction(
   {
     if(it->is_assert() && instruction->is_assert())
     {
-      if(it->get_condition().full_eq(instruction->get_condition()))
+      if(it->condition().full_eq(instruction->condition()))
         return it;
     }
 

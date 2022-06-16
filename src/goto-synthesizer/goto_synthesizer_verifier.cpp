@@ -401,7 +401,7 @@ bool simple_verifiert::verify()
       get_loop_head(fun_name, loop_number, function_map)->condition();
     goto_programt::targett loop_end =
       get_loop_end(fun_name, loop_number, function_map);
-    exprt condition = loop_end->get_condition();
+    exprt condition = loop_end->condition();
 
     //  The invariant is
     //   (inv || !guard) && (!guard -> pos_inv)
@@ -410,11 +410,10 @@ bool simple_verifiert::verify()
       implies_exprt(guard, parse_option.post_invariant_map[loop_id]));
 
     std::cout << "Candidate for loop " << loop_number << " in function "
-              << fun_name << " : "
-              << from_expr(static_cast<const exprt &>(
-                   condition.find(ID_C_spec_loop_invariant)))
+              << fun_name << " : \n   " << from_expr(invariant_map_entry.second)
+              << ",\n   " << from_expr(parse_option.post_invariant_map[loop_id])
               << "\n";
-    loop_end->set_condition(condition);
+    loop_end->condition_nonconst() = condition;
   }
 
   code_contractst cont(parse_option.goto_model, null_log);

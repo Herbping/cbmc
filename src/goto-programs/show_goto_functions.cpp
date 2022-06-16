@@ -29,14 +29,14 @@ void show_goto_functions(
   {
   case ui_message_handlert::uit::XML_UI:
   {
-    show_goto_functions_xmlt xml_show_functions(ns, list_only);
+    show_goto_functions_xmlt xml_show_functions(list_only);
     msg.status() << xml_show_functions.convert(goto_functions);
   }
   break;
 
   case ui_message_handlert::uit::JSON_UI:
   {
-    show_goto_functions_jsont json_show_functions(ns, list_only);
+    show_goto_functions_jsont json_show_functions(list_only);
     msg.status() << json_show_functions.convert(goto_functions);
   }
   break;
@@ -64,7 +64,7 @@ void show_goto_functions(
 
           msg.status() << messaget::bold << symbol.display_name()
                        << messaget::reset << " /* " << symbol.name << " */\n";
-          fun->second.body.output(ns, symbol.name, msg.status());
+          fun->second.body.output(msg.status());
           msg.status() << messaget::eom;
         }
       }

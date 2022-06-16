@@ -165,7 +165,7 @@ void memory_snapshot_harness_generatort::add_init_section(
   auto ins_it1 = goto_program.insert_before(
     start_it,
     goto_programt::make_goto(goto_program.const_cast_target(start_it)));
-  ins_it1->guard = func_init_done_var;
+  ins_it1->condition_nonconst() = func_init_done_var;
 
   auto ins_it2 = goto_program.insert_after(
     ins_it1,
@@ -201,7 +201,7 @@ size_t memory_snapshot_harness_generatort::pointer_depth(const typet &t) const
   if(t.id() != ID_pointer)
     return 0;
   else
-    return pointer_depth(t.subtype()) + 1;
+    return pointer_depth(to_pointer_type(t).base_type()) + 1;
 }
 
 code_blockt memory_snapshot_harness_generatort::add_assignments_to_globals(

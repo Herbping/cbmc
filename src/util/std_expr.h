@@ -69,7 +69,44 @@ public:
 
   const exprt &op3() const = delete;
   exprt &op3() = delete;
+
+  static void check(
+    const exprt &expr,
+    const validation_modet vm = validation_modet::INVARIANT)
+  {
+    DATA_CHECK(
+      vm,
+      expr.operands().size() == 3,
+      "ternary expression must have three operands");
+  }
+
+  static void validate(
+    const exprt &expr,
+    const namespacet &,
+    const validation_modet vm = validation_modet::INVARIANT)
+  {
+    check(expr, vm);
+  }
 };
+
+/// \brief Cast an exprt to a \ref ternary_exprt
+///
+/// \a expr must be known to be \ref ternary_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref ternary_exprt
+inline const ternary_exprt &to_ternary_expr(const exprt &expr)
+{
+  ternary_exprt::check(expr);
+  return static_cast<const ternary_exprt &>(expr);
+}
+
+/// \copydoc to_ternary_expr(const exprt &)
+inline ternary_exprt &to_ternary_expr(exprt &expr)
+{
+  ternary_exprt::check(expr);
+  return static_cast<ternary_exprt &>(expr);
+}
 
 /// Expression to hold a symbol (variable)
 class symbol_exprt : public nullary_exprt
@@ -1134,6 +1171,30 @@ public:
     : binary_exprt(std::move(_lhs), ID_mod, std::move(_rhs))
   {
   }
+
+  /// The dividend of a division is the number that is being divided
+  exprt &dividend()
+  {
+    return op0();
+  }
+
+  /// The dividend of a division is the number that is being divided
+  const exprt &dividend() const
+  {
+    return op0();
+  }
+
+  /// The divisor of a division is the number the dividend is being divided by
+  exprt &divisor()
+  {
+    return op1();
+  }
+
+  /// The divisor of a division is the number the dividend is being divided by
+  const exprt &divisor() const
+  {
+    return op1();
+  }
 };
 
 template <>
@@ -1177,6 +1238,30 @@ public:
   euclidean_mod_exprt(exprt _lhs, exprt _rhs)
     : binary_exprt(std::move(_lhs), ID_euclidean_mod, std::move(_rhs))
   {
+  }
+
+  /// The dividend of a division is the number that is being divided
+  exprt &dividend()
+  {
+    return op0();
+  }
+
+  /// The dividend of a division is the number that is being divided
+  const exprt &dividend() const
+  {
+    return op0();
+  }
+
+  /// The divisor of a division is the number the dividend is being divided by
+  exprt &divisor()
+  {
+    return op1();
+  }
+
+  /// The divisor of a division is the number the dividend is being divided by
+  const exprt &divisor() const
+  {
+    return op1();
   }
 };
 
@@ -2265,6 +2350,21 @@ public:
   {
     return op2();
   }
+
+  static void check(
+    const exprt &expr,
+    const validation_modet vm = validation_modet::INVARIANT)
+  {
+    ternary_exprt::check(expr, vm);
+  }
+
+  static void validate(
+    const exprt &expr,
+    const namespacet &ns,
+    const validation_modet vm = validation_modet::INVARIANT)
+  {
+    ternary_exprt::validate(expr, ns, vm);
+  }
 };
 
 template <>
@@ -2534,6 +2634,21 @@ public:
   {
     return op2();
   }
+
+  static void check(
+    const exprt &expr,
+    const validation_modet vm = validation_modet::INVARIANT)
+  {
+    ternary_exprt::check(expr, vm);
+  }
+
+  static void validate(
+    const exprt &expr,
+    const namespacet &ns,
+    const validation_modet vm = validation_modet::INVARIANT)
+  {
+    ternary_exprt::validate(expr, ns, vm);
+  }
 };
 
 template <>
@@ -2799,11 +2914,11 @@ inline type_exprt &to_type_expr(exprt &expr)
 }
 
 /// \brief A constant literal expression
-class constant_exprt : public expr_protectedt
+class constant_exprt : public nullary_exprt
 {
 public:
   constant_exprt(const irep_idt &_value, typet _type)
-    : expr_protectedt(ID_constant, std::move(_type))
+    : nullary_exprt(ID_constant, std::move(_type))
   {
     set_value(_value);
   }
@@ -2819,12 +2934,29 @@ public:
   }
 
   bool value_is_zero_string() const;
+
+  static void check(
+    const exprt &expr,
+    const validation_modet vm = validation_modet::INVARIANT);
+
+  static void validate(
+    const exprt &expr,
+    const namespacet &,
+    const validation_modet vm = validation_modet::INVARIANT)
+  {
+    check(expr, vm);
+  }
 };
 
 template <>
 inline bool can_cast_expr<constant_exprt>(const exprt &base)
 {
   return base.id() == ID_constant;
+}
+
+inline void validate_expr(const constant_exprt &value)
+{
+  validate_operands(value, 0, "Constants must not have operands");
 }
 
 /// \brief Cast an exprt to a \ref constant_exprt
@@ -2958,8 +3090,25 @@ inline void validate_expr(const binding_exprt &binding_expr)
 inline const binding_exprt &to_binding_expr(const exprt &expr)
 {
   PRECONDITION(
-    expr.id() == ID_forall || expr.id() == ID_exists || expr.id() == ID_lambda);
+    expr.id() == ID_forall || expr.id() == ID_exists ||
+    expr.id() == ID_lambda || expr.id() == ID_array_comprehension);
   const binding_exprt &ret = static_cast<const binding_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \brief Cast an exprt to a \ref binding_exprt
+///
+/// \a expr must be known to be \ref binding_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref binding_exprt
+inline binding_exprt &to_binding_expr(exprt &expr)
+{
+  PRECONDITION(
+    expr.id() == ID_forall || expr.id() == ID_exists ||
+    expr.id() == ID_lambda || expr.id() == ID_array_comprehension);
+  binding_exprt &ret = static_cast<binding_exprt &>(expr);
   validate_expr(ret);
   return ret;
 }

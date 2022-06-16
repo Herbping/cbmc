@@ -102,11 +102,13 @@ SRC += analyses/ai/ai.cpp \
        solvers/smt2/smt2irep.cpp \
        solvers/smt2_incremental/construct_value_expr_from_smt.cpp \
        solvers/smt2_incremental/convert_expr_to_smt.cpp \
+       solvers/smt2_incremental/object_tracking.cpp \
        solvers/smt2_incremental/smt2_incremental_decision_procedure.cpp \
        solvers/smt2_incremental/smt_bit_vector_theory.cpp \
        solvers/smt2_incremental/smt_commands.cpp \
        solvers/smt2_incremental/smt_core_theory.cpp \
        solvers/smt2_incremental/smt_index.cpp \
+       solvers/smt2_incremental/smt_object_size.cpp \
        solvers/smt2_incremental/smt_response_validation.cpp \
        solvers/smt2_incremental/smt_responses.cpp \
        solvers/smt2_incremental/smt_sorts.cpp \
@@ -123,6 +125,7 @@ SRC += analyses/ai/ai.cpp \
        solvers/strings/string_refinement/string_refinement.cpp \
        solvers/strings/string_refinement/substitute_array_list.cpp \
        solvers/strings/string_refinement/union_find_replace.cpp \
+       util/bitvector_expr.cpp \
        util/cmdline.cpp \
        util/dense_integer_map.cpp \
        util/edit_distance.cpp \
@@ -159,6 +162,7 @@ SRC += analyses/ai/ai.cpp \
        util/optional_utils.cpp \
        util/parse_options.cpp \
        util/piped_process.cpp \
+       util/pointer_expr.cpp \
        util/pointer_offset_size.cpp \
        util/prefix_filter.cpp \
        util/range.cpp \

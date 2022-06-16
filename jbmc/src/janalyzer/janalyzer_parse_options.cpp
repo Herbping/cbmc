@@ -11,13 +11,12 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "janalyzer_parse_options.h"
 
-#include <cstdlib> // exit()
-#include <fstream>
-#include <iostream>
-#include <memory>
+#include <util/config.h>
+#include <util/exit_codes.h>
+#include <util/options.h>
+#include <util/version.h>
 
-#include <ansi-c/ansi_c_language.h>
-
+#include <goto-programs/goto_check.h>
 #include <goto-programs/remove_returns.h>
 #include <goto-programs/remove_skip.h>
 #include <goto-programs/remove_virtual_functions.h>
@@ -27,30 +26,26 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <analyses/constant_propagator.h>
 #include <analyses/dependence_graph.h>
-#include <analyses/goto_check.h>
 #include <analyses/interval_domain.h>
 #include <analyses/local_may_alias.h>
-
-#include <java_bytecode/java_bytecode_language.h>
-#include <java_bytecode/lazy_goto_model.h>
-#include <java_bytecode/remove_exceptions.h>
-#include <java_bytecode/remove_instanceof.h>
-
-#include <langapi/language.h>
-#include <langapi/mode.h>
-
-#include <linking/static_lifetime_init.h>
-
-#include <util/config.h>
-#include <util/exit_codes.h>
-#include <util/options.h>
-#include <util/version.h>
-
+#include <ansi-c/ansi_c_language.h>
 #include <goto-analyzer/static_show_domain.h>
 #include <goto-analyzer/static_simplifier.h>
 #include <goto-analyzer/static_verifier.h>
 #include <goto-analyzer/taint_analysis.h>
 #include <goto-analyzer/unreachable_instructions.h>
+#include <java_bytecode/java_bytecode_language.h>
+#include <java_bytecode/lazy_goto_model.h>
+#include <java_bytecode/remove_exceptions.h>
+#include <java_bytecode/remove_instanceof.h>
+#include <langapi/language.h>
+#include <langapi/mode.h>
+#include <linking/static_lifetime_init.h>
+
+#include <cstdlib> // exit()
+#include <fstream>
+#include <iostream>
+#include <memory>
 
 janalyzer_parse_optionst::janalyzer_parse_optionst(int argc, const char **argv)
   : parse_options_baset(
@@ -92,10 +87,6 @@ void janalyzer_parse_optionst::get_command_line_options(optionst &options)
     options.set_option("assumptions", false);
   else
     options.set_option("assumptions", true);
-
-  // magic error label
-  if(cmdline.isset("error-label"))
-    options.set_option("error-label", cmdline.get_values("error-label"));
 
   // Select a specific analysis
   if(cmdline.isset("taint"))
@@ -703,13 +694,7 @@ void janalyzer_parse_optionst::process_goto_function(
 
   remove_returns(function, function_is_stub);
 
-  // add generic checks
-  goto_check(
-    function.get_function_id(),
-    function.get_goto_function(),
-    ns,
-    options,
-    ui_message_handler);
+  transform_assertions_assumptions(options, function.get_goto_function().body);
 }
 
 bool janalyzer_parse_optionst::can_generate_function_body(const irep_idt &name)
@@ -759,6 +744,8 @@ void janalyzer_parse_optionst::help()
     " --verify                     use the abstract domains to check assertions\n"
     // NOLINTNEXTLINE(whitespace/line_length)
     " --simplify file_name         use the abstract domains to simplify the program\n"
+    " --no-simplify-slicing        do not remove instructions from which no\n"
+    "                              property can be reached (use with --simplify)\n" // NOLINT(*)
     " --unreachable-instructions   list dead code\n"
     // NOLINTNEXTLINE(whitespace/line_length)
     " --unreachable-functions      list functions unreachable from the entry point\n"
@@ -772,8 +759,9 @@ void janalyzer_parse_optionst::help()
     "\n"
     "Domain options:\n"
     " --constants                  constant domain\n"
-    " --intervals                  interval domain\n"
-    " --non-null                   non-null domain\n"
+    " --intervals, --show-intervals\n"
+    "                              interval domain\n"
+    " --non-null, --show-non-null  non-null domain\n"
     " --dependence-graph           data and control dependencies between instructions\n" // NOLINT(*)
     "\n"
     "Output options:\n"
@@ -786,9 +774,14 @@ void janalyzer_parse_optionst::help()
     "Specific analyses:\n"
     // NOLINTNEXTLINE(whitespace/line_length)
     " --taint file_name            perform taint analysis using rules in given file\n"
+    " --show-taint                 print taint analysis results on stdout\n"
+    " --show-local-may-alias       perform procedure-local may alias analysis\n"
     "\n"
     "Java Bytecode frontend options:\n"
     JAVA_BYTECODE_LANGUAGE_OPTIONS_HELP
+    "\n"
+    "Platform options:\n"
+    HELP_CONFIG_PLATFORM
     "\n"
     "Program representations:\n"
     " --show-parse-tree            show parse tree\n"
@@ -797,10 +790,13 @@ void janalyzer_parse_optionst::help()
     HELP_SHOW_PROPERTIES
     "\n"
     "Program instrumentation options:\n"
-    HELP_GOTO_CHECK_JAVA
+    " --no-assertions              ignore user assertions\n"
+    " --no-assumptions             ignore user assumptions\n"
+    " --property id                enable selected properties only\n"
     "\n"
     "Other options:\n"
     " --version                    show version and exit\n"
+    " --verbosity #                verbosity level\n"
     HELP_TIMESTAMP
     "\n";
   // clang-format on

@@ -126,41 +126,9 @@ void rd_range_domaint::transform(
   // initial (non-deterministic) value
   else if(from->is_decl())
     transform_assign(ns, from, function_from, from, *rd);
-
-#if 0
-  // handle return values
-  if(to->is_function_call())
-  {
-    const code_function_callt &code=to_code_function_call(to->code);
-
-    if(code.lhs().is_not_nil())
-    {
-      rw_range_set_value_sett rw_set(ns, rd->get_value_sets());
-      goto_rw(to, rw_set);
-      const bool is_must_alias=rw_set.get_w_set().size()==1;
-
-      for(const auto &written_object_entry : rw_set.get_w_set())
-      {
-        const irep_idt &identifier = written_object_entry.first;
-        // ignore symex::invalid_object
-        const symbolt *symbol_ptr;
-        if(ns.lookup(identifier, symbol_ptr))
-          continue;
-        assert(symbol_ptr!=0);
-
-        const range_domaint &ranges =
-          rw_set.get_ranges(written_object_entry.second);
-
-        if(is_must_alias &&
-           (!rd->get_is_threaded()(from) ||
-            (!symbol_ptr->is_shared() &&
-             !rd->get_is_dirty()(identifier))))
-          for(const auto &range : ranges)
-            kill(identifier, range.first, range.second);
-      }
-    }
-  }
-#endif
+  // array_set, array_copy, array_replace have side effects
+  else if(from->is_other())
+    transform_assign(ns, from, function_from, from, *rd);
 }
 
 /// Computes an instance obtained from a `*this` by transformation over `DEAD v`
@@ -213,7 +181,8 @@ void rd_range_domaint::transform_function_call(
   reaching_definitions_analysist &rd)
 {
   // only if there is an actual call, i.e., we have a body
-  if(function_from != function_to)
+  const symbol_exprt &fn_symbol_expr = to_symbol_expr(from->call_function());
+  if(function_to == fn_symbol_expr.get_identifier())
   {
     for(valuest::iterator it=values.begin();
         it!=values.end();
@@ -238,7 +207,6 @@ void rd_range_domaint::transform_function_call(
         ++it;
     }
 
-    const symbol_exprt &fn_symbol_expr = to_symbol_expr(from->call_function());
     const code_typet &code_type=
       to_code_type(ns.lookup(fn_symbol_expr.get_identifier()).type);
 
@@ -251,9 +219,15 @@ void rd_range_domaint::transform_function_call(
 
       auto param_bits = pointer_offset_bits(param.type(), ns);
       if(param_bits.has_value())
-        gen(from, identifier, 0, to_range_spect(*param_bits));
+      {
+        gen(
+          from,
+          identifier,
+          range_spect{0},
+          range_spect::to_range_spect(*param_bits));
+      }
       else
-        gen(from, identifier, 0, -1);
+        gen(from, identifier, range_spect{0}, range_spect::unknown());
     }
   }
   else
@@ -322,12 +296,6 @@ void rd_range_domaint::transform_end_function(
   // handle return values
   if(call->call_lhs().is_not_nil())
   {
-#if 0
-    rd_range_domaint *rd_state=
-      dynamic_cast<rd_range_domaint*>(&(rd.get_state(call)));
-    assert(rd_state!=0);
-    rd_state->
-#endif
     transform_assign(ns, from, function_to, call, rd);
   }
 }
@@ -375,9 +343,9 @@ void rd_range_domaint::kill(
   const range_spect &range_start,
   const range_spect &range_end)
 {
-  assert(range_start>=0);
-  // -1 for objects of infinite/unknown size
-  if(range_end==-1)
+  PRECONDITION(range_start >= range_spect{0});
+
+  if(range_end.is_unknown())
   {
     kill_inf(identifier, range_start);
     return;
@@ -401,12 +369,13 @@ void rd_range_domaint::kill(
 
     if(v.bit_begin >= range_end)
       ++it;
-    else if(v.bit_end!=-1 &&
-            v.bit_end <= range_start)
+    else if(!v.bit_end.is_unknown() && v.bit_end <= range_start)
+    {
       ++it;
-    else if(v.bit_begin >= range_start &&
-            v.bit_end!=-1 &&
-            v.bit_end <= range_end) // rs <= a < b <= re
+    }
+    else if(
+      v.bit_begin >= range_start && !v.bit_end.is_unknown() &&
+      v.bit_end <= range_end) // rs <= a < b <= re
     {
       clear_export_cache=true;
 
@@ -422,8 +391,7 @@ void rd_range_domaint::kill(
 
       entry->second.erase(it++);
     }
-    else if(v.bit_end==-1 ||
-            v.bit_end > range_end) // a <= rs < re < b
+    else if(v.bit_end.is_unknown() || v.bit_end > range_end) // a <= rs < re < b
     {
       clear_export_cache=true;
 
@@ -474,7 +442,7 @@ void rd_range_domaint::kill_inf(
   const irep_idt &,
   const range_spect &range_start)
 {
-  assert(range_start>=0);
+  PRECONDITION(range_start >= range_spect{0});
 
 #if 0
   valuest::iterator entry=values.find(identifier);
@@ -515,20 +483,13 @@ bool rd_range_domaint::gen(
   const range_spect &range_end)
 {
   // objects of size 0 like union U { signed : 0; };
-  if(range_start==0 && range_end==0)
+  if(range_start == range_spect{0} && range_end == range_spect{0})
     return false;
 
-  assert(range_start>=0);
+  PRECONDITION(range_start >= range_spect{0});
+  PRECONDITION(range_end == range_spect::unknown() || range_end > range_start);
 
-  // -1 for objects of infinite/unknown size
-  assert(range_end>range_start || range_end==-1);
-
-  reaching_definitiont v;
-  v.identifier=identifier;
-  v.definition_at=from;
-  v.bit_begin=range_start;
-  v.bit_end=range_end;
-
+  reaching_definitiont v{identifier, from, range_start, range_end};
   if(!values[identifier].insert(bv_container->add(v)).second)
     return false;
 

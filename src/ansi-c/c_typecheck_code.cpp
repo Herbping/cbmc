@@ -909,44 +909,162 @@ void c_typecheck_baset::typecheck_spec_assigns_target(exprt &target)
   typecheck_expr(target);
 
   // fatal errors
-  bool must_throw = false;
   if(target.type().id() == ID_empty)
   {
-    must_throw = true;
     error().source_location = target.source_location();
     error() << "void-typed expressions not allowed as assigns clause targets"
             << eom;
-  }
-
-  if(!target.get_bool(ID_C_lvalue) && target.id() != ID_pointer_object)
-  {
-    must_throw = true;
-    error().source_location = target.source_location();
-    error() << "assigns clause target must be an lvalue or " CPROVER_PREFIX
-               "POINTER_OBJECT expression"
-            << eom;
-  }
-
-  // Remark: an expression can be an lvalue and still contain side effects
-  // or ternary expressions. We detect them in a second step.
-  if(has_subexpr(target, ID_side_effect))
-  {
-    must_throw = true;
-    error().source_location = target.source_location();
-    error() << "side-effects not allowed in assigns clause targets" << eom;
-  }
-
-  if(has_subexpr(target, ID_if))
-  {
-    must_throw = true;
-    error().source_location = target.source_location();
-    error() << "ternary expressions not allowed in assigns "
-               "clause targets"
-            << eom;
-  }
-
-  if(must_throw)
     throw 0;
+  }
+
+  // throws exception if expr contains side effect or ternary expr
+  auto throw_on_side_effects = [&](const exprt &expr) {
+    if(has_subexpr(expr, ID_side_effect))
+    {
+      error().source_location = expr.source_location();
+      error() << "side-effects not allowed in assigns clause targets"
+              << messaget::eom;
+      throw 0;
+    }
+    if(has_subexpr(expr, ID_if))
+    {
+      error().source_location = expr.source_location();
+      error() << "ternary expressions not allowed in assigns "
+                 "clause targets"
+              << messaget::eom;
+      throw 0;
+    }
+  };
+
+  if(target.get_bool(ID_C_lvalue))
+  {
+    throw_on_side_effects(target);
+  }
+  else if(target.id() == ID_pointer_object)
+  {
+    throw_on_side_effects(target);
+  }
+  else if(can_cast_expr<side_effect_expr_function_callt>(target))
+  {
+    const auto &funcall = to_side_effect_expr_function_call(target);
+    if(can_cast_expr<symbol_exprt>(funcall.function()))
+    {
+      const auto &ident = to_symbol_expr(funcall.function()).get_identifier();
+      if(
+        ident == CPROVER_PREFIX "object_from" || ident == CPROVER_PREFIX
+                                                   "object_slice")
+      {
+        for(const auto &argument : funcall.arguments())
+          throw_on_side_effects(argument);
+      }
+      else
+      {
+        error().source_location = target.source_location();
+        error() << "function calls in assigns clause targets must be "
+                   "to " CPROVER_PREFIX "object_from, " CPROVER_PREFIX
+                   "object_slice"
+                << eom;
+        throw 0;
+      }
+    }
+    else
+    {
+      error().source_location = target.source_location();
+      error() << "function pointer calls not allowed in assigns targets" << eom;
+      throw 0;
+    }
+  }
+  else
+  {
+    error().source_location = target.source_location();
+    error() << "assigns clause target must be an lvalue or a " CPROVER_PREFIX
+               "POINTER_OBJECT, " CPROVER_PREFIX "object_from, " CPROVER_PREFIX
+               "object_slice expression"
+            << eom;
+    throw 0;
+  }
+}
+
+void c_typecheck_baset::typecheck_spec_function_pointer_obeys_contract(
+  exprt &expr)
+{
+  if(!can_cast_expr<function_pointer_obeys_contract_exprt>(expr))
+  {
+    error().source_location = expr.source_location();
+    error() << "expected ID_function_pointer_obeys_contract expression in "
+               "requires_contract/ensures_contract clause, found "
+            << expr.id() << eom;
+    throw 0;
+  }
+
+  auto &obeys_expr = to_function_pointer_obeys_contract_expr(expr);
+
+  validate_expr(obeys_expr);
+
+  // the first parameter must be a function pointer typed assignable path
+  // expression, without side effects or ternary operator
+  auto &function_pointer = obeys_expr.function_pointer();
+  typecheck_expr(function_pointer);
+
+  if(
+    function_pointer.type().id() != ID_pointer ||
+    to_pointer_type(function_pointer.type()).subtype().id() != ID_code)
+  {
+    error().source_location = expr.source_location();
+    error() << "the first parameter of the clause must be a function pointer "
+               "expression"
+            << eom;
+    throw 0;
+  }
+
+  if(!function_pointer.get_bool(ID_C_lvalue))
+  {
+    error().source_location = function_pointer.source_location();
+    error() << "first parameter of the clause must be an lvalue" << eom;
+    throw 0;
+  }
+
+  if(has_subexpr(function_pointer, ID_side_effect))
+  {
+    error().source_location = function_pointer.source_location();
+    error() << "first parameter of the clause must have no side-effects" << eom;
+    throw 0;
+  }
+
+  if(has_subexpr(function_pointer, ID_if))
+  {
+    error().source_location = function_pointer.source_location();
+    error() << "first parameter of the clause must have no ternary operator"
+            << eom;
+    throw 0;
+  }
+
+  // second parameter must be the address of a function symbol
+  auto &contract = obeys_expr.contract();
+  typecheck_expr(contract);
+
+  if(
+    contract.id() != ID_address_of ||
+    to_address_of_expr(contract).object().id() != ID_symbol ||
+    contract.type().id() != ID_pointer ||
+    to_pointer_type(contract.type()).subtype().id() != ID_code)
+  {
+    error().source_location = expr.source_location();
+    error() << "the second parameter of the requires_contract/ensures_contract "
+               "clause must be a function symbol"
+            << eom;
+    throw 0;
+  }
+
+  if(function_pointer.type() != contract.type())
+  {
+    error().source_location = expr.source_location();
+    error() << "the first and second parameter of the "
+               "requires_contract/ensures_contract clause must have the same "
+               "function pointer type "
+            << eom;
+    throw 0;
+  }
 }
 
 void c_typecheck_baset::typecheck_spec_assigns(exprt::operandst &targets)

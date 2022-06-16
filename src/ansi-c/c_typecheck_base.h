@@ -146,6 +146,7 @@ protected:
   virtual void typecheck_start_thread(codet &code);
 
   // contracts
+  virtual void typecheck_spec_function_pointer_obeys_contract(exprt &expr);
   virtual void typecheck_spec_assigns(exprt::operandst &targets);
   virtual void typecheck_spec_assigns_condition(exprt &condition);
   virtual void typecheck_spec_assigns_target(exprt &target);
@@ -267,6 +268,9 @@ protected:
   void typecheck_redefinition_non_type(
     symbolt &old_symbol, symbolt &new_symbol);
   void typecheck_function_body(symbolt &symbol);
+
+  /// Create symbols for parameter of the code-typed symbol \p symbol.
+  void add_parameters_to_symbol_table(symbolt &symbol);
 
   virtual void do_initializer(symbolt &symbol);
 

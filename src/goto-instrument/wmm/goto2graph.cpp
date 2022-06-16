@@ -235,8 +235,7 @@ void instrumentert::cfg_visitort::visit_cfg_function(
       visit_cfg_skip(i_it);
     }
     else if(
-      instruction.is_other() &&
-      instruction.get_code().get_statement() == ID_fence)
+      instruction.is_other() && instruction.code().get_statement() == ID_fence)
     {
       visit_cfg_asm_fence(i_it, function_id);
     }
@@ -792,13 +791,13 @@ void instrumentert::cfg_visitort::visit_cfg_asm_fence(
   const irep_idt &function_id)
 {
   const goto_programt::instructiont &instruction=*i_it;
-  bool WRfence = instruction.get_code().get_bool(ID_WRfence);
-  bool WWfence = instruction.get_code().get_bool(ID_WWfence);
-  bool RRfence = instruction.get_code().get_bool(ID_RRfence);
-  bool RWfence = instruction.get_code().get_bool(ID_RWfence);
-  bool WWcumul = instruction.get_code().get_bool(ID_WWcumul);
-  bool RRcumul = instruction.get_code().get_bool(ID_RRcumul);
-  bool RWcumul = instruction.get_code().get_bool(ID_RWcumul);
+  bool WRfence = instruction.code().get_bool(ID_WRfence);
+  bool WWfence = instruction.code().get_bool(ID_WWfence);
+  bool RRfence = instruction.code().get_bool(ID_RRfence);
+  bool RWfence = instruction.code().get_bool(ID_RWfence);
+  bool WWcumul = instruction.code().get_bool(ID_WWcumul);
+  bool RRcumul = instruction.code().get_bool(ID_RRcumul);
+  bool RWcumul = instruction.code().get_bool(ID_RWcumul);
   const abstract_eventt new_fence_event(
     abstract_eventt::operationt::ASMfence,
     thread,
@@ -1386,7 +1385,6 @@ bool instrumentert::is_cfg_spurious(const event_grapht::critical_cyclet &cyc)
   goto_functionst this_interleaving;
   this_interleaving.function_map=std::move(map);
   optionst no_option;
-  null_message_handlert no_message;
 
   #if 0
   bmct bmc(no_option, symbol_table, no_message);

@@ -11,15 +11,15 @@ struct S
 int main()
 {
   static int static_var;
-  int local_var;
+  int local_var = 3;
   int *p=&my_nested[0].array[1];
   int *q=&my_nested[1].f;
   int *null=0;
   int *junk;
+  struct S s;
 
   global_var=1;
   static_var=2;
-  local_var=3;
   *p=4;
   *q=5;
   *null=6;
@@ -34,6 +34,9 @@ int main()
 
   // assign entire struct
   my_nested[1]=my_nested[0];
+
+  // struct member
+  s.f = 42;
 
   // get a trace
   __CPROVER_assert(0, "");

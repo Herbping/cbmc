@@ -198,18 +198,19 @@ void acceleration_utilst::stash_variables(
   expr_sett modified,
   substitutiont &substitution)
 {
-  find_symbols_sett vars =
-    find_symbols_or_nexts(modified.begin(), modified.end());
-  const irep_idt &loop_counter_name =
-    to_symbol_expr(loop_counter).get_identifier();
-  vars.erase(loop_counter_name);
+  const symbol_exprt &loop_counter_sym = to_symbol_expr(loop_counter);
 
-  for(const irep_idt &symbol : vars)
+  std::set<symbol_exprt> vars;
+  for(const exprt &expr : modified)
+    find_symbols(expr, vars);
+
+  vars.erase(loop_counter_sym);
+
+  for(const symbol_exprt &orig : vars)
   {
-    const symbolt &orig = symbol_table.lookup_ref(symbol);
-    symbolt stashed_sym=fresh_symbol("polynomial::stash", orig.type);
-    substitution[orig.symbol_expr()]=stashed_sym.symbol_expr();
-    program.assign(stashed_sym.symbol_expr(), orig.symbol_expr());
+    symbolt stashed_sym = fresh_symbol("polynomial::stash", orig.type());
+    substitution[orig] = stashed_sym.symbol_expr();
+    program.assign(stashed_sym.symbol_expr(), orig);
   }
 }
 
@@ -250,7 +251,7 @@ exprt acceleration_utilst::precondition(patht &path)
     }
     else if(t->is_assume() || t->is_assert())
     {
-      ret = implies_exprt(t->get_condition(), ret);
+      ret = implies_exprt(t->condition(), ret);
     }
     else
     {
@@ -475,7 +476,7 @@ void acceleration_utilst::ensure_no_overflows(scratch_programt &program)
 
   // goto_functionst::goto_functiont fn;
   // fn.body.instructions.swap(program.instructions);
-  // goto_check(ns, checker_options, fn);
+  // goto_check_c(ns, checker_options, fn);
   // fn.body.instructions.swap(program.instructions);
 
 #ifdef DEBUG
@@ -1057,7 +1058,7 @@ bool acceleration_utilst::assign_array(
   {
     if(idx.id()==ID_pointer_offset)
     {
-      poly.from_expr(to_unary_expr(idx).op());
+      poly.from_expr(to_pointer_offset_expr(idx).pointer());
     }
     else
     {

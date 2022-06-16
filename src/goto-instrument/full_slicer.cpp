@@ -62,7 +62,7 @@ void full_slicert::add_decl_dead(
 
   find_symbols_sett syms;
 
-  node.PC->apply([&syms](const exprt &e) { find_symbols_or_nexts(e, syms); });
+  node.PC->apply([&syms](const exprt &e) { find_symbols(e, syms); });
 
   for(find_symbols_sett::const_iterator
       it=syms.begin();
@@ -281,7 +281,7 @@ void full_slicert::operator()(
     else if(implicit(instruction))
       add_to_queue(queue, instruction_node_index, instruction);
     else if(
-      (instruction->is_goto() && instruction->get_condition().is_true()) ||
+      (instruction->is_goto() && instruction->condition().is_true()) ||
       instruction->is_throw())
       jumps.push_back(instruction_node_index);
     else if(instruction->is_decl())

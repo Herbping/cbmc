@@ -27,6 +27,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include "arrays.h"
 
 class array_comprehension_exprt;
+class binary_overflow_exprt;
 class bitreverse_exprt;
 class bswap_exprt;
 class byte_extract_exprt;
@@ -37,7 +38,9 @@ class extractbits_exprt;
 class floatbv_typecast_exprt;
 class ieee_float_op_exprt;
 class member_exprt;
+class overflow_result_exprt;
 class replication_exprt;
+class unary_overflow_exprt;
 class union_typet;
 
 class boolbvt:public arrayst
@@ -59,7 +62,7 @@ public:
 
   virtual const bvt &convert_bv( // check cache
     const exprt &expr,
-    const optionalt<std::size_t> expected_width = nullopt);
+    const optionalt<std::size_t> expected_width = {});
 
   virtual bvt convert_bitvector(const exprt &expr); // no cache
 
@@ -140,7 +143,8 @@ protected:
   virtual literalt convert_reduction(const unary_exprt &expr);
   virtual literalt convert_onehot(const unary_exprt &expr);
   virtual literalt convert_extractbit(const extractbit_exprt &expr);
-  virtual literalt convert_overflow(const exprt &expr);
+  virtual literalt convert_binary_overflow(const binary_overflow_exprt &expr);
+  virtual literalt convert_unary_overflow(const unary_overflow_exprt &expr);
   virtual literalt convert_equality(const equal_exprt &expr);
   virtual literalt convert_verilog_case_equality(
     const binary_relation_exprt &expr);
@@ -184,7 +188,6 @@ protected:
   virtual bvt convert_abs(const abs_exprt &expr);
   virtual bvt convert_concatenation(const concatenation_exprt &expr);
   virtual bvt convert_replication(const replication_exprt &expr);
-  virtual bvt convert_bv_literals(const exprt &expr);
   virtual bvt convert_constant(const constant_exprt &expr);
   virtual bvt convert_extractbits(const extractbits_exprt &expr);
   virtual bvt convert_symbol(const exprt &expr);
@@ -195,9 +198,7 @@ protected:
     const function_application_exprt &expr);
   virtual bvt convert_bitreverse(const bitreverse_exprt &expr);
   virtual bvt convert_saturating_add_sub(const binary_exprt &expr);
-
-  virtual exprt make_bv_expr(const typet &type, const bvt &bv);
-  virtual exprt make_free_bv_expr(const typet &type);
+  virtual bvt convert_overflow_result(const overflow_result_exprt &expr);
 
   void convert_with(
     const typet &type,

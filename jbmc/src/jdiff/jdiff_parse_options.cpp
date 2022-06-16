@@ -11,15 +11,13 @@ Author: Peter Schrammel
 
 #include "jdiff_parse_options.h"
 
-#include <cstdlib> // exit()
-#include <iostream>
-
 #include <util/config.h>
 #include <util/exit_codes.h>
 #include <util/options.h>
 #include <util/version.h>
 
 #include <goto-programs/adjust_float_expressions.h>
+#include <goto-programs/goto_check.h>
 #include <goto-programs/initialize_goto_model.h>
 #include <goto-programs/instrument_preconditions.h>
 #include <goto-programs/loop_ids.h>
@@ -31,15 +29,17 @@ Author: Peter Schrammel
 #include <goto-programs/set_properties.h>
 #include <goto-programs/show_properties.h>
 
+#include <goto-diff/change_impact.h>
+#include <goto-diff/unified_diff.h>
 #include <goto-instrument/cover.h>
-
 #include <java_bytecode/java_bytecode_language.h>
 #include <java_bytecode/remove_exceptions.h>
 #include <java_bytecode/remove_instanceof.h>
 
 #include "java_syntactic_diff.h"
-#include <goto-diff/change_impact.h>
-#include <goto-diff/unified_diff.h>
+
+#include <cstdlib> // exit()
+#include <iostream>
 
 jdiff_parse_optionst::jdiff_parse_optionst(int argc, const char **argv)
   : parse_options_baset(
@@ -58,18 +58,22 @@ void jdiff_parse_optionst::get_command_line_options(optionst &options)
     exit(1);
   }
 
-  // TODO: improve this when language front ends have been
-  //   disentangled from command line parsing
-  // we always require these options
-  cmdline.set("no-lazy-methods");
-  cmdline.set("no-refine-strings");
   parse_java_language_options(cmdline, options);
+
+  // check assertions
+  if(cmdline.isset("no-assertions"))
+    options.set_option("assertions", false);
+  else
+    options.set_option("assertions", true);
+
+  // use assumptions
+  if(cmdline.isset("no-assumptions"))
+    options.set_option("assumptions", false);
+  else
+    options.set_option("assumptions", true);
 
   if(cmdline.isset("cover"))
     parse_cover_options(cmdline, options);
-
-  // all checks supported by goto_check
-  PARSE_OPTIONS_GOTO_CHECK_JAVA(cmdline, options);
 
   options.set_option("show-properties", cmdline.isset("show-properties"));
 }
@@ -190,9 +194,7 @@ bool jdiff_parse_optionst::process_goto_program(
   // remove returns
   remove_returns(goto_model);
 
-  // add generic checks
-  log.status() << "Generic Property Instrumentation" << messaget::eom;
-  goto_check_java(options, goto_model, ui_message_handler);
+  transform_assertions_assumptions(options, goto_model);
 
   // checks don't know about adjusted float expressions
   adjust_float_expressions(goto_model);
@@ -253,13 +255,13 @@ void jdiff_parse_optionst::help()
     " --compact-output             output dependencies in compact mode\n"
     "\n"
     "Program instrumentation options:\n"
-    HELP_GOTO_CHECK_JAVA
+    " --no-assertions              ignore user assertions\n"
+    " --no-assumptions             ignore user assumptions\n"
     HELP_COVER
-    "Java Bytecode frontend options:\n"
-    JAVA_BYTECODE_LANGUAGE_OPTIONS_HELP
     "Other options:\n"
     " --version                    show version and exit\n"
     " --json-ui                    use JSON-formatted output\n"
+    " --verbosity #                verbosity level\n"
     HELP_TIMESTAMP
     "\n";
   // clang-format on

@@ -75,7 +75,7 @@ static void output_dead_plain(
   for(dead_mapt::const_iterator it=dead_map.begin();
       it!=dead_map.end();
       ++it)
-    goto_program.output_instruction(ns, function_identifier, os, *it->second);
+    it->second->output(os);
 }
 
 static void add_to_xml(
@@ -104,7 +104,7 @@ static optionalt<std::string>
 file_name_string_opt(const source_locationt &source_location)
 {
   if(source_location.get_file().empty())
-    return nullopt;
+    return {};
 
   return concat_dir_file(
     id2string(source_location.get_working_directory()),
@@ -136,7 +136,7 @@ static void add_to_json(
       ++it)
   {
     std::ostringstream oss;
-    goto_program.output_instruction(ns, function_identifier, oss, *it->second);
+    it->second->output(oss);
     std::string s=oss.str();
 
     std::string::size_type n=s.find('\n');
@@ -255,7 +255,7 @@ line_string_opt(const source_locationt &source_location)
   const irep_idt &line = source_location.get_line();
 
   if(line.empty())
-    return nullopt;
+    return {};
   else
     return id2string(line);
 }

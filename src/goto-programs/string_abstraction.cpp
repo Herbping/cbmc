@@ -474,12 +474,9 @@ goto_programt::targett string_abstractiont::abstract(
   case GOTO:
   case ASSERT:
   case ASSUME:
-    if(has_string_macros(it->get_condition()))
-    {
-      exprt tmp = it->get_condition();
-      replace_string_macros(tmp, false, it->source_location());
-      it->set_condition(tmp);
-    }
+    if(has_string_macros(it->condition()))
+      replace_string_macros(
+        it->condition_nonconst(), false, it->source_location());
     break;
 
   case FUNCTION_CALL:
@@ -568,9 +565,6 @@ void string_abstractiont::abstract_function_call(
         "argument array type differs from formal parameter pointer type");
 
       index_exprt idx(str_args.back(), from_integer(0, c_index_type()));
-      // disable bounds check on that one
-      idx.set(ID_C_bounds_check, false);
-
       str_args.back()=address_of_exprt(idx);
     }
 

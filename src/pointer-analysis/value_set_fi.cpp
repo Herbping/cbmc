@@ -11,13 +11,10 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "value_set_fi.h"
 
-#include <ostream>
-
-#include <goto-programs/goto_instruction_code.h>
-
 #include <util/arith_tools.h>
 #include <util/byte_operators.h>
 #include <util/c_types.h>
+#include <util/expr_util.h>
 #include <util/namespace.h>
 #include <util/pointer_expr.h>
 #include <util/prefix.h>
@@ -25,7 +22,11 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/std_code.h>
 #include <util/symbol.h>
 
+#include <goto-programs/goto_instruction_code.h>
+
 #include <langapi/language_util.h>
+
+#include <ostream>
 
 const value_set_fit::object_map_dt value_set_fit::object_map_dt::blank{};
 
@@ -180,7 +181,7 @@ void value_set_fit::flatten_rec(
       {
         // this is some static object, keep it in.
         const symbol_exprt se(o.get(ID_identifier), o.type().subtype());
-        insert(dest, se, 0);
+        insert(dest, se, mp_integer{0});
       }
       else
       {
@@ -410,17 +411,18 @@ void value_set_fit::get_value_set_rec(
   {
     const typet &type = to_index_expr(expr).array().type();
 
-    DATA_INVARIANT(type.id()==ID_array ||
-                   type.id()=="#REF#",
-                   "operand 0 of index expression must be an array");
-
-    get_value_set_rec(
-      to_index_expr(expr).array(),
-      dest,
-      "[]" + suffix,
-      original_type,
-      ns,
-      recursion_set);
+    if(type.id() == ID_array)
+    {
+      get_value_set_rec(
+        to_index_expr(expr).array(),
+        dest,
+        "[]" + suffix,
+        original_type,
+        ns,
+        recursion_set);
+    }
+    else
+      insert(dest, exprt(ID_unknown, original_type));
 
     return;
   }
@@ -459,7 +461,7 @@ void value_set_fit::get_value_set_rec(
 
     if(has_prefix(id2string(ident), alloc_adapter_prefix))
     {
-      insert(dest, expr, 0);
+      insert(dest, expr, mp_integer{0});
       return;
     }
     else if(v_it!=values.end())
@@ -467,7 +469,7 @@ void value_set_fit::get_value_set_rec(
       typet t("#REF#");
       t.subtype() = expr.type();
       symbol_exprt sym(ident, t);
-      insert(dest, sym, 0);
+      insert(dest, sym, mp_integer{0});
       return;
     }
   }
@@ -517,10 +519,9 @@ void value_set_fit::get_value_set_rec(
   else if(expr.is_constant())
   {
     // check if NULL
-    if(expr.get(ID_value)==ID_NULL &&
-       expr.type().id()==ID_pointer)
+    if(is_null_pointer(to_constant_expr(expr)))
     {
-      insert(dest, exprt(ID_null_object, expr.type().subtype()), 0);
+      insert(dest, exprt(ID_null_object, expr.type().subtype()), mp_integer{0});
       return;
     }
   }
@@ -619,7 +620,7 @@ void value_set_fit::get_value_set_rec(
         (from_function << 16) | from_target_index);
       dynamic_object.valid()=true_exprt();
 
-      insert(dest, dynamic_object, 0);
+      insert(dest, dynamic_object, mp_integer{0});
       return;
     }
     else if(statement==ID_cpp_new ||
@@ -633,14 +634,14 @@ void value_set_fit::get_value_set_rec(
         (from_function << 16) | from_target_index);
       dynamic_object.valid()=true_exprt();
 
-      insert(dest, dynamic_object, 0);
+      insert(dest, dynamic_object, mp_integer{0});
       return;
     }
   }
   else if(expr.id()==ID_struct)
   {
     // this is like a static struct object
-    insert(dest, address_of_exprt(expr), 0);
+    insert(dest, address_of_exprt(expr), mp_integer{0});
     return;
   }
   else if(expr.id()==ID_with)
@@ -780,11 +781,14 @@ void value_set_fit::get_reference_set_sharing_rec(
           expr.id()==ID_dynamic_object ||
           expr.id()==ID_string_constant)
   {
-    if(expr.type().id()==ID_array &&
-       expr.type().subtype().id()==ID_array)
+    if(
+      expr.type().id() == ID_array &&
+      to_array_type(expr.type()).element_type().id() == ID_array)
+    {
       insert(dest, expr);
+    }
     else
-      insert(dest, expr, 0);
+      insert(dest, expr, mp_integer{0});
 
     return;
   }
@@ -1045,12 +1049,15 @@ void value_set_fit::assign(
   else if(type.id()==ID_array)
   {
     const index_exprt lhs_index(
-      lhs, exprt(ID_unknown, c_index_type()), type.subtype());
+      lhs,
+      exprt(ID_unknown, c_index_type()),
+      to_array_type(type).element_type());
 
     if(rhs.id()==ID_unknown ||
        rhs.id()==ID_invalid)
     {
-      assign(lhs_index, exprt(rhs.id(), type.subtype()), ns);
+      assign(
+        lhs_index, exprt(rhs.id(), to_array_type(type).element_type()), ns);
     }
     else if(rhs.is_nil())
     {
@@ -1192,12 +1199,15 @@ void value_set_fit::assign_rec(
   {
     const typet &type = to_index_expr(lhs).array().type();
 
-    DATA_INVARIANT(type.id()==ID_array ||
-                   type.id()=="#REF#",
-                   "operand 0 of index expression must be an array");
-
-    assign_rec(
-      to_index_expr(lhs).array(), values_rhs, "[]" + suffix, ns, recursion_set);
+    if(type.id() == ID_array)
+    {
+      assign_rec(
+        to_index_expr(lhs).array(),
+        values_rhs,
+        "[]" + suffix,
+        ns,
+        recursion_set);
+    }
   }
   else if(lhs.id()==ID_member)
   {
@@ -1239,9 +1249,9 @@ void value_set_fit::assign_rec(
 
     assign_rec(typecast_expr.op(), values_rhs, suffix, ns, recursion_set);
   }
-  else if(lhs.id()=="zero_string" ||
-          lhs.id()=="is_zero_string" ||
-          lhs.id()=="zero_string_length")
+  else if(
+    lhs.id() == "zero_string" || lhs.id() == "is_zero_string" ||
+    lhs.id() == "zero_string_length" || lhs.id() == ID_address_of)
   {
     // ignore
   }
@@ -1386,14 +1396,17 @@ void value_set_fit::apply_code(const codet &code, const namespacet &ns)
   else if(statement==ID_fence)
   {
   }
-  else if(statement==ID_array_copy ||
-          statement==ID_array_replace ||
-          statement==ID_array_set)
+  else if(
+    statement == ID_array_copy || statement == ID_array_replace ||
+    statement == ID_array_set || statement == ID_array_equal)
   {
   }
   else if(can_cast_expr<code_inputt>(code) || can_cast_expr<code_outputt>(code))
   {
     // doesn't do anything
+  }
+  else if(statement == ID_havoc_object)
+  {
   }
   else
     throw

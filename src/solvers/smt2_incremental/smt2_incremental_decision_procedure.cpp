@@ -2,13 +2,6 @@
 
 #include "smt2_incremental_decision_procedure.h"
 
-#include <solvers/smt2_incremental/construct_value_expr_from_smt.h>
-#include <solvers/smt2_incremental/convert_expr_to_smt.h>
-#include <solvers/smt2_incremental/smt_commands.h>
-#include <solvers/smt2_incremental/smt_core_theory.h>
-#include <solvers/smt2_incremental/smt_responses.h>
-#include <solvers/smt2_incremental/smt_solver_process.h>
-#include <solvers/smt2_incremental/smt_terms.h>
 #include <util/expr.h>
 #include <util/namespace.h>
 #include <util/nodiscard.h>
@@ -16,6 +9,15 @@
 #include <util/std_expr.h>
 #include <util/string_utils.h>
 #include <util/symbol.h>
+
+#include <solvers/smt2_incremental/construct_value_expr_from_smt.h>
+#include <solvers/smt2_incremental/convert_expr_to_smt.h>
+#include <solvers/smt2_incremental/smt_commands.h>
+#include <solvers/smt2_incremental/smt_core_theory.h>
+#include <solvers/smt2_incremental/smt_responses.h>
+#include <solvers/smt2_incremental/smt_solver_process.h>
+#include <solvers/smt2_incremental/smt_terms.h>
+#include <solvers/smt2_incremental/type_size_mapping.h>
 
 #include <stack>
 
@@ -132,12 +134,14 @@ smt2_incremental_decision_proceduret::smt2_incremental_decision_proceduret(
   : ns{_ns},
     number_of_solver_calls{0},
     solver_process(std::move(_solver_process)),
-    log{message_handler}
+    log{message_handler},
+    object_map{initial_smt_object_map()}
 {
   solver_process->send(
     smt_set_option_commandt{smt_option_produce_modelst{true}});
   solver_process->send(smt_set_logic_commandt{
     smt_logic_quantifier_free_uninterpreted_functions_bit_vectorst{}});
+  solver_process->send(object_size_function.declaration);
 }
 
 void smt2_incremental_decision_proceduret::ensure_handle_for_expr_defined(
@@ -157,9 +161,25 @@ void smt2_incremental_decision_proceduret::ensure_handle_for_expr_defined(
   solver_process->send(function);
 }
 
+smt_termt
+smt2_incremental_decision_proceduret::convert_expr_to_smt(const exprt &expr)
+{
+  track_expression_objects(expr, ns, object_map);
+  associate_pointer_sizes(
+    expr,
+    ns,
+    pointer_sizes_map,
+    object_map,
+    object_size_function.make_application);
+  return ::convert_expr_to_smt(
+    expr, object_map, pointer_sizes_map, object_size_function.make_application);
+}
+
 exprt smt2_incremental_decision_proceduret::handle(const exprt &expr)
 {
-  log.debug() << "`handle`  -\n  " << expr.pretty(2, 0) << messaget::eom;
+  log.conditional_output(log.debug(), [&](messaget::mstreamt &debug) {
+    debug << "`handle`  -\n  " << expr.pretty(2, 0) << messaget::eom;
+  });
   ensure_handle_for_expr_defined(expr);
   return expr;
 }
@@ -182,14 +202,24 @@ static optionalt<smt_termt> get_identifier(
 
 exprt smt2_incremental_decision_proceduret::get(const exprt &expr) const
 {
-  log.debug() << "`get` - \n  " + expr.pretty(2, 0) << messaget::eom;
+  log.conditional_output(log.debug(), [&](messaget::mstreamt &debug) {
+    debug << "`get` - \n  " + expr.pretty(2, 0) << messaget::eom;
+  });
   optionalt<smt_termt> descriptor =
     get_identifier(expr, expression_handle_identifiers, expression_identifiers);
   if(!descriptor)
   {
     if(gather_dependent_expressions(expr).empty())
     {
-      descriptor = convert_expr_to_smt(expr);
+      INVARIANT(
+        objects_are_already_tracked(expr, object_map),
+        "Objects in expressions being read should already be tracked from "
+        "point of being set/handled.");
+      descriptor = ::convert_expr_to_smt(
+        expr,
+        object_map,
+        pointer_sizes_map,
+        object_size_function.make_application);
     }
     else
     {
@@ -251,8 +281,10 @@ smt2_incremental_decision_proceduret::get_number_of_solver_calls() const
 void smt2_incremental_decision_proceduret::set_to(const exprt &expr, bool value)
 {
   PRECONDITION(can_cast_type<bool_typet>(expr.type()));
-  log.debug() << "`set_to` (" << std::string{value ? "true" : "false"}
-              << ") -\n  " << expr.pretty(2, 0) << messaget::eom;
+  log.conditional_output(log.debug(), [&](messaget::mstreamt &debug) {
+    debug << "`set_to` (" << std::string{value ? "true" : "false"} << ") -\n  "
+          << expr.pretty(2, 0) << messaget::eom;
+  });
 
   define_dependent_functions(expr);
   auto converted_term = [&]() -> smt_termt {
@@ -302,9 +334,26 @@ static decision_proceduret::resultt lookup_decision_procedure_result(
   UNREACHABLE;
 }
 
+void smt2_incremental_decision_proceduret::define_object_sizes()
+{
+  object_size_defined.resize(object_map.size());
+  for(const auto &key_value : object_map)
+  {
+    const decision_procedure_objectt &object = key_value.second;
+    if(object_size_defined[object.unique_id])
+      continue;
+    else
+      object_size_defined[object.unique_id] = true;
+    define_dependent_functions(object.size);
+    solver_process->send(object_size_function.make_definition(
+      object.unique_id, convert_expr_to_smt(object.size)));
+  }
+}
+
 decision_proceduret::resultt smt2_incremental_decision_proceduret::dec_solve()
 {
   ++number_of_solver_calls;
+  define_object_sizes();
   const smt_responset result =
     get_response_to_command(*solver_process, smt_check_sat_commandt{});
   if(const auto check_sat_response = result.cast<smt_check_sat_responset>())

@@ -22,7 +22,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 exprt pointer_object(const exprt &p)
 {
-  return unary_exprt(ID_pointer_object, p, size_type());
+  return pointer_object_exprt(p, size_type());
 }
 
 exprt same_object(const exprt &p1, const exprt &p2)
@@ -32,12 +32,12 @@ exprt same_object(const exprt &p1, const exprt &p2)
 
 exprt object_size(const exprt &pointer)
 {
-  return unary_exprt(ID_object_size, pointer, size_type());
+  return object_size_exprt(pointer, size_type());
 }
 
 exprt pointer_offset(const exprt &pointer)
 {
-  return unary_exprt(ID_pointer_offset, pointer, signed_size_type());
+  return pointer_offset_exprt(pointer, signed_size_type());
 }
 
 exprt deallocated(const exprt &pointer, const namespacet &ns)
@@ -54,13 +54,6 @@ exprt dead_object(const exprt &pointer, const namespacet &ns)
   const symbolt &deallocated_symbol=ns.lookup(CPROVER_PREFIX "dead_object");
 
   return same_object(pointer, deallocated_symbol.symbol_expr());
-}
-
-exprt dynamic_object(const exprt &pointer)
-{
-  exprt dynamic_expr(ID_is_dynamic_object, bool_typet());
-  dynamic_expr.copy_to_operands(pointer);
-  return dynamic_expr;
 }
 
 exprt good_pointer(const exprt &pointer)

@@ -60,7 +60,7 @@ static void finish_catch_push_targets(goto_programt &dest)
   {
     if(
       instruction.is_catch() &&
-      instruction.get_code().get_statement() == ID_push_catch)
+      instruction.code().get_statement() == ID_push_catch)
     {
       // Populate `targets` with a GOTO instruction target per
       // exception handler if it isn't already populated.
@@ -71,7 +71,7 @@ static void finish_catch_push_targets(goto_programt &dest)
       {
         bool handler_added=true;
         const code_push_catcht::exception_listt &handler_list =
-          to_code_push_catch(instruction.get_code()).exception_list();
+          to_code_push_catch(instruction.code()).exception_list();
 
         for(const auto &handler : handler_list)
         {
@@ -114,7 +114,7 @@ void goto_convertt::finish_gotos(goto_programt &dest, const irep_idt &mode)
 
     if(i.is_start_thread())
     {
-      const irep_idt &goto_label = i.get_code().get(ID_destination);
+      const irep_idt &goto_label = i.code().get(ID_destination);
 
       labelst::const_iterator l_it=
         targets.labels.find(goto_label);
@@ -123,14 +123,14 @@ void goto_convertt::finish_gotos(goto_programt &dest, const irep_idt &mode)
       {
         throw incorrect_goto_program_exceptiont(
           "goto label \'" + id2string(goto_label) + "\' not found",
-          i.get_code().find_source_location());
+          i.code().find_source_location());
       }
 
       i.targets.push_back(l_it->second.first);
     }
     else if(i.is_incomplete_goto())
     {
-      const irep_idt &goto_label = i.get_code().get(ID_destination);
+      const irep_idt &goto_label = i.code().get(ID_destination);
 
       labelst::const_iterator l_it=targets.labels.find(goto_label);
 
@@ -138,7 +138,7 @@ void goto_convertt::finish_gotos(goto_programt &dest, const irep_idt &mode)
       {
         throw incorrect_goto_program_exceptiont(
           "goto label \'" + id2string(goto_label) + "\' not found",
-          i.get_code().find_source_location());
+          i.code().find_source_location());
       }
 
       i.complete_goto(l_it->second.first);
@@ -204,7 +204,7 @@ void goto_convertt::finish_computed_gotos(goto_programt &goto_program)
   for(auto &g_it : targets.computed_gotos)
   {
     goto_programt::instructiont &i=*g_it;
-    dereference_exprt destination = to_dereference_expr(i.get_code().op0());
+    dereference_exprt destination = to_dereference_expr(i.code().op0());
     const exprt pointer = destination.pointer();
 
     // remember the expression for later checks
@@ -256,7 +256,7 @@ void goto_convertt::optimize_guarded_gotos(goto_programt &dest)
 
     if(
       it_goto_y == dest.instructions.end() || !it_goto_y->is_goto() ||
-      !it_goto_y->get_condition().is_true() || it_goto_y->is_target())
+      !it_goto_y->condition().is_true() || it_goto_y->is_target())
     {
       continue;
     }
@@ -559,7 +559,7 @@ void goto_convertt::convert_block(
   // in a prior break/continue/return already, don't create dead code
   if(
     !dest.empty() && dest.instructions.back().is_goto() &&
-    dest.instructions.back().get_condition().is_true())
+    dest.instructions.back().condition().is_true())
   {
     // don't do destructors when we are unreachable
   }
@@ -626,23 +626,24 @@ void goto_convertt::convert_frontend_decl(
   }
   else
   {
-    // this is expected to go away
-    exprt initializer;
+    exprt initializer = code.op1();
 
     codet tmp=code;
-    initializer=code.op1();
     tmp.operands().resize(1);
+    // hide this declaration-without-initializer step in the goto trace
+    tmp.add_source_location().set_hide();
 
     // Break up into decl and assignment.
     // Decl must be visible before initializer.
     copy(tmp, DECL, dest);
 
+    auto initializer_location = initializer.find_source_location();
     clean_expr(initializer, dest, mode);
 
     if(initializer.is_not_nil())
     {
       code_assignt assign(code.op0(), initializer);
-      assign.add_source_location() = tmp.source_location();
+      assign.add_source_location() = initializer_location;
 
       convert_assign(assign, dest, mode);
     }
@@ -834,7 +835,6 @@ void goto_convertt::convert_assert(
 
   goto_programt::targett t =
     dest.add(goto_programt::make_assertion(cond, code.source_location()));
-  t->source_location_nonconst().set(ID_property, ID_assertion);
   t->source_location_nonconst().set("user-provided", true);
 }
 
@@ -867,7 +867,7 @@ void goto_convertt::convert_loop_contracts(
   if(assigns.is_not_nil())
   {
     PRECONDITION(loop->is_goto());
-    loop->guard.add(ID_C_spec_assigns).swap(assigns.op());
+    loop->condition_nonconst().add(ID_C_spec_assigns).swap(assigns.op());
   }
 
   auto invariant =
@@ -1528,12 +1528,12 @@ void goto_convertt::generate_ifthenelse(
   // do guarded assertions directly
   if(
     is_size_one(true_case) && true_case.instructions.back().is_assert() &&
-    true_case.instructions.back().get_condition().is_false() &&
+    true_case.instructions.back().condition().is_false() &&
     true_case.instructions.back().labels.empty())
   {
     // The above conjunction deliberately excludes the instance
     // if(some) { label: assert(false); }
-    true_case.instructions.back().set_condition(boolean_negate(guard));
+    true_case.instructions.back().condition_nonconst() = boolean_negate(guard);
     dest.destructive_append(true_case);
     true_case.instructions.clear();
     if(
@@ -1546,12 +1546,12 @@ void goto_convertt::generate_ifthenelse(
   // similarly, do guarded assertions directly
   if(
     is_size_one(false_case) && false_case.instructions.back().is_assert() &&
-    false_case.instructions.back().get_condition().is_false() &&
+    false_case.instructions.back().condition().is_false() &&
     false_case.instructions.back().labels.empty())
   {
     // The above conjunction deliberately excludes the instance
     // if(some) ... else { label: assert(false); }
-    false_case.instructions.back().set_condition(guard);
+    false_case.instructions.back().condition_nonconst() = guard;
     dest.destructive_append(false_case);
     false_case.instructions.clear();
     if(
@@ -1566,11 +1566,11 @@ void goto_convertt::generate_ifthenelse(
   if(
     is_empty(false_case) && true_case.instructions.size() == 2 &&
     true_case.instructions.front().is_assert() &&
-    true_case.instructions.front().get_condition().is_false() &&
+    true_case.instructions.front().condition().is_false() &&
     true_case.instructions.front().labels.empty() &&
     true_case.instructions.back().labels.empty())
   {
-    true_case.instructions.front().set_condition(boolean_negate(guard));
+    true_case.instructions.front().condition_nonconst() = boolean_negate(guard);
     true_case.instructions.erase(--true_case.instructions.end());
     dest.destructive_append(true_case);
     true_case.instructions.clear();

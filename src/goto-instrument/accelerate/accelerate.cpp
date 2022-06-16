@@ -30,6 +30,10 @@ Author: Matt Lewis
 #include "scratch_program.h"
 #include "util.h"
 
+#ifdef DEBUG
+#  include <util/format_expr.h>
+#endif
+
 goto_programt::targett acceleratet::find_back_jump(
   goto_programt::targett loop_header)
 {
@@ -40,7 +44,7 @@ goto_programt::targett acceleratet::find_back_jump(
   for(const auto &t : loop)
   {
     if(
-      t->is_goto() && t->get_condition().is_true() && t->targets.size() == 1 &&
+      t->is_goto() && t->condition().is_true() && t->targets.size() == 1 &&
       t->targets.front() == loop_header &&
       t->location_number > back_jump->location_number)
     {
@@ -332,8 +336,8 @@ void acceleratet::set_dirty_vars(path_acceleratort &accelerator)
     }
 
 #ifdef DEBUG
-    std::cout << "Setting dirty flag " << expr2c(dirty_var, ns)
-      << " for " << expr2c(*it, ns) << '\n';
+    std::cout << "Setting dirty flag " << format(dirty_var) << " for "
+              << format(*it) << '\n';
 #endif
 
     accelerator.pure_accelerator.add(
@@ -379,21 +383,16 @@ void acceleratet::add_dirty_checks()
 
     // Find which symbols are read, i.e. those appearing in a guard or on
     // the right hand side of an assignment.  Assume each is not dirty.
-    find_symbols_sett read;
+    std::set<symbol_exprt> read;
 
     if(it->has_condition())
-      find_symbols_or_nexts(it->get_condition(), read);
+      find_symbols(it->condition(), read);
 
     if(it->is_assign())
-    {
-      find_symbols_or_nexts(it->assign_rhs(), read);
-    }
+      find_symbols(it->assign_rhs(), read);
 
-    for(find_symbols_sett::iterator jt=read.begin();
-        jt!=read.end();
-        ++jt)
+    for(const auto &var : read)
     {
-      const exprt &var=ns.lookup(*jt).symbol_expr();
       expr_mapt::iterator dirty_var=dirty_vars_map.find(var);
 
       if(dirty_var==dirty_vars_map.end())
@@ -426,7 +425,7 @@ bool acceleratet::is_underapproximate(path_acceleratort &accelerator)
     }
 
 #ifdef DEBUG
-    std::cout << "Underapproximate variable: " << expr2c(*it, ns) << '\n';
+    std::cout << "Underapproximate variable: " << format(*it) << '\n';
 #endif
     return true;
   }

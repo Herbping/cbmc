@@ -188,7 +188,7 @@ goto_synthesizer_parse_optionst::compute_flow_dependent_set_in_loop(
 
       // add a variable to result if it is in the guard
       std::set<exprt> extracted_vars = std::set<exprt>();
-      extract_symbol_exprt_rec(node->guard, extracted_vars);
+      extract_symbol_exprt_rec(node->condition(), extracted_vars);
       result.insert(extracted_vars.begin(), extracted_vars.end());
     }
 
@@ -297,7 +297,7 @@ void goto_synthesizer_parse_optionst::preprocess(
       new_id.func_name,
       new_id.loop_number,
       goto_model.goto_functions.function_map);
-    if(loop_end->get_condition().find(ID_C_spec_loop_invariant).is_nil())
+    if(loop_end->condition().find(ID_C_spec_loop_invariant).is_nil())
     {
       invariant_map[new_id] = true_exprt();
       post_invariant_map[new_id] = true_exprt();

@@ -126,13 +126,22 @@ void unwindsett::parse_unwindset_one_loop(
               loop_nr_label) != instruction.labels.end())
           {
             location = instruction.source_location();
+            // the label may be attached to the DECL part of an initializing
+            // declaration, which we may have marked as hidden
+            location->remove(ID_hide);
           }
           if(
             location.has_value() && instruction.is_backwards_goto() &&
             instruction.source_location() == *location)
           {
+            if(nr.has_value())
+            {
+              messaget log{message_handler};
+              log.warning()
+                << "loop identifier " << id
+                << " provided with unwindset is ambiguous" << messaget::eom;
+            }
             nr = instruction.loop_number;
-            break;
           }
         }
         if(!nr.has_value())

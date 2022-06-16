@@ -29,11 +29,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <langapi/language_util.h>
 
-std::ostream &goto_programt::output(std::ostream &out) const
-{
-  return output(namespacet(symbol_tablet()), irep_idt(), out);
-}
-
 goto_programt::instructiont goto_programt::make_incomplete_goto(
   const code_gotot &_code,
   const source_locationt &l)
@@ -48,42 +43,34 @@ goto_programt::instructiont goto_programt::make_incomplete_goto(
 ///   // Labels: {list-of-labels}
 ///   {representation of the instruction}
 /// ```
-/// \param ns: the namespace to resolve the expressions in
-/// \param identifier: the identifier used to find a symbol to identify the
-///   source language
 /// \param out: the stream to write the goto string to
-/// \param instruction: the instruction to convert
 /// \return Appends to out a two line representation of the instruction
-std::ostream &goto_programt::output_instruction(
-  const namespacet &ns,
-  const irep_idt &identifier,
-  std::ostream &out,
-  const instructiont &instruction) const
+std::ostream &goto_programt::instructiont::output(std::ostream &out) const
 {
-  out << "        // " << instruction.location_number << " ";
+  out << "        // " << location_number << " ";
 
-  if(!instruction.source_location().is_nil())
-    out << instruction.source_location().as_string();
+  if(!source_location().is_nil())
+    out << source_location().as_string();
   else
     out << "no location";
 
   out << "\n";
 
-  if(!instruction.labels.empty())
+  if(!labels.empty())
   {
     out << "        // Labels:";
-    for(const auto &label : instruction.labels)
+    for(const auto &label : labels)
       out << " " << label;
 
     out << '\n';
   }
 
-  if(instruction.is_target())
-    out << std::setw(6) << instruction.target_number << ": ";
+  if(is_target())
+    out << std::setw(6) << target_number << ": ";
   else
     out << "        ";
 
-  switch(instruction.type())
+  switch(type())
   {
   case NO_INSTRUCTION_TYPE:
     out << "NO INSTRUCTION TYPE SET" << '\n';
@@ -91,24 +78,22 @@ std::ostream &goto_programt::output_instruction(
 
   case GOTO:
   case INCOMPLETE_GOTO:
-    if(!instruction.get_condition().is_true())
+    if(!condition().is_true())
     {
-      out << "IF " << format(instruction.get_condition()) << " THEN ";
+      out << "IF " << format(condition()) << " THEN ";
     }
 
     out << "GOTO ";
 
-    if(instruction.is_incomplete_goto())
+    if(is_incomplete_goto())
     {
       out << "(incomplete)";
     }
     else
     {
-      for(auto gt_it = instruction.targets.begin();
-          gt_it != instruction.targets.end();
-          gt_it++)
+      for(auto gt_it = targets.begin(); gt_it != targets.end(); gt_it++)
       {
-        if(gt_it != instruction.targets.begin())
+        if(gt_it != targets.begin())
           out << ", ";
         out << (*gt_it)->target_number;
       }
@@ -118,42 +103,87 @@ std::ostream &goto_programt::output_instruction(
     break;
 
   case OTHER:
-    if(instruction.get_other().id() == ID_code)
+    if(get_other().id() == ID_code)
     {
-      const auto &code = instruction.get_other();
-      if(code.get_statement() == ID_havoc_object)
+      const auto &code = get_other();
+      if(code.get_statement() == ID_array_copy)
+      {
+        out << "ARRAY_COPY " << format(code.op0()) << ' ' << format(code.op1())
+            << '\n';
+        break;
+      }
+      else if(code.get_statement() == ID_array_replace)
+      {
+        out << "ARRAY_REPLACE " << format(code.op0()) << ' '
+            << format(code.op1()) << '\n';
+        break;
+      }
+      else if(code.get_statement() == ID_array_set)
+      {
+        out << "ARRAY_SET " << format(code.op0()) << ' ' << format(code.op1())
+            << '\n';
+        break;
+      }
+      else if(code.get_statement() == ID_havoc_object)
       {
         out << "HAVOC_OBJECT " << format(code.op0()) << '\n';
+        break;
+      }
+      else if(code.get_statement() == ID_fence)
+      {
+        out << "FENCE";
+        if(code.get_bool(ID_WWfence))
+          out << " WW";
+        if(code.get_bool(ID_RRfence))
+          out << " RR";
+        if(code.get_bool(ID_RWfence))
+          out << " RW";
+        if(code.get_bool(ID_WRfence))
+          out << " WR";
+        out << '\n';
+        break;
+      }
+      else if(code.get_statement() == ID_input)
+      {
+        out << "INPUT";
+        for(const auto &op : code.operands())
+          out << ' ' << format(op);
+        out << '\n';
+        break;
+      }
+      else if(code.get_statement() == ID_output)
+      {
+        out << "OUTPUT " << format(code.op0()) << '\n';
         break;
       }
       // fallthrough
     }
 
-    out << "OTHER " << format(instruction.get_other()) << '\n';
+    out << "OTHER " << format(get_other()) << '\n';
     break;
 
   case SET_RETURN_VALUE:
-    out << "SET RETURN VALUE " << format(instruction.return_value()) << '\n';
+    out << "SET RETURN VALUE " << format(return_value()) << '\n';
     break;
 
   case DECL:
-    out << "DECL " << format(instruction.decl_symbol()) << " : "
-        << format(instruction.decl_symbol().type()) << '\n';
+    out << "DECL " << format(decl_symbol()) << " : "
+        << format(decl_symbol().type()) << '\n';
     break;
 
   case DEAD:
-    out << "DEAD " << format(instruction.dead_symbol()) << '\n';
+    out << "DEAD " << format(dead_symbol()) << '\n';
     break;
 
   case FUNCTION_CALL:
     out << "CALL ";
     {
-      if(instruction.call_lhs().is_not_nil())
-        out << format(instruction.call_lhs()) << " := ";
-      out << format(instruction.call_function());
+      if(call_lhs().is_not_nil())
+        out << format(call_lhs()) << " := ";
+      out << format(call_function());
       out << '(';
       bool first = true;
-      for(const auto &argument : instruction.call_arguments())
+      for(const auto &argument : call_arguments())
       {
         if(first)
           first = false;
@@ -167,21 +197,21 @@ std::ostream &goto_programt::output_instruction(
     break;
 
   case ASSIGN:
-    out << "ASSIGN " << format(instruction.assign_lhs())
-        << " := " << format(instruction.assign_rhs()) << '\n';
+    out << "ASSIGN " << format(assign_lhs()) << " := " << format(assign_rhs())
+        << '\n';
     break;
 
   case ASSUME:
   case ASSERT:
-    if(instruction.is_assume())
+    if(is_assume())
       out << "ASSUME ";
     else
       out << "ASSERT ";
 
     {
-      out << format(instruction.get_condition());
+      out << format(condition());
 
-      const irep_idt &comment = instruction.source_location().get_comment();
+      const irep_idt &comment = source_location().get_comment();
       if(!comment.empty())
         out << " // " << comment;
     }
@@ -206,49 +236,48 @@ std::ostream &goto_programt::output_instruction(
 
     {
       const irept::subt &exception_list =
-        instruction.get_code().find(ID_exception_list).get_sub();
+        code().find(ID_exception_list).get_sub();
 
       for(const auto &ex : exception_list)
         out << " " << ex.id();
     }
 
-    if(instruction.get_code().operands().size() == 1)
-      out << ": " << format(instruction.get_code().op0());
+    if(code().operands().size() == 1)
+      out << ": " << format(code().op0());
 
     out << '\n';
     break;
 
   case CATCH:
   {
-    if(instruction.get_code().get_statement() == ID_exception_landingpad)
+    if(code().get_statement() == ID_exception_landingpad)
     {
-      const auto &landingpad = to_code_landingpad(instruction.get_code());
+      const auto &landingpad = to_code_landingpad(code());
       out << "EXCEPTION LANDING PAD (" << format(landingpad.catch_expr().type())
           << ' ' << format(landingpad.catch_expr()) << ")";
     }
-    else if(instruction.get_code().get_statement() == ID_push_catch)
+    else if(code().get_statement() == ID_push_catch)
     {
       out << "CATCH-PUSH ";
 
       unsigned i=0;
       const irept::subt &exception_list =
-        instruction.get_code().find(ID_exception_list).get_sub();
+        code().find(ID_exception_list).get_sub();
       DATA_INVARIANT(
-        instruction.targets.size() == exception_list.size(),
+        targets.size() == exception_list.size(),
         "unexpected discrepancy between sizes of instruction"
         "targets and exception list");
-      for(instructiont::targetst::const_iterator
-            gt_it=instruction.targets.begin();
-          gt_it!=instruction.targets.end();
+      for(instructiont::targetst::const_iterator gt_it = targets.begin();
+          gt_it != targets.end();
           gt_it++, i++)
       {
-        if(gt_it!=instruction.targets.begin())
+        if(gt_it != targets.begin())
           out << ", ";
         out << exception_list[i].id() << "->"
             << (*gt_it)->target_number;
       }
     }
-    else if(instruction.get_code().get_statement() == ID_pop_catch)
+    else if(code().get_statement() == ID_pop_catch)
     {
       out << "CATCH-POP";
     }
@@ -270,9 +299,7 @@ std::ostream &goto_programt::output_instruction(
     break;
 
   case START_THREAD:
-    out << "START THREAD "
-        << instruction.get_target()->target_number
-        << '\n';
+    out << "START THREAD " << get_target()->target_number << '\n';
     break;
 
   case END_THREAD:
@@ -291,10 +318,10 @@ void goto_programt::get_decl_identifiers(
     if(instruction.is_decl())
     {
       DATA_INVARIANT(
-        instruction.get_code().get_statement() == ID_decl,
+        instruction.code().get_statement() == ID_decl,
         "expected statement to be declaration statement");
       DATA_INVARIANT(
-        instruction.get_code().operands().size() == 1,
+        instruction.code().operands().size() == 1,
         "declaration statement expects one operand");
       decl_identifiers.insert(instruction.decl_symbol().get_identifier());
     }
@@ -336,7 +363,7 @@ std::list<exprt> expressions_read(
   case ASSUME:
   case ASSERT:
   case GOTO:
-    dest.push_back(instruction.get_condition());
+    dest.push_back(instruction.condition());
     break;
 
   case SET_RETURN_VALUE:
@@ -492,9 +519,9 @@ std::string as_string(
     return "(NO INSTRUCTION TYPE)";
 
   case GOTO:
-    if(!i.get_condition().is_true())
+    if(!i.condition().is_true())
     {
-      result += "IF " + from_expr(ns, function, i.get_condition()) + " THEN ";
+      result += "IF " + from_expr(ns, function, i.condition()) + " THEN ";
     }
 
     result+="GOTO ";
@@ -516,7 +543,7 @@ std::string as_string(
   case DEAD:
   case FUNCTION_CALL:
   case ASSIGN:
-    return from_expr(ns, function, i.get_code());
+    return from_expr(ns, function, i.code());
 
   case ASSUME:
   case ASSERT:
@@ -525,7 +552,7 @@ std::string as_string(
     else
       result+="ASSERT ";
 
-    result += from_expr(ns, function, i.get_condition());
+    result += from_expr(ns, function, i.condition());
 
     {
       const irep_idt &comment = i.source_location().get_comment();
@@ -591,15 +618,12 @@ void goto_programt::update()
   compute_loop_numbers();
 }
 
-std::ostream &goto_programt::output(
-  const namespacet &ns,
-  const irep_idt &identifier,
-  std::ostream &out) const
+std::ostream &goto_programt::output(std::ostream &out) const
 {
-  // output program
+  // output the program
 
   for(const auto &instruction : instructions)
-    output_instruction(ns, identifier, out, instruction);
+    instruction.output(out);
 
   return out;
 }
@@ -712,7 +736,7 @@ void goto_programt::copy_from(const goto_programt &src)
 bool goto_programt::has_assertion() const
 {
   for(const auto &i : instructions)
-    if(i.is_assert() && !i.get_condition().is_true())
+    if(i.is_assert() && !i.condition().is_true())
       return true;
 
   return false;
@@ -744,7 +768,7 @@ bool goto_programt::instructiont::equals(const instructiont &other) const
   // clang-format off
   return
     _type == other._type &&
-    code == other.code &&
+    _code == other._code &&
     guard == other.guard &&
     targets.size() == other.targets.size() &&
     labels == other.labels;
@@ -755,13 +779,12 @@ void goto_programt::instructiont::validate(
   const namespacet &ns,
   const validation_modet vm) const
 {
-  validate_full_code(code, ns, vm);
+  validate_full_code(_code, ns, vm);
   validate_full_expr(guard, ns, vm);
 
   auto expr_symbol_finder = [&](const exprt &e) {
     find_symbols_sett typetags;
-    find_type_symbols(e.type(), typetags);
-    find_symbols_or_nexts(e, typetags);
+    find_type_and_expr_symbols(e, typetags);
     const symbolt *symbol;
     for(const auto &identifier : typetags)
     {
@@ -873,7 +896,7 @@ void goto_programt::instructiont::validate(
       "assert instruction should not have a target",
       source_location());
 
-    std::for_each(guard.depth_begin(), guard.depth_end(), expr_symbol_finder);
+    expr_symbol_finder(guard);
     std::for_each(guard.depth_begin(), guard.depth_end(), type_finder);
     break;
   case OTHER:
@@ -895,14 +918,14 @@ void goto_programt::instructiont::validate(
   case SET_RETURN_VALUE:
     DATA_CHECK_WITH_DIAGNOSTICS(
       vm,
-      code.get_statement() == ID_return,
+      _code.get_statement() == ID_return,
       "SET_RETURN_VALUE instruction should contain a return statement",
       source_location());
     break;
   case ASSIGN:
     DATA_CHECK(
       vm,
-      code.get_statement() == ID_assign,
+      _code.get_statement() == ID_assign,
       "assign instruction should contain an assign statement");
     DATA_CHECK(
       vm, targets.empty(), "assign instruction should not have a target");
@@ -910,7 +933,7 @@ void goto_programt::instructiont::validate(
   case DECL:
     DATA_CHECK_WITH_DIAGNOSTICS(
       vm,
-      code.get_statement() == ID_decl,
+      _code.get_statement() == ID_decl,
       "declaration instructions should contain a declaration statement",
       source_location());
     DATA_CHECK_WITH_DIAGNOSTICS(
@@ -923,7 +946,7 @@ void goto_programt::instructiont::validate(
   case DEAD:
     DATA_CHECK_WITH_DIAGNOSTICS(
       vm,
-      code.get_statement() == ID_dead,
+      _code.get_statement() == ID_dead,
       "dead instructions should contain a dead statement",
       source_location());
     DATA_CHECK_WITH_DIAGNOSTICS(
@@ -936,12 +959,12 @@ void goto_programt::instructiont::validate(
   case FUNCTION_CALL:
     DATA_CHECK_WITH_DIAGNOSTICS(
       vm,
-      code.get_statement() == ID_function_call,
+      _code.get_statement() == ID_function_call,
       "function call instruction should contain a call statement",
       source_location());
 
-    std::for_each(code.depth_begin(), code.depth_end(), expr_symbol_finder);
-    std::for_each(code.depth_begin(), code.depth_end(), type_finder);
+    expr_symbol_finder(_code);
+    std::for_each(_code.depth_begin(), _code.depth_end(), type_finder);
     break;
   case THROW:
     break;
@@ -1049,9 +1072,9 @@ void goto_programt::instructiont::transform(
   case NO_INSTRUCTION_TYPE:
     if(has_condition())
     {
-      auto new_condition = f(get_condition());
+      auto new_condition = f(condition());
       if(new_condition.has_value())
-        set_condition(new_condition.value());
+        condition_nonconst() = new_condition.value();
     }
   }
 }
@@ -1104,7 +1127,7 @@ void goto_programt::instructiont::apply(
   case INCOMPLETE_GOTO:
   case NO_INSTRUCTION_TYPE:
     if(has_condition())
-      f(get_condition());
+      f(condition());
   }
 }
 

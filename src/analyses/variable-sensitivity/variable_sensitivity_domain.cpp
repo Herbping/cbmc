@@ -79,13 +79,13 @@ void variable_sensitivity_domaint::transform(
         if(to == from->get_target())
         {
           // The AI is exploring the branch where the jump is taken
-          assume(instruction.guard, ns);
+          assume(instruction.condition(), ns);
         }
         else
         {
           // Exploring the path where the jump is not taken - therefore assume
           // the condition is false
-          assume(not_exprt(instruction.guard), ns);
+          assume(not_exprt(instruction.condition()), ns);
         }
       }
       // ignore jumps to the next line, we can assume nothing
@@ -94,7 +94,7 @@ void variable_sensitivity_domaint::transform(
   break;
 
   case ASSUME:
-    assume(instruction.guard, ns);
+    assume(instruction.condition(), ns);
     break;
 
   case FUNCTION_CALL:
@@ -227,8 +227,9 @@ bool variable_sensitivity_domaint::merge(
   trace_ptrt to)
 {
 #ifdef DEBUG
-  std::cout << "Merging from/to:\n " << from->location_number << " --> "
-            << to->location_number << '\n';
+  std::cout << "Merging from/to:\n "
+            << from->current_location()->location_number << " --> "
+            << to->current_location()->location_number << '\n';
 #endif
   auto widen_mode =
     from->should_widen(*to) ? widen_modet::could_widen : widen_modet::no;

@@ -11,14 +11,15 @@ Author: Daniel Kroening
 
 #include "remove_internal_symbols.h"
 
-#include <goto-programs/adjust_float_expressions.h>
-
+#include <util/c_types.h>
 #include <util/config.h>
 #include <util/find_symbols.h>
 #include <util/message.h>
 #include <util/namespace.h>
 #include <util/std_types.h>
 #include <util/symbol_table.h>
+
+#include <goto-programs/adjust_float_expressions.h>
 
 #include "static_lifetime_init.h"
 
@@ -62,14 +63,16 @@ static void get_symbols(
       }
 
       // check for contract definitions
-      const exprt ensures =
-        static_cast<const exprt &>(code_type.find(ID_C_spec_ensures));
-      const exprt requires =
-        static_cast<const exprt &>(code_type.find(ID_C_spec_requires));
+      const code_with_contract_typet &maybe_contract =
+        to_code_with_contract_type(code_type);
 
       find_symbols_sett new_symbols;
-      find_type_and_expr_symbols(ensures, new_symbols);
-      find_type_and_expr_symbols(requires, new_symbols);
+      for(const exprt &e : maybe_contract.ensures())
+        find_type_and_expr_symbols(e, new_symbols);
+      for(const exprt &r : maybe_contract.requires())
+        find_type_and_expr_symbols(r, new_symbols);
+      for(const exprt &a : maybe_contract.assigns())
+        find_type_and_expr_symbols(a, new_symbols);
 
       for(const auto &s : new_symbols)
       {
@@ -106,6 +109,30 @@ void remove_internal_symbols(
   message_handlert &mh,
   const bool keep_file_local)
 {
+  remove_internal_symbols(symbol_table, mh, keep_file_local, {});
+}
+
+/// Removes internal symbols from a symbol table
+/// A symbol is EXPORTED if it is a
+/// * non-static function with body that is not extern inline
+/// * symbol used in an EXPORTED symbol
+/// * type used in an EXPORTED symbol
+///
+///          Read
+///          http://gcc.gnu.org/ml/gcc/2006-11/msg00006.html
+///          on "extern inline"
+/// \param symbol_table: symbol table to clean up
+/// \param mh: log handler
+/// \param keep_file_local: keep file-local functions with bodies even if we
+///                         would otherwise remove them
+/// \param keep: set of symbol names to keep in the symbol table regardless
+///              of usage or kind
+void remove_internal_symbols(
+  symbol_tablet &symbol_table,
+  message_handlert &mh,
+  const bool keep_file_local,
+  const std::set<irep_idt> &keep)
+{
   namespacet ns(symbol_table);
   find_symbols_sett exported;
   messaget log(mh);
@@ -127,6 +154,8 @@ void remove_internal_symbols(
   special.insert("__placement_new_array");
   special.insert("__delete");
   special.insert("__delete_array");
+  // plus any extra symbols we wish to keep
+  special.insert(keep.begin(), keep.end());
 
   for(symbol_tablet::symbolst::const_iterator
       it=symbol_table.symbols.begin();

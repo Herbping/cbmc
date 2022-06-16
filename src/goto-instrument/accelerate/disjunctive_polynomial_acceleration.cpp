@@ -30,6 +30,10 @@ Author: Matt Lewis
 #include "scratch_program.h"
 #include "util.h"
 
+#ifdef DEBUG
+#  include <util/format_expr.h>
+#endif
+
 bool disjunctive_polynomial_accelerationt::accelerate(
   path_acceleratort &accelerator)
 {
@@ -47,9 +51,7 @@ bool disjunctive_polynomial_accelerationt::accelerate(
       ++it)
   {
     if(loop.contains(it))
-    {
-      goto_program.output_instruction(ns, "scratch", std::cout, *it);
-    }
+      it->output(std::cout);
   }
 
   std::cout << "Modified:\n";
@@ -58,7 +60,7 @@ bool disjunctive_polynomial_accelerationt::accelerate(
       it!=modified.end();
       ++it)
   {
-    std::cout << expr2c(*it, ns) << '\n';
+    std::cout << format(*it) << '\n';
   }
 #endif
 
@@ -107,7 +109,7 @@ bool disjunctive_polynomial_accelerationt::accelerate(
       if(utils.check_inductive(this_poly, path))
       {
 #ifdef DEBUG
-        std::cout << "Fitted a polynomial for " << expr2c(target, ns)
+        std::cout << "Fitted a polynomial for " << format(target)
                   << '\n';
 #endif
         polynomials[target]=poly;
@@ -145,7 +147,7 @@ bool disjunctive_polynomial_accelerationt::accelerate(
       ++it)
   {
 #ifdef DEBUG
-    std::cout << "Trying to accelerate " << expr2c(*it, ns) << '\n';
+    std::cout << "Trying to accelerate " << format(*it) << '\n';
 #endif
 
     if(it->type().id()==ID_bool)
@@ -205,7 +207,7 @@ bool disjunctive_polynomial_accelerationt::accelerate(
     }
 
 #ifdef DEBUG
-    std::cout << "Failed to accelerate " << expr2c(*it, ns) << '\n';
+    std::cout << "Failed to accelerate " << format(*it) << '\n';
 #endif
 
     // We weren't able to accelerate this target...
@@ -396,14 +398,14 @@ bool disjunctive_polynomial_accelerationt::fit_polynomial(
   cone_of_influence(var, influence);
 
 #ifdef DEBUG
-  std::cout << "Fitting a polynomial for " << expr2c(var, ns)
+  std::cout << "Fitting a polynomial for " << format(var)
             << ", which depends on:\n";
 
   for(expr_sett::iterator it=influence.begin();
       it!=influence.end();
       ++it)
   {
-    std::cout << expr2c(*it, ns) << '\n';
+    std::cout << format(*it) << '\n';
   }
 #endif
 
@@ -810,7 +812,7 @@ void disjunctive_polynomial_accelerationt::build_path(
       // If this was a conditional branch (it probably was), figure out
       // if we hit the "taken" or "not taken" branch & accumulate the
       // appropriate guard.
-      cond = not_exprt(t->get_condition());
+      cond = not_exprt(t->condition());
 
       for(goto_programt::targetst::iterator it=t->targets.begin();
           it!=t->targets.end();
@@ -818,7 +820,7 @@ void disjunctive_polynomial_accelerationt::build_path(
       {
         if(next==*it)
         {
-          cond = t->get_condition();
+          cond = t->condition();
           break;
         }
       }

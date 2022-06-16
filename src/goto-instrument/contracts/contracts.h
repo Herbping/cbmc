@@ -14,22 +14,24 @@ Date: February 2016
 #ifndef CPROVER_GOTO_INSTRUMENT_CONTRACTS_CONTRACTS_H
 #define CPROVER_GOTO_INSTRUMENT_CONTRACTS_CONTRACTS_H
 
-#include <map>
-#include <set>
-#include <string>
-#include <unordered_set>
-
-#include <goto-instrument/loop_utils.h>
-
 #include <goto-programs/goto_convert_class.h>
-#include <goto-programs/goto_functions.h>
-#include <goto-programs/goto_model.h>
-#include <goto-programs/instrument_preconditions.h>
 
 #include <util/message.h>
 #include <util/namespace.h>
 #include <util/optional.h>
 #include <util/pointer_expr.h>
+
+#include <goto-programs/goto_functions.h>
+#include <goto-programs/goto_model.h>
+#include <goto-programs/instrument_preconditions.h>
+
+#include <goto-instrument/loop_utils.h>
+
+#include <list>
+#include <map>
+#include <set>
+#include <string>
+#include <unordered_set>
 
 #define FLAG_LOOP_CONTRACTS "apply-loop-contracts"
 #define HELP_LOOP_CONTRACTS                                                    \
@@ -49,12 +51,14 @@ class local_may_aliast;
 class replace_symbolt;
 class instrument_spec_assignst;
 class cfg_infot;
+class function_pointer_obeys_contract_exprt;
 
 class code_contractst
 {
 public:
   code_contractst(goto_modelt &goto_model, messaget &log)
     : ns(goto_model.symbol_table),
+      goto_model(goto_model),
       symbol_table(goto_model.symbol_table),
       goto_functions(goto_model.goto_functions),
       log(log),
@@ -62,8 +66,13 @@ public:
   {
   }
 
-  /// \brief Replace all calls to each function in the list with that function's
-  ///        contract
+  /// Throws an exception if some function `functions` is found in the program.
+  void check_all_functions_found(const std::set<std::string> &functions) const;
+
+  /// \brief Replace all calls to each function in the `to_replace` set
+  /// with that function's contract
+  ///
+  /// Throws an exception if some `to_replace` functions are not found.
   ///
   /// Use this function when proving code that calls into an expensive function,
   /// `F`. You can write a contract for F using __CPROVER_requires and
@@ -73,12 +82,12 @@ public:
   /// actually abides by its `ensures` and `requires` clauses, you should
   /// separately call `code_constractst::enforce_contracts()` on `F` and verify
   /// it using `cbmc --function F`.
-  ///
-  /// \return `true` on failure, `false` otherwise
-  bool replace_calls(const std::set<std::string> &);
+  void replace_calls(const std::set<std::string> &to_replace);
 
   /// \brief Turn requires & ensures into assumptions and assertions for each of
   ///        the named functions
+  ///
+  /// Throws an exception if some `to_enforce` functions are not found.
   ///
   /// Use this function to prove the correctness of a function F independently
   /// of its calling context. If you have proved that F is correct, then you can
@@ -87,22 +96,34 @@ public:
   /// execution does not need to explore F every time it is called, increasing
   /// scalability.
   ///
+  /// Static variables of the model are nondet-initialized, except for the ones
+  /// specified in to_exclude_from_nondet_init.
+  ///
   /// Implementation: mangle the name of each function F into a new name,
   /// `__CPROVER_contracts_original_F` (`CF` for short). Then mint a new
   /// function called `F` that assumes `CF`'s `requires` clause, calls `CF`, and
   /// then asserts `CF`'s `ensures` clause.
   ///
-  /// \return `true` on failure, `false` otherwise
-  bool enforce_contracts(const std::set<std::string> &functions);
+  void enforce_contracts(
+    const std::set<std::string> &to_enforce,
+    const std::set<std::string> &to_exclude_from_nondet_init = {});
 
-  void apply_loop_contracts();
+  /// Applies loop contract transformations.
+  /// Static variables of the model are nondet-initialized, except for the ones
+  /// specified in to_exclude_from_nondet_init.
+  void apply_loop_contracts(
+    const std::set<std::string> &to_exclude_from_nondet_init = {});
 
   void check_apply_loop_contracts(
     const irep_idt &function_name,
     goto_functionst::goto_functiont &goto_function,
     const local_may_aliast &local_may_alias,
     goto_programt::targett loop_head,
+    goto_programt::targett loop_end,
     const loopt &loop,
+    exprt assigns_clause,
+    exprt invariant,
+    exprt decreases_clause,
     const irep_idt &mode);
 
   // for "helper" classes to update symbol table.
@@ -112,6 +133,7 @@ public:
   namespacet ns;
 
 protected:
+  goto_modelt &goto_model;
   symbol_tablet &symbol_table;
   goto_functionst &goto_functions;
 
@@ -120,15 +142,43 @@ protected:
 
   std::unordered_set<irep_idt> summarized;
 
+  /// Translates a function_pointer_obeys_contract_exprt into an assertion
+  /// ```
+  /// ASSERT function_pointer == contract;
+  /// ```
+  /// \param expr expression to translate
+  /// \param property_class property class to use for the generated assertions
+  /// \param replace symbol substitution to use in the context where the
+  ///                expression is translated
+  /// \param mode language mode to use for goto_conversion and prints
+  /// \param dest goto_program where generated instructions are appended
+  void assert_function_pointer_obeys_contract(
+    const function_pointer_obeys_contract_exprt &expr,
+    const irep_idt &property_class,
+    const replace_symbolt &replace,
+    const irep_idt &mode,
+    goto_programt &dest);
+
+  /// Translates a function_pointer_obeys_contract_exprt into an assignment
+  /// ```
+  /// ASSIGN function_pointer = contract;
+  /// ```
+  /// \param expr expression to translate
+  /// \param replace symbol substitution to use in the context where the
+  ///                expression is translated
+  /// \param mode language mode to use for goto_conversion and prints
+  /// \param dest goto_program where generated instructions are appended
+  void assume_function_pointer_obeys_contract(
+    const function_pointer_obeys_contract_exprt &expr,
+    const replace_symbolt &replace,
+    const irep_idt &mode,
+    goto_programt &dest);
+
   /// \brief Enforce contract of a single function
-  bool enforce_contract(const irep_idt &function);
+  void enforce_contract(const irep_idt &function);
 
   /// Instrument functions to check frame conditions.
-  bool check_frame_conditions_function(const irep_idt &function);
-
-  /// Check if there are any malloc statements which may be repeated because of
-  /// a goto statement that jumps back.
-  bool check_for_looped_mallocs(const goto_programt &program);
+  void check_frame_conditions_function(const irep_idt &function);
 
   /// Apply loop contracts, whenever available, to all loops in `function`.
   /// Loop invariants, loop variants, and loop assigns clauses.
@@ -139,7 +189,7 @@ protected:
   /// Replaces function calls with assertions based on requires clauses,
   /// non-deterministic assignments for the write set, and assumptions
   /// based on ensures clauses.
-  bool apply_function_contract(
+  void apply_function_contract(
     const irep_idt &function,
     const source_locationt &location,
     goto_programt &function_body,
@@ -152,14 +202,11 @@ protected:
     const irep_idt &mangled_function,
     goto_programt &dest);
 
-  /// This function recursively searches the expression to find nested or
+  /// This function recursively searches \p expression to find nested or
   /// non-nested quantified expressions. When a quantified expression is found,
-  /// the quantified variable is added to the symbol table
-  /// and to the expression map.
-  void add_quantified_variable(
-    const exprt &expression,
-    replace_symbolt &replace,
-    const irep_idt &mode);
+  /// a fresh quantified variable is added to the symbol table and \p expression
+  /// is updated to use this fresh variable.
+  void add_quantified_variable(exprt &expression, const irep_idt &mode);
 
   /// This function recursively identifies the "old" expressions within expr
   /// and replaces them with correspoding history variables.

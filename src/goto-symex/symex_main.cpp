@@ -25,7 +25,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/mathematical_expr.h>
 #include <util/replace_symbol.h>
 #include <util/std_expr.h>
-#include <util/string2int.h>
 #include <util/symbol_table.h>
 
 #include "path_storage.h"
@@ -43,7 +42,6 @@ symex_configt::symex_configt(const optionst &options)
     partial_loops(options.get_bool_option("partial-loops")),
     havoc_undefined_functions(
       options.get_bool_option("havoc-undefined-functions")),
-    debug_level(unsafe_string2int(options.get_option("debug-level"))),
     run_validation_checks(options.get_bool_option("validate-ssa-equation")),
     show_symex_steps(options.get_bool_option("show-goto-symex-steps")),
     show_points_to_sets(options.get_bool_option("show-points-to-sets")),
@@ -158,7 +156,7 @@ void goto_symext::symex_assert(
   const goto_programt::instructiont &instruction,
   statet &state)
 {
-  exprt condition = clean_expr(instruction.get_condition(), state, false);
+  exprt condition = clean_expr(instruction.condition(), state, false);
 
   // First, push negations in and perhaps convert existential quantifiers into
   // universals:
@@ -517,13 +515,13 @@ void goto_symext::print_symex_step(statet &state)
   if(
     !symex_config.show_symex_steps || !state.reachable ||
     state.source.pc->type() == DEAD ||
-    (state.source.pc->get_code().is_nil() &&
+    (state.source.pc->code().is_nil() &&
      state.source.pc->type() != END_FUNCTION))
   {
     return;
   }
 
-  if(state.source.pc->get_code().is_not_nil())
+  if(state.source.pc->code().is_not_nil())
   {
     auto guard_expression = state.guard.as_expr();
     std::size_t size = 0;
@@ -535,7 +533,7 @@ void goto_symext::print_symex_step(statet &state)
     }
 
     log.status() << "[Guard size: " << size << "] "
-                 << format(state.source.pc->get_code());
+                 << format(state.source.pc->code());
 
     if(
       state.source.pc->source_location().is_not_nil() &&
@@ -650,7 +648,7 @@ void goto_symext::execute_next_instruction(
 
   case ASSUME:
     if(state.reachable)
-      symex_assume(state, instruction.get_condition());
+      symex_assume(state, instruction.condition());
     symex_transition(state);
     break;
 

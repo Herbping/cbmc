@@ -9,8 +9,6 @@ Author: Daniel Kroening, kroening@kroening.com
 /// \file
 /// ANSI-C Conversion / Type Checking
 
-#include "c_typecheck_base.h"
-
 #include <util/arith_tools.h>
 #include <util/byte_operators.h>
 #include <util/c_types.h>
@@ -22,6 +20,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/string_constant.h>
 
 #include "anonymous_member.h"
+#include "c_typecheck_base.h"
+#include "type2name.h"
 
 void c_typecheck_baset::do_initializer(
   exprt &initializer,
@@ -232,43 +232,24 @@ void c_typecheck_baset::do_initializer(symbolt &symbol)
   if(has_prefix(id2string(symbol.name), CPROVER_PREFIX "constant_infinity"))
     return;
 
-  if(symbol.is_static_lifetime)
-  {
-    if(symbol.value.is_not_nil())
-    {
-      typecheck_expr(symbol.value);
-      do_initializer(symbol.value, symbol.type, true);
+  if(symbol.is_type)
+    return;
 
-      // need to adjust size?
-      if(
-        symbol.type.id() == ID_array &&
-        to_array_type(symbol.type).size().is_nil())
-        symbol.type=symbol.value.type();
-    }
-  }
-  else if(!symbol.is_type)
+  if(symbol.value.is_not_nil())
   {
-    if(symbol.is_macro)
-    {
-      // these must have a constant value
-      assert(symbol.value.is_not_nil());
-      typecheck_expr(symbol.value);
-      source_locationt location=symbol.value.source_location();
-      do_initializer(symbol.value, symbol.type, true);
-      make_constant(symbol.value);
-    }
-    else if(symbol.value.is_not_nil())
-    {
-      typecheck_expr(symbol.value);
-      do_initializer(symbol.value, symbol.type, true);
+    typecheck_expr(symbol.value);
+    do_initializer(symbol.value, symbol.type, true);
 
-      // need to adjust size?
-      if(
-        symbol.type.id() == ID_array &&
-        to_array_type(symbol.type).size().is_nil())
-        symbol.type=symbol.value.type();
-    }
+    // A flexible array may have been initialized, which entails a type change.
+    // Note that the type equality test is important: we want to preserve
+    // annotations like typedefs or const-ness when the type is otherwise the
+    // same.
+    if(!symbol.is_macro && symbol.type != symbol.value.type())
+      symbol.type = symbol.value.type();
   }
+
+  if(symbol.is_macro)
+    make_constant(symbol.value);
 }
 
 void c_typecheck_baset::designator_enter(
@@ -431,23 +412,21 @@ exprt::operandst::const_iterator c_typecheck_baset::do_designated_initializer(
            (to_array_type(full_type).size().is_zero() ||
             to_array_type(full_type).size().is_nil()))
         {
-          // we are willing to grow an incomplete or zero-sized array
-          const auto zero = zero_initializer(
-            to_array_type(full_type).element_type(),
-            value.source_location(),
-            *this);
+          const typet &element_type = to_array_type(full_type).element_type();
+
+          // we are willing to grow an incomplete or zero-sized array --
+          // do_initializer_list will fix up the resulting type
+          const auto zero =
+            zero_initializer(element_type, value.source_location(), *this);
           if(!zero.has_value())
           {
             error().source_location = value.source_location();
             error() << "cannot zero-initialize array with element type '"
-                    << to_string(to_type_with_subtype(full_type).subtype())
-                    << "'" << eom;
+                    << to_string(element_type) << "'" << eom;
             throw 0;
           }
           dest->operands().resize(
             numeric_cast_v<std::size_t>(index) + 1, *zero);
-
-          // todo: adjust type!
         }
         else
         {
@@ -978,7 +957,7 @@ exprt c_typecheck_baset::do_initializer_list(
     if(to_array_type(full_type).size().is_nil())
     {
       // start with empty array
-      result=exprt(ID_array, full_type);
+      result = array_exprt({}, to_array_type(full_type));
       result.add_source_location()=value.source_location();
     }
     else
@@ -1025,20 +1004,58 @@ exprt c_typecheck_baset::do_initializer_list(
     increment_designator(current_designator);
   }
 
-  // make sure we didn't mess up index computation
   if(full_type.id()==ID_struct)
   {
-    assert(result.operands().size()==
-           to_struct_type(full_type).components().size());
+    const struct_typet &full_struct_type = to_struct_type(full_type);
+    const struct_typet::componentst &components = full_struct_type.components();
+    // make sure we didn't mess up index computation
+    CHECK_RETURN(result.operands().size() == components.size());
+
+    if(
+      !components.empty() &&
+      components.back().type().get_bool(ID_C_flexible_array_member))
+    {
+      const auto array_size = numeric_cast<mp_integer>(
+        to_array_type(components.back().type()).size());
+      array_exprt &init_array = to_array_expr(result.operands().back());
+      if(
+        !array_size.has_value() ||
+        (*array_size <= 1 && init_array.operands().size() != *array_size))
+      {
+        struct_typet actual_struct_type = full_struct_type;
+        array_typet &actual_array_type =
+          to_array_type(actual_struct_type.components().back().type());
+        actual_array_type.size() = from_integer(
+          init_array.operands().size(), actual_array_type.index_type());
+        actual_array_type.set(ID_C_flexible_array_member, true);
+        init_array.type() = actual_array_type;
+
+        // mimic bits of typecheck_compound_type to produce a new struct tag
+        actual_struct_type.remove(ID_tag);
+        type_symbolt compound_symbol{actual_struct_type};
+        compound_symbol.mode = mode;
+        compound_symbol.location = value.source_location();
+        std::string typestr = type2name(compound_symbol.type, *this);
+        compound_symbol.base_name = "#anon#" + typestr;
+        compound_symbol.name = "tag-#anon#" + typestr;
+        irep_idt tag_identifier = compound_symbol.name;
+
+        // We might already have the same anonymous struct, which is fine as it
+        // will be exactly the same type.
+        symbol_table.insert(std::move(compound_symbol));
+
+        result.type() = struct_tag_typet{tag_identifier};
+      }
+    }
   }
 
   if(full_type.id()==ID_array &&
      to_array_type(full_type).size().is_nil())
   {
     // make complete by setting array size
-    size_t size=result.operands().size();
-    result.type().id(ID_array);
-    result.type().set(ID_size, from_integer(size, c_index_type()));
+    array_typet &array_type = to_array_type(result.type());
+    array_type.size() =
+      from_integer(result.operands().size(), array_type.index_type());
   }
 
   return result;

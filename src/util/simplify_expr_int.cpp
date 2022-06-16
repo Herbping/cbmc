@@ -439,16 +439,24 @@ simplify_exprt::resultt<> simplify_exprt::simplify_plus(const plus_exprt &expr)
       expr.op0().id() == ID_plus && expr.op0().type().id() == ID_pointer &&
       expr.op0().operands().size() == 2)
     {
-      plus_exprt op0 = to_plus_expr(expr.op0());
+      plus_exprt result = to_plus_expr(expr.op0());
+      if(as_const(result).op0().type().id() != ID_pointer)
+        result.op0().swap(result.op1());
+      const exprt &op1 = as_const(result).op1();
 
-      if(op0.op1().id() == ID_plus)
-        to_plus_expr(op0.op1()).add_to_operands(expr.op1());
+      if(op1.id() == ID_plus)
+      {
+        plus_exprt new_op1 = to_plus_expr(op1);
+        new_op1.add_to_operands(
+          typecast_exprt::conditional_cast(expr.op1(), new_op1.op0().type()));
+        result.op1() = simplify_plus(new_op1);
+      }
       else
-        op0.op1()=plus_exprt(op0.op1(), expr.op1());
-
-      auto result = op0;
-
-      result.op1() = simplify_plus(to_plus_expr(result.op1()));
+      {
+        plus_exprt new_op1{
+          op1, typecast_exprt::conditional_cast(expr.op1(), op1.type())};
+        result.op1() = simplify_plus(new_op1);
+      }
 
       return changed(simplify_plus(result));
     }
@@ -1421,13 +1429,13 @@ simplify_exprt::resultt<> simplify_exprt::simplify_inequality_both_constant(
 static bool eliminate_common_addends(exprt &op0, exprt &op1)
 {
   // we can't eliminate zeros
-  if(op0.is_zero() ||
-     op1.is_zero() ||
-     (op0.is_constant() &&
-      to_constant_expr(op0).get_value()==ID_NULL) ||
-     (op1.is_constant() &&
-      to_constant_expr(op1).get_value()==ID_NULL))
+  if(
+    op0.is_zero() || op1.is_zero() ||
+    (op0.is_constant() && is_null_pointer(to_constant_expr(op0))) ||
+    (op1.is_constant() && is_null_pointer(to_constant_expr(op1))))
+  {
     return true;
+  }
 
   if(op0.id()==ID_plus)
   {
@@ -1572,9 +1580,12 @@ simplify_exprt::resultt<> simplify_exprt::simplify_inequality_rhs_is_constant(
     }
 
     // very special case for pointers
-    if(expr.id()==ID_equal &&
-       expr.op1().is_constant() &&
-       expr.op1().get(ID_value)==ID_NULL)
+    if(expr.id() != ID_equal)
+      return unchanged(expr);
+
+    const constant_exprt &op1_constant = to_constant_expr(expr.op1());
+
+    if(is_null_pointer(op1_constant))
     {
       // the address of an object is never NULL
 

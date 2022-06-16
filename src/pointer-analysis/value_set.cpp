@@ -11,11 +11,10 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "value_set.h"
 
-#include <ostream>
-
 #include <util/arith_tools.h>
 #include <util/byte_operators.h>
 #include <util/c_types.h>
+#include <util/expr_util.h>
 #include <util/format_expr.h>
 #include <util/format_type.h>
 #include <util/pointer_expr.h>
@@ -25,6 +24,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/simplify_expr.h>
 #include <util/std_code.h>
 #include <util/symbol_table.h>
+
+#include <ostream>
 
 #ifdef DEBUG
 #include <iostream>
@@ -308,7 +309,7 @@ bool value_sett::eval_pointer_offset(
   if(expr.id()==ID_pointer_offset)
   {
     const object_mapt reference_set =
-      get_value_set(to_unary_expr(expr).op(), ns, true);
+      get_value_set(to_pointer_offset_expr(expr).pointer(), ns, true);
 
     exprt new_expr;
     mp_integer previous_offset=0;
@@ -560,11 +561,12 @@ void value_sett::get_value_set_rec(
   else if(expr.is_constant())
   {
     // check if NULL
-    if(expr.get(ID_value)==ID_NULL &&
-       expr_type.id()==ID_pointer)
+    if(is_null_pointer(to_constant_expr(expr)))
     {
       insert(
-        dest, exprt(ID_null_object, to_pointer_type(expr_type).base_type()), 0);
+        dest,
+        exprt(ID_null_object, to_pointer_type(expr_type).base_type()),
+        mp_integer{0});
     }
     else if(expr_type.id()==ID_unsignedbv ||
             expr_type.id()==ID_signedbv)
@@ -593,7 +595,7 @@ void value_sett::get_value_set_rec(
       // integer-to-pointer
 
       if(op.is_zero())
-        insert(dest, exprt(ID_null_object, expr_type.subtype()), 0);
+        insert(dest, exprt(ID_null_object, expr_type.subtype()), mp_integer{0});
       else
       {
         // see if we have something for the integer
@@ -778,7 +780,7 @@ void value_sett::get_value_set_rec(
       dynamic_object.set_instance(location_number);
       dynamic_object.valid()=true_exprt();
 
-      insert(dest, dynamic_object, 0);
+      insert(dest, dynamic_object, mp_integer{0});
     }
     else if(statement==ID_cpp_new ||
             statement==ID_cpp_new_array)
@@ -791,7 +793,7 @@ void value_sett::get_value_set_rec(
       dynamic_object.set_instance(location_number);
       dynamic_object.valid()=true_exprt();
 
-      insert(dest, dynamic_object, 0);
+      insert(dest, dynamic_object, mp_integer{0});
     }
     else
       insert(dest, exprt(ID_unknown, original_type));
@@ -1092,7 +1094,7 @@ void value_sett::get_reference_set_rec(
       to_array_type(expr.type()).element_type().id() == ID_array)
       insert(dest, expr);
     else
-      insert(dest, expr, 0);
+      insert(dest, expr, mp_integer{0});
 
     return;
   }
@@ -1279,13 +1281,18 @@ void value_sett::assign(
           "rhs.type():\n" +
             rhs.type().pretty() + "\n" + "lhs.type():\n" + lhs.type().pretty());
 
-        const struct_typet &rhs_struct_type =
-          to_struct_type(ns.follow(rhs.type()));
+        const typet &followed = ns.follow(rhs.type());
 
-        const typet &rhs_subtype = rhs_struct_type.component_type(name);
-        rhs_member = simplify_expr(member_exprt{rhs, name, rhs_subtype}, ns);
+        if(followed.id() == ID_struct || followed.id() == ID_union)
+        {
+          const struct_union_typet &rhs_struct_union_type =
+            to_struct_union_type(followed);
 
-        assign(lhs_member, rhs_member, ns, true, add_to_sets);
+          const typet &rhs_subtype = rhs_struct_union_type.component_type(name);
+          rhs_member = simplify_expr(member_exprt{rhs, name, rhs_subtype}, ns);
+
+          assign(lhs_member, rhs_member, ns, true, add_to_sets);
+        }
       }
     }
   }
@@ -1608,8 +1615,7 @@ void value_sett::apply_code_rec(
   {
     // can be ignored, we don't expect side effects here
   }
-  else if(statement=="cpp_delete" ||
-          statement=="cpp_delete[]")
+  else if(statement == ID_cpp_delete || statement == ID_cpp_delete_array)
   {
     // does nothing
   }
@@ -1646,6 +1652,9 @@ void value_sett::apply_code_rec(
   else if(statement==ID_array_replace)
   {
   }
+  else if(statement == ID_array_equal)
+  {
+  }
   else if(statement==ID_assume)
   {
     guard(to_code_assume(code).assumption(), ns);
@@ -1666,6 +1675,9 @@ void value_sett::apply_code_rec(
   else if(statement==ID_dead)
   {
     // Ignore by default; could prune the value set.
+  }
+  else if(statement == ID_havoc_object)
+  {
   }
   else
   {

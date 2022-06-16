@@ -20,12 +20,9 @@ Author: Thomas Kiley
 #include "goto_functions.h"
 
 /// For outputting the GOTO program in a readable JSON format.
-/// \param _ns: the namespace to use to resolve names with
 /// \param _list_only: output only list of functions, but not their bodies
-show_goto_functions_jsont::show_goto_functions_jsont(
-  const namespacet &_ns,
-  bool _list_only)
-  : ns(_ns), list_only(_list_only)
+show_goto_functions_jsont::show_goto_functions_jsont(bool _list_only)
+  : list_only(_list_only)
 {}
 
 /// Walks through all of the functions in the program and returns a JSON object
@@ -69,23 +66,22 @@ json_objectt show_goto_functions_jsont::convert(
         json_objectt instruction_entry{
           {"instructionId", json_stringt(instruction.to_string())}};
 
-        if(instruction.get_code().source_location().is_not_nil())
+        if(instruction.code().source_location().is_not_nil())
         {
           instruction_entry["sourceLocation"] =
-            json(instruction.get_code().source_location());
+            json(instruction.code().source_location());
         }
 
         std::ostringstream instruction_builder;
-        function.body.output_instruction(
-          ns, function_name, instruction_builder, instruction);
+        instruction.output(instruction_builder);
 
         instruction_entry["instruction"]=
           json_stringt(instruction_builder.str());
 
-        if(!instruction.get_code().operands().empty())
+        if(!instruction.code().operands().empty())
         {
           json_arrayt operand_array;
-          for(const exprt &operand : instruction.get_code().operands())
+          for(const exprt &operand : instruction.code().operands())
           {
             json_objectt operand_object=
               no_comments_irep_converter.convert_from_irep(

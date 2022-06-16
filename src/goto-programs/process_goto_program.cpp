@@ -11,7 +11,8 @@ Author: Martin Brain, martin.brain@cs.ox.ac.uk
 
 #include "process_goto_program.h"
 
-#include <analyses/goto_check.h>
+#include <util/message.h>
+#include <util/options.h>
 
 #include <goto-programs/adjust_float_expressions.h>
 #include <goto-programs/goto_inline.h>
@@ -26,8 +27,9 @@ Author: Martin Brain, martin.brain@cs.ox.ac.uk
 #include <goto-programs/string_abstraction.h>
 #include <goto-programs/string_instrumentation.h>
 
-#include <util/message.h>
-#include <util/options.h>
+#include <ansi-c/goto_check_c.h>
+
+#include "goto_check.h"
 
 bool process_goto_program(
   goto_modelt &goto_model,
@@ -73,7 +75,8 @@ bool process_goto_program(
 
   // add generic checks
   log.status() << "Generic Property Instrumentation" << messaget::eom;
-  goto_check(options, goto_model, log.get_message_handler());
+  goto_check_c(options, goto_model, log.get_message_handler());
+  transform_assertions_assumptions(options, goto_model);
 
   // checks don't know about adjusted float expressions
   adjust_float_expressions(goto_model);

@@ -79,8 +79,8 @@ SCENARIO(
               instrend = main_function.body.instructions.end();
             instrit != instrend; ++instrit)
         {
-          for(auto it = instrit->get_code().depth_begin(),
-                   itend = instrit->get_code().depth_end();
+          for(auto it = instrit->code().depth_begin(),
+                   itend = instrit->code().depth_end();
               it != itend;
               ++it)
           {
@@ -92,15 +92,20 @@ SCENARIO(
             }
           }
 
-          for(auto it = instrit->guard.depth_begin(),
-                itend = instrit->guard.depth_end();
-              it != itend; ++it)
+          if(instrit->has_condition())
           {
-            if(it->id() == ID_dereference)
+            const auto &condition = instrit->condition();
+
+            for(auto it = condition.depth_begin(),
+                     itend = condition.depth_end();
+                it != itend;
+                ++it)
             {
-              const auto &deref = to_dereference_expr(*it);
-              REQUIRE(
-                safe_pointers.is_safe_dereference(deref, instrit));
+              if(it->id() == ID_dereference)
+              {
+                const auto &deref = to_dereference_expr(*it);
+                REQUIRE(safe_pointers.is_safe_dereference(deref, instrit));
+              }
             }
           }
         }

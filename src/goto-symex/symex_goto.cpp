@@ -91,7 +91,7 @@ static optionalt<renamedt<exprt, L2>> try_evaluate_pointer_comparison(
 
   if(
     skip_typecast(other_operand).id() != ID_address_of &&
-    (!constant_expr || constant_expr->get_value() != ID_NULL))
+    (!constant_expr || !is_null_pointer(*constant_expr)))
   {
     return {};
   }
@@ -233,7 +233,7 @@ void goto_symext::symex_goto(statet &state)
 
   const goto_programt::instructiont &instruction=*state.source.pc;
 
-  exprt new_guard = clean_expr(instruction.get_condition(), state, false);
+  exprt new_guard = clean_expr(instruction.condition(), state, false);
 
   renamedt<exprt, L2> renamed_guard = state.rename(std::move(new_guard), ns);
   renamed_guard = try_evaluate_pointer_comparisons(
@@ -340,7 +340,7 @@ void goto_symext::symex_goto(statet &state)
     DATA_INVARIANT(
       instruction.targets.size() > 0,
       "Instruction is an unconditional goto with no target: " +
-        instruction.get_code().pretty());
+        instruction.code().pretty());
     symex_transition(state, instruction.get_target(), true);
     return;
   }
@@ -383,13 +383,13 @@ void goto_symext::symex_goto(statet &state)
       "Tried to explore the other path of a branch, but the next "
       "instruction along that path is not the same as the instruction "
       "that we saved at the branch point. Saved instruction is " +
-        state.saved_target->get_code().pretty() +
+        state.saved_target->code().pretty() +
         "\nwe were intending "
         "to explore " +
-        new_state_pc->get_code().pretty() +
+        new_state_pc->code().pretty() +
         "\nthe "
         "instruction we think we saw on a previous path exploration is " +
-        state_pc->get_code().pretty());
+        state_pc->code().pretty());
     goto_programt::const_targett tmp = new_state_pc;
     new_state_pc = state_pc;
     state_pc = tmp;
@@ -471,7 +471,7 @@ void goto_symext::symex_goto(statet &state)
         state,
         taken_state,
         not_taken_state,
-        instruction.get_condition(),
+        instruction.condition(),
         new_guard,
         ns);
     }
@@ -572,7 +572,7 @@ void goto_symext::symex_unreachable_goto(statet &state)
     goto_state_list.emplace_back(state.source, std::move(new_state));
   };
 
-  if(instruction.get_condition().is_true())
+  if(instruction.condition().is_true())
   {
     if(instruction.is_backwards_goto())
     {
@@ -932,25 +932,19 @@ void goto_symext::loop_bound_exceeded(
   else
     negated_cond=not_exprt(guard);
 
+  if(symex_config.unwinding_assertions)
+  {
+    // Generate VCC for unwinding assertion.
+    vcc(
+      negated_cond,
+      "unwinding assertion loop " + std::to_string(loop_number),
+      state);
+  }
+
   if(!symex_config.partial_loops)
   {
-    if(symex_config.unwinding_assertions)
-    {
-      // Generate VCC for unwinding assertion.
-      vcc(
-        negated_cond,
-        "unwinding assertion loop " + std::to_string(loop_number),
-        state);
-    }
-
     // generate unwinding assumption, unless we permit partial loops
     symex_assume_l2(state, negated_cond);
-
-    if(symex_config.unwinding_assertions)
-    {
-      // add to state guard to prevent further assignments
-      state.guard.add(negated_cond);
-    }
   }
 }
 

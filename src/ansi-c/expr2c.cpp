@@ -7,16 +7,13 @@ Author: Daniel Kroening, kroening@kroening.com
 \*******************************************************************/
 
 #include "expr2c.h"
-
-#include <algorithm>
-#include <sstream>
-
-#include <map>
+#include "expr2c_class.h"
 
 #include <util/arith_tools.h>
 #include <util/c_types.h>
 #include <util/config.h>
 #include <util/cprover_prefix.h>
+#include <util/expr_util.h>
 #include <util/find_symbols.h>
 #include <util/fixedbv.h>
 #include <util/floatbv_expr.h>
@@ -33,7 +30,10 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "c_misc.h"
 #include "c_qualifiers.h"
-#include "expr2c_class.h"
+
+#include <algorithm>
+#include <map>
+#include <sstream>
 
 // clang-format off
 
@@ -1663,9 +1663,6 @@ std::string expr2ct::convert_symbol(const exprt &src)
     #endif
   }
 
-  if(src.id()==ID_next_symbol)
-    dest="NEXT("+dest+")";
-
   return dest;
 }
 
@@ -1983,9 +1980,7 @@ std::string expr2ct::convert_constant(
   }
   else if(type.id()==ID_pointer)
   {
-    if(
-      value == ID_NULL ||
-      (value == std::string(value.size(), '0') && config.ansi_c.NULL_is_zero))
+    if(is_null_pointer(src))
     {
       if(configuration.use_library_macros)
         dest = "NULL";
@@ -1994,23 +1989,11 @@ std::string expr2ct::convert_constant(
       if(to_pointer_type(type).base_type().id() != ID_empty)
         dest="(("+convert(type)+")"+dest+")";
     }
-    else if(src.operands().size() == 1)
+    else if(
+      value == "INVALID" || has_prefix(id2string(value), "INVALID-") ||
+      value == "NULL+offset")
     {
-      const auto &annotation = to_unary_expr(src).op();
-
-      if(annotation.id() == ID_constant)
-      {
-        const irep_idt &op_value = to_constant_expr(annotation).get_value();
-
-        if(op_value=="INVALID" ||
-           has_prefix(id2string(op_value), "INVALID-") ||
-           op_value=="NULL+offset")
-          dest=id2string(op_value);
-        else
-          return convert_norep(src, precedence);
-      }
-      else
-        return convert_with_precedence(annotation, precedence);
+      dest = id2string(value);
     }
     else
     {
@@ -2027,6 +2010,15 @@ std::string expr2ct::convert_constant(
     return convert_norep(src, precedence);
 
   return dest;
+}
+
+std::string expr2ct::convert_annotated_pointer_constant(
+  const annotated_pointer_constant_exprt &src,
+  unsigned &precedence)
+{
+  const auto &annotation = src.symbolic_pointer();
+
+  return convert_with_precedence(annotation, precedence);
 }
 
 /// To get the C-like representation of a given boolean value.
@@ -3855,9 +3847,6 @@ std::string expr2ct::convert_with_precedence(
   else if(src.id()==ID_symbol)
     return convert_symbol(src);
 
-  else if(src.id()==ID_next_symbol)
-    return convert_symbol(src);
-
   else if(src.id()==ID_nondet_symbol)
     return convert_nondet_symbol(to_nondet_symbol_expr(src));
 
@@ -3887,6 +3876,12 @@ std::string expr2ct::convert_with_precedence(
 
   else if(src.id()==ID_constant)
     return convert_constant(to_constant_expr(src), precedence);
+
+  else if(src.id() == ID_annotated_pointer_constant)
+  {
+    return convert_annotated_pointer_constant(
+      to_annotated_pointer_constant_expr(src), precedence);
+  }
 
   else if(src.id()==ID_string_constant)
     return '"' + MetaString(id2string(to_string_constant(src).get_value())) +
@@ -3920,9 +3915,8 @@ std::string expr2ct::convert_with_precedence(
     return convert_cond(src, precedence);
 
   else if(
-    src.id() == ID_overflow_unary_minus || src.id() == ID_overflow_minus ||
-    src.id() == ID_overflow_mult || src.id() == ID_overflow_plus ||
-    src.id() == ID_overflow_shl)
+    can_cast_expr<unary_minus_overflow_exprt>(src) ||
+    can_cast_expr<binary_overflow_exprt>(src))
   {
     return convert_overflow(src, precedence);
   }
@@ -4032,7 +4026,7 @@ optionalt<std::string> expr2ct::convert_function(const exprt &src)
 
   const auto function_entry = function_names.find(src.id());
   if(function_entry == function_names.end())
-    return nullopt;
+    return {};
 
   return convert_function(src, function_entry->second);
 }

@@ -54,15 +54,120 @@ public:
   virtual void output(const namespacet &ns, std::ostream &out) const=0;
 };
 
-typedef int range_spect;
-
-inline range_spect to_range_spect(const mp_integer &size)
+/// Data type to describe upper and lower bounds of the range of bits that a
+/// read or write access may affect. Each of the bounds may be not known or not
+/// constant, which is expressed using \ref range_spect::unknown.
+class range_spect
 {
-  assert(size.is_long());
-  mp_integer::llong_t ll=size.to_long();
-  assert(ll<=std::numeric_limits<range_spect>::max());
-  assert(ll>=std::numeric_limits<range_spect>::min());
-  return (range_spect)ll;
+public:
+  using value_type = int;
+
+  explicit range_spect(value_type v) : v(v)
+  {
+  }
+
+  static range_spect unknown()
+  {
+    return range_spect{-1};
+  }
+
+  bool is_unknown() const
+  {
+    return *this == unknown();
+  }
+
+  static range_spect to_range_spect(const mp_integer &size)
+  {
+    // The size need not fit into the analysis platform's width of a signed long
+    // (as an example, it could be an unsigned size_t max, or perhaps the source
+    // platform has much wider types than the analysis platform.
+    if(!size.is_long())
+      return range_spect::unknown();
+
+    mp_integer::llong_t ll = size.to_long();
+    if(
+      ll > std::numeric_limits<range_spect::value_type>::max() ||
+      ll < std::numeric_limits<range_spect::value_type>::min())
+    {
+      return range_spect::unknown();
+    }
+
+    return range_spect{(value_type)ll};
+  }
+
+  bool operator<(const range_spect &other) const
+  {
+    PRECONDITION(!is_unknown() && !other.is_unknown());
+    return v < other.v;
+  }
+
+  bool operator<=(const range_spect &other) const
+  {
+    PRECONDITION(!is_unknown() && !other.is_unknown());
+    return v <= other.v;
+  }
+
+  bool operator>(const range_spect &other) const
+  {
+    PRECONDITION(!is_unknown() && !other.is_unknown());
+    return v > other.v;
+  }
+
+  bool operator>=(const range_spect &other) const
+  {
+    PRECONDITION(!is_unknown() && !other.is_unknown());
+    return v >= other.v;
+  }
+
+  bool operator==(const range_spect &other) const
+  {
+    return v == other.v;
+  }
+
+  range_spect operator+(const range_spect &other) const
+  {
+    if(is_unknown() || other.is_unknown())
+      return range_spect::unknown();
+    return range_spect::to_range_spect(mp_integer{v} + mp_integer{other.v});
+  }
+
+  range_spect &operator+=(const range_spect &other)
+  {
+    range_spect result = *this + other;
+    v = result.v;
+    return *this;
+  }
+
+  range_spect operator-(const range_spect &other) const
+  {
+    if(is_unknown() || other.is_unknown())
+      return range_spect::unknown();
+    return range_spect::to_range_spect(mp_integer{v} - mp_integer{other.v});
+  }
+
+  range_spect &operator-=(const range_spect &other)
+  {
+    range_spect result = *this - other;
+    v = result.v;
+    return *this;
+  }
+
+  range_spect operator*(const range_spect &other) const
+  {
+    if(is_unknown() || other.is_unknown())
+      return range_spect::unknown();
+    return range_spect::to_range_spect(mp_integer{v} * mp_integer{other.v});
+  }
+
+private:
+  value_type v;
+  friend std::ostream &operator<<(std::ostream &, const range_spect &);
+};
+
+inline std::ostream &operator<<(std::ostream &os, const range_spect &r)
+{
+  os << r.v;
+  return os;
 }
 
 // each element x represents a range of bits [x.first, x.second.first)
@@ -147,6 +252,12 @@ public:
   {
     get_objects_rec(type);
   }
+
+  virtual void get_array_objects(
+    const irep_idt &,
+    goto_programt::const_targett,
+    get_modet,
+    const exprt &);
 
   void output(std::ostream &out) const;
 
@@ -286,6 +397,18 @@ public:
     target = _target;
 
     rw_range_sett::get_objects_rec(type);
+  }
+
+  void get_array_objects(
+    const irep_idt &_function,
+    goto_programt::const_targett _target,
+    get_modet mode,
+    const exprt &pointer) override
+  {
+    function = _function;
+    target = _target;
+
+    rw_range_sett::get_array_objects(_function, _target, mode, pointer);
   }
 
 protected:

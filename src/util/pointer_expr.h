@@ -329,7 +329,7 @@ public:
 template <>
 inline bool can_cast_expr<is_dynamic_object_exprt>(const exprt &base)
 {
-  return base.id() == ID_is_invalid_pointer;
+  return base.id() == ID_is_dynamic_object;
 }
 
 inline void validate_expr(const is_dynamic_object_exprt &value)
@@ -418,6 +418,8 @@ class object_address_exprt : public nullary_exprt
 public:
   explicit object_address_exprt(const symbol_exprt &);
 
+  object_address_exprt(const symbol_exprt &, pointer_typet);
+
   irep_idt object_identifier() const
   {
     return get(ID_identifier);
@@ -450,7 +452,7 @@ inline bool can_cast_expr<object_address_exprt>(const exprt &base)
 
 inline void validate_expr(const object_address_exprt &value)
 {
-  validate_operands(value, 1, "object_address must have one operand");
+  validate_operands(value, 0, "object_address must have zero operands");
 }
 
 /// \brief Cast an exprt to an \ref object_address_exprt
@@ -569,7 +571,7 @@ public:
   /// constructor for element addresses.
   /// The base address must be a pointer to an element.
   /// The index is expected to have an integer type.
-  element_address_exprt(exprt base, exprt index);
+  element_address_exprt(const exprt &base, exprt index);
 
   const pointer_typet &type() const
   {
@@ -792,6 +794,259 @@ inline const w_ok_exprt &to_w_ok_expr(const exprt &expr)
   const w_ok_exprt &ret = static_cast<const w_ok_exprt &>(expr);
   validate_expr(ret);
   return ret;
+}
+
+/// \brief Pointer-typed bitvector constant annotated with the pointer
+/// expression that the bitvector is the numeric representation of.
+/// This variation of a constant expression is only used in the context of a
+/// GOTO trace, to give both the numeric value and the symbolic value of a
+/// pointer, e.g. numeric value "0xabcd0004" but symbolic value
+/// "&some_object + 4". The numeric value is stored in the usual value slot and
+/// the symbolic value is accessed using the `symbolic_pointer` method
+/// introduced by this class.
+class annotated_pointer_constant_exprt : public unary_exprt
+{
+public:
+  annotated_pointer_constant_exprt(
+    const irep_idt &_value,
+    const exprt &_pointer)
+    : unary_exprt(ID_annotated_pointer_constant, _pointer, _pointer.type())
+  {
+    set_value(_value);
+  }
+
+  const irep_idt &get_value() const
+  {
+    return get(ID_value);
+  }
+
+  void set_value(const irep_idt &value)
+  {
+    set(ID_value, value);
+  }
+
+  exprt &symbolic_pointer()
+  {
+    return op0();
+  }
+
+  const exprt &symbolic_pointer() const
+  {
+    return op0();
+  }
+};
+
+template <>
+inline bool can_cast_expr<annotated_pointer_constant_exprt>(const exprt &base)
+{
+  return base.id() == ID_annotated_pointer_constant;
+}
+
+inline void validate_expr(const annotated_pointer_constant_exprt &value)
+{
+  validate_operands(
+    value, 1, "Annotated pointer constant must have one operand");
+}
+
+/// \brief Cast an exprt to an \ref annotated_pointer_constant_exprt
+///
+/// \a expr must be known to be \ref annotated_pointer_constant_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref annotated_pointer_constant_exprt
+inline const annotated_pointer_constant_exprt &
+to_annotated_pointer_constant_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_annotated_pointer_constant);
+  const annotated_pointer_constant_exprt &ret =
+    static_cast<const annotated_pointer_constant_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_annotated_pointer_constant_expr(const exprt &)
+inline annotated_pointer_constant_exprt &
+to_annotated_pointer_constant_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_annotated_pointer_constant);
+  annotated_pointer_constant_exprt &ret =
+    static_cast<annotated_pointer_constant_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// The offset (in bytes) of a pointer relative to the object
+class pointer_offset_exprt : public unary_exprt
+{
+public:
+  explicit pointer_offset_exprt(exprt pointer, typet type)
+    : unary_exprt(ID_pointer_offset, std::move(pointer), std::move(type))
+  {
+  }
+
+  exprt &pointer()
+  {
+    return op0();
+  }
+
+  const exprt &pointer() const
+  {
+    return op0();
+  }
+};
+
+template <>
+inline bool can_cast_expr<pointer_offset_exprt>(const exprt &base)
+{
+  return base.id() == ID_pointer_offset;
+}
+
+inline void validate_expr(const pointer_offset_exprt &value)
+{
+  validate_operands(value, 1, "pointer_offset must have one operand");
+  DATA_INVARIANT(
+    value.pointer().type().id() == ID_pointer,
+    "pointer_offset must have pointer-typed operand");
+}
+
+/// \brief Cast an exprt to a \ref pointer_offset_exprt
+///
+/// \a expr must be known to be \ref pointer_offset_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref pointer_offset_exprt
+inline const pointer_offset_exprt &to_pointer_offset_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_pointer_offset);
+  const pointer_offset_exprt &ret =
+    static_cast<const pointer_offset_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_pointer_offset_expr(const exprt &)
+inline pointer_offset_exprt &to_pointer_offset_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_pointer_offset);
+  pointer_offset_exprt &ret = static_cast<pointer_offset_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// A numerical identifier for the object a pointer points to
+class pointer_object_exprt : public unary_exprt
+{
+public:
+  explicit pointer_object_exprt(exprt pointer, typet type)
+    : unary_exprt(ID_pointer_object, std::move(pointer), std::move(type))
+  {
+  }
+
+  exprt &pointer()
+  {
+    return op0();
+  }
+
+  const exprt &pointer() const
+  {
+    return op0();
+  }
+};
+
+template <>
+inline bool can_cast_expr<pointer_object_exprt>(const exprt &base)
+{
+  return base.id() == ID_pointer_object;
+}
+
+inline void validate_expr(const pointer_object_exprt &value)
+{
+  validate_operands(value, 1, "pointer_object must have one operand");
+  DATA_INVARIANT(
+    value.pointer().type().id() == ID_pointer,
+    "pointer_object must have pointer-typed operand");
+}
+
+/// \brief Cast an exprt to a \ref pointer_object_exprt
+///
+/// \a expr must be known to be \ref pointer_object_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref pointer_object_exprt
+inline const pointer_object_exprt &to_pointer_object_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_pointer_object);
+  const pointer_object_exprt &ret =
+    static_cast<const pointer_object_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_pointer_object_expr(const exprt &)
+inline pointer_object_exprt &to_pointer_object_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_pointer_object);
+  pointer_object_exprt &ret = static_cast<pointer_object_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// Expression for finding the size (in bytes) of the object a pointer points
+/// to.
+class object_size_exprt : public unary_exprt
+{
+public:
+  explicit object_size_exprt(exprt pointer, typet type)
+    : unary_exprt(ID_object_size, std::move(pointer), std::move(type))
+  {
+  }
+
+  exprt &pointer()
+  {
+    return op();
+  }
+
+  const exprt &pointer() const
+  {
+    return op();
+  }
+};
+
+/// \brief Cast an exprt to a \ref object_size_exprt
+///
+/// \a expr must be known to be \ref object_size_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref object_size_exprt
+inline const object_size_exprt &to_object_size_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_object_size);
+  const object_size_exprt &ret = static_cast<const object_size_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_object_size_expr(const exprt &)
+inline object_size_exprt &to_object_size_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_object_size);
+  object_size_exprt &ret = static_cast<object_size_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+template <>
+inline bool can_cast_expr<object_size_exprt>(const exprt &base)
+{
+  return base.id() == ID_object_size;
+}
+
+inline void validate_expr(const object_size_exprt &value)
+{
+  validate_operands(value, 1, "Object size expression must have one operand.");
+  DATA_INVARIANT(
+    can_cast_type<pointer_typet>(value.pointer().type()),
+    "Object size expression must have pointer typed operand.");
 }
 
 #endif // CPROVER_UTIL_POINTER_EXPR_H

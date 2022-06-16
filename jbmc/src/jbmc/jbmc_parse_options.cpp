@@ -11,10 +11,6 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "jbmc_parse_options.h"
 
-#include <cstdlib> // exit()
-#include <iostream>
-#include <memory>
-
 #include <util/config.h>
 #include <util/exit_codes.h>
 #include <util/invariant.h>
@@ -22,17 +18,8 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/version.h>
 #include <util/xml.h>
 
-#include <langapi/language.h>
-
-#include <ansi-c/ansi_c_language.h>
-
-#include <goto-checker/all_properties_verifier.h>
-#include <goto-checker/all_properties_verifier_with_fault_localization.h>
-#include <goto-checker/all_properties_verifier_with_trace_storage.h>
-#include <goto-checker/stop_on_fail_verifier.h>
-#include <goto-checker/stop_on_fail_verifier_with_fault_localization.h>
-
 #include <goto-programs/adjust_float_expressions.h>
+#include <goto-programs/goto_check.h>
 #include <goto-programs/goto_convert_functions.h>
 #include <goto-programs/instrument_preconditions.h>
 #include <goto-programs/loop_ids.h>
@@ -45,18 +32,16 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <goto-programs/show_properties.h>
 #include <goto-programs/show_symbol_table.h>
 
+#include <ansi-c/ansi_c_language.h>
+#include <goto-checker/all_properties_verifier.h>
+#include <goto-checker/all_properties_verifier_with_fault_localization.h>
+#include <goto-checker/all_properties_verifier_with_trace_storage.h>
+#include <goto-checker/stop_on_fail_verifier.h>
+#include <goto-checker/stop_on_fail_verifier_with_fault_localization.h>
 #include <goto-instrument/full_slicer.h>
 #include <goto-instrument/nondet_static.h>
 #include <goto-instrument/reachability_slicer.h>
-
 #include <goto-symex/path_storage.h>
-
-#include <linking/static_lifetime_init.h>
-
-#include <pointer-analysis/add_failed_symbols.h>
-
-#include <langapi/mode.h>
-
 #include <java_bytecode/convert_java_nondet.h>
 #include <java_bytecode/java_bytecode_language.h>
 #include <java_bytecode/java_multi_path_symex_checker.h>
@@ -69,6 +54,14 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <java_bytecode/remove_java_new.h>
 #include <java_bytecode/replace_java_nondet.h>
 #include <java_bytecode/simple_method_stubbing.h>
+#include <langapi/language.h>
+#include <langapi/mode.h>
+#include <linking/static_lifetime_init.h>
+#include <pointer-analysis/add_failed_symbols.h>
+
+#include <cstdlib> // exit()
+#include <iostream>
+#include <memory>
 
 jbmc_parse_optionst::jbmc_parse_optionst(int argc, const char **argv)
   : parse_options_baset(
@@ -101,14 +94,10 @@ void jbmc_parse_optionst::set_default_options(optionst &options)
   options.set_option("assertions", true);
   options.set_option("assumptions", true);
   options.set_option("built-in-assertions", true);
-  options.set_option("lazy-methods", true);
-  options.set_option("pretty-names", true);
   options.set_option("propagation", true);
   options.set_option("refine-strings", true);
-  options.set_option("sat-preprocessor", true);
   options.set_option("simple-slice", true);
   options.set_option("simplify", true);
-  options.set_option("simplify-if", true);
   options.set_option("show-goto-symex-steps", false);
 
   // Other default
@@ -213,9 +202,6 @@ void jbmc_parse_optionst::get_command_line_options(optionst &options)
   if(cmdline.isset("depth"))
     options.set_option("depth", cmdline.get_value("depth"));
 
-  if(cmdline.isset("debug-level"))
-    options.set_option("debug-level", cmdline.get_value("debug-level"));
-
   if(cmdline.isset("unwindset"))
     options.set_option("unwindset", cmdline.get_value("unwindset"));
 
@@ -227,9 +213,6 @@ void jbmc_parse_optionst::get_command_line_options(optionst &options)
   options.set_option(
     "self-loops-to-assumptions",
     !cmdline.isset("no-self-loops-to-assumptions"));
-
-  // all checks supported by goto_check_java
-  PARSE_OPTIONS_GOTO_CHECK_JAVA(cmdline, options);
 
   // unwind loops in java enum static initialization
   if(cmdline.isset("java-unwind-enum-static"))
@@ -252,49 +235,15 @@ void jbmc_parse_optionst::get_command_line_options(optionst &options)
     "partial-loops",
     cmdline.isset("partial-loops"));
 
-  if(options.get_bool_option("partial-loops") &&
-     options.get_bool_option("unwinding-assertions"))
-  {
-    log.error() << "--partial-loops and --unwinding-assertions "
-                << "must not be given together" << messaget::eom;
-    exit(1); // should contemplate EX_USAGE from sysexits.h
-  }
-
   // remove unused equations
   options.set_option(
     "slice-formula",
     cmdline.isset("slice-formula"));
 
-  // simplify if conditions and branches
-  if(cmdline.isset("no-simplify-if"))
-    options.set_option("simplify-if", false);
-
   if(cmdline.isset("arrays-uf-always"))
     options.set_option("arrays-uf", "always");
   else if(cmdline.isset("arrays-uf-never"))
     options.set_option("arrays-uf", "never");
-
-  if(cmdline.isset("dimacs"))
-    options.set_option("dimacs", true);
-
-  if(cmdline.isset("refine-arrays"))
-  {
-    options.set_option("refine", true);
-    options.set_option("refine-arrays", true);
-  }
-
-  if(cmdline.isset("refine-arithmetic"))
-  {
-    options.set_option("refine", true);
-    options.set_option("refine-arithmetic", true);
-  }
-
-  if(cmdline.isset("refine"))
-  {
-    options.set_option("refine", true);
-    options.set_option("refine-arrays", true);
-    options.set_option("refine-arithmetic", true);
-  }
 
   if(cmdline.isset("no-refine-strings"))
     options.set_option("refine-strings", false);
@@ -321,84 +270,6 @@ void jbmc_parse_optionst::get_command_line_options(optionst &options)
       "cannot use --max-nondet-string-length with --no-refine-strings",
       "--max-nondet-string-length");
   }
-
-  if(cmdline.isset("max-node-refinement"))
-    options.set_option(
-      "max-node-refinement",
-      cmdline.get_value("max-node-refinement"));
-
-  // SMT Options
-
-  if(cmdline.isset("smt1"))
-  {
-    log.error() << "--smt1 is no longer supported" << messaget::eom;
-    exit(CPROVER_EXIT_USAGE_ERROR);
-  }
-
-  if(cmdline.isset("smt2"))
-    options.set_option("smt2", true);
-
-  if(cmdline.isset("fpa"))
-    options.set_option("fpa", true);
-
-  bool solver_set=false;
-
-  if(cmdline.isset("boolector"))
-  {
-    options.set_option("boolector", true), solver_set=true;
-    options.set_option("smt2", true);
-  }
-
-  if(cmdline.isset("mathsat"))
-  {
-    options.set_option("mathsat", true), solver_set=true;
-    options.set_option("smt2", true);
-  }
-
-  if(cmdline.isset("cvc4"))
-  {
-    options.set_option("cvc4", true), solver_set=true;
-    options.set_option("smt2", true);
-  }
-
-  if(cmdline.isset("yices"))
-  {
-    options.set_option("yices", true), solver_set=true;
-    options.set_option("smt2", true);
-  }
-
-  if(cmdline.isset("z3"))
-  {
-    options.set_option("z3", true), solver_set=true;
-    options.set_option("smt2", true);
-  }
-
-  if(cmdline.isset("smt2") && !solver_set)
-  {
-    if(cmdline.isset("outfile"))
-    {
-      // outfile and no solver should give standard compliant SMT-LIB
-      options.set_option("generic", true);
-    }
-    else
-    {
-      // the default smt2 solver
-      options.set_option("z3", true);
-    }
-  }
-
-  if(cmdline.isset("beautify"))
-    options.set_option("beautify", true);
-
-  if(cmdline.isset("no-sat-preprocessor"))
-    options.set_option("sat-preprocessor", false);
-
-  options.set_option(
-    "pretty-names",
-    !cmdline.isset("no-pretty-names"));
-
-  if(cmdline.isset("outfile"))
-    options.set_option("outfile", cmdline.get_value("outfile"));
 
   if(cmdline.isset("graphml-witness"))
   {
@@ -427,9 +298,6 @@ void jbmc_parse_optionst::get_command_line_options(optionst &options)
 
   PARSE_OPTIONS_GOTO_TRACE(cmdline, options);
 
-  if(cmdline.isset("no-lazy-methods"))
-    options.set_option("lazy-methods", false);
-
   if(cmdline.isset("symex-driven-lazy-loading"))
   {
     options.set_option("symex-driven-lazy-loading", true);
@@ -457,6 +325,14 @@ void jbmc_parse_optionst::get_command_line_options(optionst &options)
 
   if(cmdline.isset("show-goto-symex-steps"))
     options.set_option("show-goto-symex-steps", true);
+
+  if(cmdline.isset("smt1"))
+  {
+    log.error() << "--smt1 is no longer supported" << messaget::eom;
+    exit(CPROVER_EXIT_USAGE_ERROR);
+  }
+
+  parse_solver_options(cmdline, options);
 }
 
 /// invoke main modules
@@ -806,13 +682,7 @@ void jbmc_parse_optionst::process_goto_function(
       ui_message_handler);
   }
 
-  // add generic checks
-  goto_check_java(
-    function.get_function_id(),
-    function.get_goto_function(),
-    ns,
-    options,
-    ui_message_handler);
+  transform_assertions_assumptions(options, function.get_goto_function().body);
 
   // Replace Java new side effects
   remove_java_new(
@@ -841,7 +711,7 @@ void jbmc_parse_optionst::process_goto_function(
   if(using_symex_driven_loading)
   {
     // label the assertions
-    label_properties(goto_function.body);
+    label_properties(function.get_function_id(), goto_function.body);
 
     goto_function.body.update();
     function.compute_location_numbers();
@@ -962,18 +832,24 @@ bool jbmc_parse_optionst::process_goto_functions(
     log.status() << "Performing a forwards-backwards reachability slice"
                  << messaget::eom;
     if(cmdline.isset("property"))
-      reachability_slicer(goto_model, cmdline.get_values("property"), true);
+    {
+      reachability_slicer(
+        goto_model, cmdline.get_values("property"), true, ui_message_handler);
+    }
     else
-      reachability_slicer(goto_model, true);
+      reachability_slicer(goto_model, true, ui_message_handler);
   }
 
   if(cmdline.isset("reachability-slice"))
   {
     log.status() << "Performing a reachability slice" << messaget::eom;
     if(cmdline.isset("property"))
-      reachability_slicer(goto_model, cmdline.get_values("property"));
+    {
+      reachability_slicer(
+        goto_model, cmdline.get_values("property"), ui_message_handler);
+    }
     else
-      reachability_slicer(goto_model);
+      reachability_slicer(goto_model, ui_message_handler);
   }
 
   // full slice?
@@ -1068,7 +944,11 @@ void jbmc_parse_optionst::help()
     " --trace                      give a counterexample trace for failed properties\n" //NOLINT(*)
     " --stop-on-fail               stop analysis once a failed property is detected\n" // NOLINT(*)
     "                              (implies --trace)\n"
+    " --localize-faults            localize faults (experimental)\n"
     HELP_JAVA_TRACE_VALIDATION
+    "\n"
+    "Platform options:\n"
+    HELP_CONFIG_PLATFORM
     "\n"
     "Program representations:\n"
     " --show-parse-tree            show parse tree\n"
@@ -1082,9 +962,9 @@ void jbmc_parse_optionst::help()
     "Program instrumentation options:\n"
     " --no-assertions              ignore user assertions\n"
     " --no-assumptions             ignore user assumptions\n"
-    " --error-label label          check that label is unreachable\n"
     " --mm MM                      memory consistency model for concurrent programs\n" // NOLINT(*)
     HELP_REACHABILITY_SLICER
+    HELP_REACHABILITY_SLICER_FB
     " --full-slice                 run full slicer (experimental)\n" // NOLINT(*)
     "\n"
     "Java Bytecode frontend options:\n"
@@ -1108,20 +988,9 @@ void jbmc_parse_optionst::help()
     HELP_BMC
     "\n"
     "Backend options:\n"
-    " --object-bits n              number of bits used for object addresses\n"
-    " --dimacs                     generate CNF in DIMACS format\n"
-    " --beautify                   beautify the counterexample (greedy heuristic)\n" // NOLINT(*)
-    " --localize-faults            localize faults (experimental)\n"
-    " --smt1                       use default SMT1 solver (obsolete)\n"
-    " --smt2                       use default SMT2 solver (Z3)\n"
-    " --boolector                  use Boolector\n"
-    " --mathsat                    use MathSAT\n"
-    " --cvc4                       use CVC4\n"
-    " --yices                      use Yices\n"
-    " --z3                         use Z3\n"
-    " --refine                     use refinement procedure (experimental)\n"
+    HELP_CONFIG_BACKEND
+    HELP_SOLVER
     HELP_STRING_REFINEMENT
-    " --outfile filename           output formula to given file\n"
     " --arrays-uf-never            never turn arrays into uninterpreted functions\n" // NOLINT(*)
     " --arrays-uf-always           always turn arrays into uninterpreted functions\n" // NOLINT(*)
     "\n"

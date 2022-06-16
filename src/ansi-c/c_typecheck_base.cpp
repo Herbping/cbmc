@@ -262,6 +262,41 @@ void c_typecheck_baset::typecheck_redefinition_type(
   }
 }
 
+static bool is_instantiation_of_flexible_array(
+  const struct_typet &old_type,
+  const struct_typet &new_type)
+{
+  const struct_typet::componentst &old_components = old_type.components();
+  const struct_typet::componentst &new_components = new_type.components();
+
+  if(old_components.size() != new_components.size())
+    return false;
+
+  if(old_components.empty())
+    return false;
+
+  for(std::size_t i = 0; i < old_components.size() - 1; ++i)
+  {
+    if(old_components[i].type() != new_components[i].type())
+      return false;
+  }
+
+  if(
+    old_components.back().type().id() != ID_array ||
+    new_components.back().type().id() != ID_array)
+  {
+    return false;
+  }
+
+  const auto &old_array_type = to_array_type(old_components.back().type());
+  const auto &new_array_type = to_array_type(new_components.back().type());
+
+  return old_array_type.element_type() == new_array_type.element_type() &&
+         old_array_type.get_bool(ID_C_flexible_array_member) &&
+         new_array_type.get_bool(ID_C_flexible_array_member) &&
+         (old_array_type.size().is_nil() || old_array_type.size().is_zero());
+}
+
 void c_typecheck_baset::typecheck_redefinition_non_type(
   symbolt &old_symbol,
   symbolt &new_symbol)
@@ -446,6 +481,13 @@ void c_typecheck_baset::typecheck_redefinition_non_type(
       // int (*f) (int)=0;
       // int (*f) ();
     }
+    else if(
+      final_old.id() == ID_struct && final_new.id() == ID_struct &&
+      is_instantiation_of_flexible_array(
+        to_struct_type(final_old), to_struct_type(final_new)))
+    {
+      old_symbol.type = new_symbol.type;
+    }
     else
     {
       error().source_location=new_symbol.location;
@@ -521,34 +563,8 @@ void c_typecheck_baset::typecheck_function_body(symbolt &symbol)
   // set return type
   return_type=code_type.return_type();
 
-  unsigned anon_counter=0;
-
-  // Add the parameter declarations into the symbol table.
-  for(auto &p : code_type.parameters())
-  {
-    // may be anonymous
-    if(p.get_base_name().empty())
-    {
-      irep_idt base_name="#anon"+std::to_string(anon_counter++);
-      p.set_base_name(base_name);
-    }
-
-    // produce identifier
-    irep_idt base_name = p.get_base_name();
-    irep_idt identifier=id2string(symbol.name)+"::"+id2string(base_name);
-
-    p.set_identifier(identifier);
-
-    parameter_symbolt p_symbol;
-
-    p_symbol.type = p.type();
-    p_symbol.name=identifier;
-    p_symbol.base_name=base_name;
-    p_symbol.location = p.source_location();
-
-    symbolt *new_p_symbol;
-    move_symbol(p_symbol, new_p_symbol);
-  }
+  // Add the parameter declarations into the symbol table
+  add_parameters_to_symbol_table(symbol);
 
   // typecheck the body code
   typecheck_code(to_code(symbol.value));
@@ -725,6 +741,15 @@ void c_typecheck_baset::typecheck_declaration(
 
       typecheck_symbol(symbol);
 
+      auto check_history_expr = [&](const exprt expr) {
+        disallow_subexpr_by_id(
+          expr, ID_old, CPROVER_PREFIX "old is not allowed in preconditions.");
+        disallow_subexpr_by_id(
+          expr,
+          ID_loop_entry,
+          CPROVER_PREFIX "loop_entry is not allowed in preconditions.");
+      };
+
       // check the contract, if any
       symbolt &new_symbol = symbol_table.get_writeable_ref(identifier);
       if(new_symbol.type.id() == ID_code)
@@ -734,29 +759,36 @@ void c_typecheck_baset::typecheck_declaration(
         // available
         auto &code_type = to_code_with_contract_type(new_symbol.type);
 
+        for(auto &expr : code_type.requires_contract())
+        {
+          typecheck_spec_function_pointer_obeys_contract(expr);
+          check_history_expr(expr);
+        }
+
         for(auto &requires : code_type.requires())
         {
           typecheck_expr(requires);
           implicit_typecast_bool(requires);
-          disallow_subexpr_by_id(
-            requires,
-            ID_old,
-            CPROVER_PREFIX "old is not allowed in preconditions.");
-          disallow_subexpr_by_id(
-            requires,
-            ID_loop_entry,
-            CPROVER_PREFIX "loop_entry is not allowed in preconditions.");
+          check_history_expr(requires);
         }
 
         typecheck_spec_assigns(code_type.assigns());
 
+        const auto &return_type = code_type.return_type();
+        if(return_type.id() != ID_empty)
+          parameter_map[CPROVER_PREFIX "return_value"] = return_type;
+
+        for(auto &expr : code_type.ensures_contract())
+        {
+          typecheck_spec_function_pointer_obeys_contract(expr);
+          disallow_subexpr_by_id(
+            expr,
+            ID_loop_entry,
+            CPROVER_PREFIX "loop_entry is not allowed in postconditions.");
+        }
+
         if(!as_const(code_type).ensures().empty())
         {
-          const auto &return_type = code_type.return_type();
-
-          if(return_type.id() != ID_empty)
-            parameter_map[CPROVER_PREFIX "return_value"] = return_type;
-
           for(auto &ensures : code_type.ensures())
           {
             typecheck_expr(ensures);
@@ -766,11 +798,47 @@ void c_typecheck_baset::typecheck_declaration(
               ID_loop_entry,
               CPROVER_PREFIX "loop_entry is not allowed in postconditions.");
           }
-
-          if(return_type.id() != ID_empty)
-            parameter_map.erase(CPROVER_PREFIX "return_value");
         }
+
+        if(return_type.id() != ID_empty)
+          parameter_map.erase(CPROVER_PREFIX "return_value");
       }
     }
+  }
+}
+
+void c_typecheck_baset::add_parameters_to_symbol_table(symbolt &symbol)
+{
+  PRECONDITION(can_cast_type<code_typet>(symbol.type));
+
+  code_typet &code_type = to_code_type(symbol.type);
+
+  unsigned anon_counter = 0;
+
+  // Add the parameter declarations into the symbol table.
+  for(auto &p : code_type.parameters())
+  {
+    // may be anonymous
+    if(p.get_base_name().empty())
+    {
+      irep_idt base_name = "#anon" + std::to_string(anon_counter++);
+      p.set_base_name(base_name);
+    }
+
+    // produce identifier
+    irep_idt base_name = p.get_base_name();
+    irep_idt identifier = id2string(symbol.name) + "::" + id2string(base_name);
+
+    p.set_identifier(identifier);
+
+    parameter_symbolt p_symbol;
+
+    p_symbol.type = p.type();
+    p_symbol.name = identifier;
+    p_symbol.base_name = base_name;
+    p_symbol.location = p.source_location();
+
+    symbolt *new_p_symbol;
+    move_symbol(p_symbol, new_p_symbol);
   }
 }
