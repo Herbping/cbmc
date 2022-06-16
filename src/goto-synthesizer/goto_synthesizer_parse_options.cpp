@@ -289,7 +289,7 @@ void goto_synthesizer_parse_optionst::preprocess(
   }
 
   size_t loop_number = 0;
-  // first candidatge invairant for unannotated loop is true
+  // first candidate invairant for unannotated loop is true
   while(loop_number < natural_loops.loop_map.size())
   {
     loop_idt new_id = {.func_name = function_name, .loop_number = loop_number};

@@ -216,17 +216,15 @@ cext simple_verifiert::get_cex(
           last_lhs = step.full_lhs;
           // FIXME^^ for tmp_post
 
-          if(lhs != "a" && lhs != "b" && lhs != "c")
-            live_lhs.insert(step.full_lhs);
+          live_lhs.insert(step.full_lhs);
         }
 
         // if an existing object is assigned to a pointer
         if(!step.hidden && rhs.find("dynamic_object") != std::string::npos)
         {
           // get the binary representation of object_id :: pointer_offset
-          const irep_idt value =
-            to_constant_expr(step.full_lhs_value).get_value();
-          const typet &type = to_constant_expr(step.full_lhs_value).type();
+          const irep_idt value = step.full_lhs_value.get(ID_value);
+          const typet &type = step.full_lhs_value.type();
           const auto width = to_pointer_type(type).get_width();
           mp_integer int_value = bvrep2integer(value, width, false);
 

@@ -368,7 +368,7 @@ void code_contractst::check_apply_loop_contracts(
     loop_head, add_pragma_disable_assigns_check(pre_loop_head_instrs));
 
   // Generate havocing code for assignment targets.
-  havoc_assigns_targetst havoc_gen(to_havoc, ns, loop_end->loop_number);
+  havoc_assigns_targetst havoc_gen(to_havoc, ns, loop_end->loop_number, true);
   havoc_gen.append_full_havoc_code(loop_head_location, pre_loop_head_instrs);
 
   // Insert the second block of pre_loop_head_instrs: the havocing code.
