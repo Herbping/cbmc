@@ -54,10 +54,12 @@ SCENARIO(
   guard_managert guard_manager;
   std::size_t count = 0;
   auto fresh_name = [&count](const irep_idt &) { return count++; };
-  goto_symex_statet state{source,
-                          DEFAULT_MAX_FIELD_SENSITIVITY_ARRAY_SIZE,
-                          guard_manager,
-                          fresh_name};
+  goto_symex_statet state{
+    source,
+    DEFAULT_MAX_FIELD_SENSITIVITY_ARRAY_SIZE,
+    true,
+    guard_manager,
+    fresh_name};
 
   GIVEN("A value set in which pointer symbol `ptr1` only points to `&value1`")
   {
@@ -80,16 +82,14 @@ SCENARIO(
       }
     }
 
-    WHEN("Evaluating ptr1 == (long*)(short*)&value1")
+    WHEN("Evaluating ptr1 == (int*)(short*)&value1")
     {
       const signedbv_typet long_type{64};
       const signedbv_typet short_type{16};
-      const pointer_typet ptr_long_type = pointer_type(long_type);
       const pointer_typet ptr_short_type = pointer_type(short_type);
       const equal_exprt comparison{
         ptr1,
-        typecast_exprt{typecast_exprt{address1, ptr_short_type},
-                       ptr_long_type}};
+        typecast_exprt{typecast_exprt{address1, ptr_short_type}, ptr_type}};
       const renamedt<exprt, L2> renamed_comparison =
         state.rename(comparison, ns);
       auto result = try_evaluate_pointer_comparisons(
@@ -249,7 +249,7 @@ SCENARIO(
     // struct_symbol..pointer_field <- &value1
     {
       field_sensitivityt field_sensitivity{
-        DEFAULT_MAX_FIELD_SENSITIVITY_ARRAY_SIZE};
+        DEFAULT_MAX_FIELD_SENSITIVITY_ARRAY_SIZE, true};
       const exprt index_fs =
         field_sensitivity.apply(ns, state, member_l1.get(), true);
       value_set.assign(index_fs, address1_l1.get(), ns, false, false);

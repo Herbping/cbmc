@@ -1308,6 +1308,7 @@ public:
   equal_exprt(exprt _lhs, exprt _rhs)
     : binary_relation_exprt(std::move(_lhs), ID_equal, std::move(_rhs))
   {
+    PRECONDITION(lhs().type() == rhs().type());
   }
 
   static void check(
@@ -1416,9 +1417,7 @@ public:
         _array,
         ID_index,
         std::move(_index),
-        _array.type().has_subtype()
-          ? to_type_with_subtype(_array.type()).subtype()
-          : typet(ID_nil))
+        to_type_with_subtype(_array.type()).subtype())
   {
   }
 
@@ -1569,6 +1568,16 @@ public:
   array_typet &type()
   {
     return static_cast<array_typet &>(multi_ary_exprt::type());
+  }
+
+  array_exprt &with_source_location(const exprt &other) &
+  {
+    return exprt::with_source_location<array_exprt>(other);
+  }
+
+  array_exprt &&with_source_location(const exprt &other) &&
+  {
+    return std::move(*this).exprt::with_source_location<array_exprt>(other);
   }
 };
 

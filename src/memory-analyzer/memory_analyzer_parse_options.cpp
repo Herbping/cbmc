@@ -11,24 +11,24 @@ Author: Malte Mues <mail.mues@gmail.com>
 /// Commandline parser for the memory analyzer executing main work.
 
 #include "memory_analyzer_parse_options.h"
-#include "analyze_symbol.h"
 
-#include <algorithm>
-#include <fstream>
-
-#include <ansi-c/ansi_c_language.h>
+#include <util/config.h>
+#include <util/exit_codes.h>
+#include <util/message.h>
+#include <util/version.h>
 
 #include <goto-programs/goto_model.h>
 #include <goto-programs/read_goto_binary.h>
 #include <goto-programs/show_symbol_table.h>
 
+#include <ansi-c/ansi_c_language.h>
 #include <langapi/mode.h>
 
-#include <util/config.h>
-#include <util/exit_codes.h>
-#include <util/message.h>
-#include <util/string_utils.h>
-#include <util/version.h>
+#include "analyze_symbol.h"
+
+#include <algorithm>
+#include <fstream>
+#include <iostream>
 
 memory_analyzer_parse_optionst::memory_analyzer_parse_optionst(
   int argc,
@@ -53,7 +53,7 @@ int memory_analyzer_parse_optionst::doit()
 {
   if(cmdline.isset("version"))
   {
-    message.status() << CBMC_VERSION << '\n';
+    std::cout << CBMC_VERSION << '\n';
     return CPROVER_EXIT_SUCCESS;
   }
 
@@ -102,9 +102,6 @@ int memory_analyzer_parse_optionst::doit()
 
   std::string binary = cmdline.args.front();
 
-  const std::string symbol_list(cmdline.get_value("symbols"));
-  std::vector<std::string> result = split_string(symbol_list, ',', true, true);
-
   auto opt = read_goto_binary(binary, ui_message_handler);
 
   if(!opt.has_value())
@@ -130,12 +127,8 @@ int memory_analyzer_parse_optionst::doit()
     gdb_value_extractor.run_gdb_to_breakpoint(breakpoint);
   }
 
-  std::vector<irep_idt> result_ids(result.size());
-  std::transform(
-    result.begin(), result.end(), result_ids.begin(), [](std::string &name) {
-      return irep_idt{name};
-    });
-  gdb_value_extractor.analyze_symbols(result_ids);
+  gdb_value_extractor.analyze_symbols(
+    cmdline.get_comma_separated_values("symbols"));
 
   std::ofstream file;
 
@@ -172,7 +165,7 @@ int memory_analyzer_parse_optionst::doit()
 
 void memory_analyzer_parse_optionst::help()
 {
-  message.status()
+  std::cout
     << '\n'
     << banner_string("Memory-Analyzer", CBMC_VERSION) << '\n'
     << align_center_with_border("Copyright (C) 2019") << '\n'
@@ -193,5 +186,5 @@ void memory_analyzer_parse_optionst::help()
     << " --symtab-snapshot            output snapshot as symbol table\n"
     << " --output-file <file>         write snapshot to file\n"
     << " --json-ui                    output snapshot in JSON format\n"
-    << messaget::eom;
+    << '\n';
 }
