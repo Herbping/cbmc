@@ -25,6 +25,7 @@ Author: Qinheping Hu, qinhh@amazon.com
 
 #include "goto_synthesizer_enumerator.h"
 #include "goto_synthesizer_verifier.h"
+#include "loop_invariant_synthesizer.h"
 #include "synthesizer_utils.h"
 
 #ifdef _MSC_VER
