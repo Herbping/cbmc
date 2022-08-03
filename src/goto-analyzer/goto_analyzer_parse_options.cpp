@@ -711,11 +711,11 @@ void goto_analyzer_parse_optionst::help()
     "\n"
     "Abstract interpreter options:\n"
     // NOLINTNEXTLINE(whitespace/line_length)
+    " --legacy-ait                 recursion for function and one domain per location\n"
+    // NOLINTNEXTLINE(whitespace/line_length)
     " --recursive-interprocedural  use recursion to handle interprocedural reasoning\n"
     // NOLINTNEXTLINE(whitespace/line_length)
     " --three-way-merge            use VSD's three-way merge on return from function call\n"
-    // NOLINTNEXTLINE(whitespace/line_length)
-    " --legacy-ait                 recursion for function and one domain per location\n"
     // NOLINTNEXTLINE(whitespace/line_length)
     " --legacy-concurrent          legacy-ait with an extended fixed-point for concurrency\n"
     // NOLINTNEXTLINE(whitespace/line_length)
@@ -743,9 +743,8 @@ void goto_analyzer_parse_optionst::help()
     "\n"
     "Domain options:\n"
     " --constants                  a constant for each variable if possible\n"
-    " --intervals, --show-intervals\n"
-    "                              an interval for each variable\n"
-    " --non-null, --show-non-null  tracks which pointers are non-null\n"
+    " --intervals                  an interval for each variable\n"
+    " --non-null                   tracks which pointers are non-null\n"
     " --dependence-graph           data and control dependencies between instructions\n" // NOLINT(*)
     " --vsd, --variable-sensitivity\n"
     "                              a configurable non-relational domain\n"
@@ -756,8 +755,9 @@ void goto_analyzer_parse_optionst::help()
     "\n"
     "Storage options:\n"
     // NOLINTNEXTLINE(whitespace/line_length)
+    " --one-domain-per-location    stores a domain for each location reached (default)\n"
+    // NOLINTNEXTLINE(whitespace/line_length)
     " --one-domain-per-history     stores a domain for each history object created\n"
-    " --one-domain-per-location    stores a domain for each location reached\n"
     "\n"
     "Output options:\n"
     " --text file_name             output results in plain text to given file\n"

@@ -186,7 +186,8 @@ int goto_instrument_parse_optionst::doit()
         if(unwindset_given)
         {
           unwindset.parse_unwindset(
-            cmdline.get_values("unwindset"), ui_message_handler);
+            cmdline.get_comma_separated_values("unwindset"),
+            ui_message_handler);
         }
 
         bool unwinding_assertions=cmdline.isset("unwinding-assertions");
@@ -1819,7 +1820,6 @@ void goto_instrument_parse_optionst::help()
     " --nondet-static              add nondeterministic initialization of variables with static lifetime\n" // NOLINT(*)
     " --nondet-static-exclude e    same as nondet-static except for the variable e\n" //NOLINT(*)
     "                              (use multiple times if required)\n"
-    " --check-invariant function   instruments invariant checking function\n"
     " --function-enter <f>, --function-exit <f>, --branch <f>\n"
     "                              instruments a call to <f> at the beginning,\n" // NOLINT(*)
     "                              the exit, or a branch point, respectively\n"

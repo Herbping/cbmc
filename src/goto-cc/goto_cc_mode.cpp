@@ -64,6 +64,9 @@ void goto_cc_modet::help()
   " --native-compiler cmd       command to invoke as preprocessor/compiler\n"
   " --native-linker cmd         command to invoke as linker\n"
   " --native-assembler cmd      command to invoke as assembler (goto-as only)\n"
+  " --export-file-local-symbols\n"
+  "                             name-mangle and export file-local symbols\n"
+  " --mangle-suffix suffix      append suffix to exported file-local symbols\n"
   " --print-rejected-preprocessed-source file\n"
   "                             copy failing (preprocessed) source to file\n"
   " --object-bits               number of bits used for object addresses\n"
@@ -111,6 +114,15 @@ int goto_cc_modet::main(int argc, const char **argv)
     log.error() << "Out of memory" << messaget::eom;
     return EX_SOFTWARE;
   }
+
+  catch(const invalid_source_file_exceptiont &e)
+  {
+    messaget log{message_handler};
+    log.error().source_location = e.get_source_location();
+    log.error() << e.get_reason() << messaget::eom;
+    return EX_SOFTWARE;
+  }
+
   catch(const cprover_exception_baset &e)
   {
     messaget log{message_handler};
