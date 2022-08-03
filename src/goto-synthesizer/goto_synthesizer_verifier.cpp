@@ -140,41 +140,51 @@ cext simple_verifiert::get_cex(
   const source_locationt &loop_entry_loc,
   cext::cex_typet type)
 {
-  std::map<exprt, std::string> lhs_eval;
+  // values after havoc
+  std::map<exprt, std::string> havoc_eval;
   std::map<std::string, std::string> object_sizes;
   std::map<std::string, std::string> pointer_offsets;
+
+  // loop_entry values
   std::map<std::string, std::string> loop_entry_eval;
   std::map<std::string, std::string> loop_entry_offsets;
+
+  // alive variables
   std::set<exprt> live_lhs;
 
   std::string next_object_size = "";
-  bool have_seen_entry = false; // false if haven't touched the loop head
-  bool after_entry =
-    false; // true if have touched the first lone of the loop body
+  bool entered_loop = false;
+  bool in_base_case = true;
 
-  // for tmp_post case, the checked pointer is the late seen alive variable
-  exprt last_lhs;
+  //        ... preamble ...
+  // ,-     initialize loop_entry history vars;     <- loop_entry_eval/offsets
+  // |      entered_loop = false
+  // |      in_base_case = true;
+  // |      goto HEAD;
+  // |    STEP:
+  // |      assert (initial_invariant_val);
+  // |      in_base_case = false;
+  // |      havoc (assigns_set);                    <- havoc_eval/offsets/sizes
+  // |      assume (invariant_expr);
+  // `-     old_variant_val = decreases_clause_expr;
+  //    * HEAD:
+  // ,-     ... eval guard ...
+  // |      if (!guard)
+  // |        goto EXIT;
+  // `-     ... loop body ...
+  // ,-     entered_loop = true
+  // |      if (in_base_case)
+  // |        goto STEP;
+  // |      assert (invariant_expr);
+  // |      new_variant_val = decreases_clause_expr;
+  // |      assert (new_variant_val < old_variant_val);
+  // |      dead old_variant_val, new_variant_val;
+  // |      assume (false);
+  // `- * EXIT:
+  //        ... postamble ..
 
   for(const auto &step : goto_trace.steps)
   {
-    // stop record after the entry of the loop
-    if(!step.pc->source_location().is_nil())
-    {
-      const auto &source_location = step.pc->source_location();
-      if(
-        source_location.get_file() == loop_entry_loc.get_file() &&
-        source_location.get_function() == loop_entry_loc.get_function() &&
-        source_location.get_line() == loop_entry_loc.get_line())
-      {
-        have_seen_entry = true;
-      }
-      else
-      {
-        if(have_seen_entry && !step.hidden)
-          after_entry = true;
-      }
-    }
-
     switch(step.type)
     {
     case goto_trace_stept::typet::ASSERT:
@@ -194,7 +204,21 @@ cext simple_verifiert::get_cex(
         std::string lhs = from_expr(ns, identifier, step.full_lhs);
         std::string rhs = from_expr(ns, identifier, step.full_lhs_value);
 
-        // make the rhs pure number
+        if(lhs.rfind("__entered_loop", 0) == 0)
+          entered_loop = rhs == "TRUE" ? true : false;
+        if(lhs.rfind("__in_base_case", 0) == 0)
+          in_base_case = rhs == "FALSE" ? false : true;
+
+        std::cout << lhs << " = " << rhs << " : " << step.pc->is_loop_havoc()
+                  << "\n";
+        in_base_case = entered_loop;
+        entered_loop = in_base_case;
+
+        // skip hidden steps
+        if(step.hidden)
+          break;
+
+        // clean the numeric representation ended with "ul" or "u"
         if(
           rhs.length() > 2 && rhs.find("ul") == rhs.length() - 2 &&
           isdigit(rhs.at(rhs.length() - 3)))
@@ -204,23 +228,37 @@ cext simple_verifiert::get_cex(
           isdigit(rhs.at(rhs.length() - 2)))
           rhs = rhs.substr(0, rhs.length() - 1);
 
-        // update the alive varaibles
+        // alive variables
+        // 1. must be in the same function of the target loop;
+        // 2. alive before entering the target loop;
+        // 3. a pointer or a primitive variable;
+        // 4. not a pointer to union, whose lhs contain "(".
+        //    TODO: add support for union pointer
         if(
           step.pc->source_location().get_function() ==
             loop_entry_loc.get_function() &&
-          !after_entry && !step.hidden &&
+          !entered_loop &&
           (step.full_lhs.type().id() == ID_unsignedbv ||
            step.full_lhs.type().id() == ID_pointer) &&
           (lhs.find("(") == std::string::npos))
         {
-          last_lhs = step.full_lhs;
-          // FIXME^^ for tmp_post
-
           live_lhs.insert(step.full_lhs);
         }
 
-        // if an existing object is assigned to a pointer
-        if(!step.hidden && rhs.find("dynamic_object") != std::string::npos)
+        // A dynamic object will be create when we malloc for a pointer.
+        // c code:
+        //    ptr = malloc(1073741825)
+        // trace:
+        //    ptr = NULL
+        //    malloc_size = 1073741825ul
+        //    ptr = dynamic_object1   *
+        // * the postfix 1 is the object_id (1-based indexing)
+        // We build a map from dynamic_object to malloc size.
+        // Every time a dynamic_object is assigned to a pointer, we update
+        // the object size of the pointer by looking up id in the map.
+        // We update offset of the pointer by masking its address to compute
+        // the offset.
+        if(rhs.find("dynamic_object") != std::string::npos)
         {
           // get the binary representation of object_id :: pointer_offset
           const irep_idt value = step.full_lhs_value.get(ID_value);
@@ -229,39 +267,39 @@ cext simple_verifiert::get_cex(
           mp_integer int_value = bvrep2integer(value, width, false);
 
           // mask out object id
+          // 0x00 FF FF FF FF FF FF FF
           mp_integer mask = string2integer("72057594037927935");
-
           pointer_offsets[lhs] = integer2string(bitwise_and(mask, int_value));
 
-          // get the object_size
+          // get the object id (1-based indexing)
           size_t left = rhs.find("dynamic_object") + 14;
           size_t right = left;
+          // TODO: use isdigit below
           while(rhs[right] != ' ')
           {
             right++;
           }
+
+          // look up size in the map with object id (1-based indexing)
           object_sizes[lhs] = object_sizes[rhs.substr(left, right - left)];
         }
 
-        // record the evaluation and the loop_entry value
-        if(have_seen_entry && !after_entry)
+        // record the havoc values of primitive variables
+        if(step.pc->is_loop_havoc())
         {
-          lhs_eval[step.full_lhs] = rhs;
+          havoc_eval[step.full_lhs] = rhs;
         }
 
-        if(!have_seen_entry)
+        // record the loop_entry values
+        if(!entered_loop)
         {
           loop_entry_eval[lhs] = rhs;
+
+          // record offsets if lhs is a pointer
           if(step.full_lhs.type().id() == ID_pointer)
           {
             loop_entry_offsets[lhs] = pointer_offsets[lhs];
           }
-        }
-
-        // needed when we check tmp_post
-        if(!step.hidden)
-        {
-          last_lhs = step.full_lhs;
         }
 
         // store the object_size of dynamic_object by its index
@@ -315,7 +353,7 @@ cext simple_verifiert::get_cex(
   }
 
   return cext(
-    lhs_eval,
+    havoc_eval,
     object_sizes,
     pointer_offsets,
     loop_entry_eval,
@@ -431,11 +469,11 @@ bool simple_verifiert::verify()
     all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>
     verifier = util_make_unique<
       all_properties_verifier_with_trace_storaget<multi_path_symex_checkert>>(
-      options, ui_null_message_handler, parse_option.goto_model);
+      options, ui_message_handler, parse_option.goto_model);
 
   const resultt result = (*verifier)();
-  // show_goto_functions(parse_option.goto_model, ui_message_handler, false);
-  // verifier->report();
+  show_goto_functions(parse_option.goto_model, ui_message_handler, false);
+  verifier->report();
 
   if(result != resultt::PASS)
   {
