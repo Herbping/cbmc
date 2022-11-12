@@ -324,6 +324,16 @@ public:
     : unary_predicate_exprt(ID_is_dynamic_object, op)
   {
   }
+
+  exprt &address()
+  {
+    return op();
+  }
+
+  const exprt &address() const
+  {
+    return op();
+  }
 };
 
 template <>
@@ -354,6 +364,58 @@ inline is_dynamic_object_exprt &to_is_dynamic_object_expr(exprt &expr)
   DATA_INVARIANT(
     expr.operands().size() == 1, "is_dynamic_object must have one operand");
   return static_cast<is_dynamic_object_exprt &>(expr);
+}
+
+/// pointer_in_range(a, b, c) evaluates to true iff
+/// same_object(a, b, c) ∧ r_ok(a, offset(c)-offset(a)) ∧ a<=b ∧ b<=c
+/// Note that the last inequality is weak, i.e., b may be equal to c.
+class pointer_in_range_exprt : public ternary_exprt
+{
+public:
+  explicit pointer_in_range_exprt(exprt a, exprt b, exprt c)
+    : ternary_exprt(
+        ID_pointer_in_range,
+        std::move(a),
+        std::move(b),
+        std::move(c),
+        bool_typet())
+  {
+    PRECONDITION(op0().type().id() == ID_pointer);
+    PRECONDITION(op1().type().id() == ID_pointer);
+    PRECONDITION(op2().type().id() == ID_pointer);
+  }
+
+  // translate into equivalent conjunction
+  exprt lower() const;
+};
+
+template <>
+inline bool can_cast_expr<pointer_in_range_exprt>(const exprt &base)
+{
+  return base.id() == ID_pointer_in_range;
+}
+
+inline void validate_expr(const pointer_in_range_exprt &value)
+{
+  validate_operands(value, 3, "pointer_in_range must have three operands");
+}
+
+inline const pointer_in_range_exprt &to_pointer_in_range_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_pointer_in_range);
+  DATA_INVARIANT(
+    expr.operands().size() == 3, "pointer_in_range must have three operands");
+  return static_cast<const pointer_in_range_exprt &>(expr);
+}
+
+/// \copydoc to_pointer_in_range_expr(const exprt &)
+/// \ingroup gr_std_expr
+inline pointer_in_range_exprt &to_pointer_in_range_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_pointer_in_range);
+  DATA_INVARIANT(
+    expr.operands().size() == 3, "pointer_in_range must have one operand");
+  return static_cast<pointer_in_range_exprt &>(expr);
 }
 
 /// \brief Operator to return the address of an object
@@ -572,6 +634,11 @@ public:
   /// The base address must be a pointer to an element.
   /// The index is expected to have an integer type.
   element_address_exprt(const exprt &base, exprt index);
+
+  /// constructor for element addresses.
+  /// The base address must be a pointer to an element.
+  /// The index is expected to have an integer type.
+  element_address_exprt(exprt base, exprt index, pointer_typet);
 
   const pointer_typet &type() const
   {
@@ -1047,6 +1114,286 @@ inline void validate_expr(const object_size_exprt &value)
   DATA_INVARIANT(
     can_cast_type<pointer_typet>(value.pointer().type()),
     "Object size expression must have pointer typed operand.");
+}
+
+/// A predicate that indicates that a zero-terminated string
+/// starts at the given address.
+/// This is an experimental feature for CHC encodings -- do not use.
+class is_cstring_exprt : public unary_predicate_exprt
+{
+public:
+  explicit is_cstring_exprt(exprt address)
+    : unary_predicate_exprt(ID_is_cstring, std::move(address))
+  {
+    PRECONDITION(as_const(*this).address().type().id() == ID_pointer);
+  }
+
+  exprt &address()
+  {
+    return op0();
+  }
+
+  const exprt &address() const
+  {
+    return op0();
+  }
+};
+
+template <>
+inline bool can_cast_expr<is_cstring_exprt>(const exprt &base)
+{
+  return base.id() == ID_is_cstring;
+}
+
+inline void validate_expr(const is_cstring_exprt &value)
+{
+  validate_operands(value, 1, "is_cstring must have one operand");
+}
+
+/// \brief Cast an exprt to a \ref is_cstring_exprt
+///
+/// \a expr must be known to be \ref is_cstring_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref is_cstring_exprt
+inline const is_cstring_exprt &to_is_cstring_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_is_cstring);
+  const is_cstring_exprt &ret = static_cast<const is_cstring_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_is_cstring_expr(const exprt &)
+inline is_cstring_exprt &to_is_cstring_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_is_cstring);
+  is_cstring_exprt &ret = static_cast<is_cstring_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// An expression, akin to ISO C's strlen, that denotes the
+/// length of a zero-terminated string that starts at the
+/// given address. The trailing zero is not included in the count.
+/// This is an experimental feature for CHC encodings -- do not use.
+class cstrlen_exprt : public unary_exprt
+{
+public:
+  cstrlen_exprt(exprt address, typet type)
+    : unary_exprt(ID_cstrlen, std::move(address), std::move(type))
+  {
+    PRECONDITION(as_const(*this).address().type().id() == ID_pointer);
+  }
+
+  exprt &address()
+  {
+    return op0();
+  }
+
+  const exprt &address() const
+  {
+    return op0();
+  }
+};
+
+template <>
+inline bool can_cast_expr<cstrlen_exprt>(const exprt &base)
+{
+  return base.id() == ID_cstrlen;
+}
+
+inline void validate_expr(const cstrlen_exprt &value)
+{
+  validate_operands(value, 1, "cstrlen must have one operand");
+}
+
+/// \brief Cast an exprt to a \ref cstrlen_exprt
+///
+/// \a expr must be known to be \ref cstrlen_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref cstrlen_exprt
+inline const cstrlen_exprt &to_cstrlen_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_cstrlen);
+  const cstrlen_exprt &ret = static_cast<const cstrlen_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_cstrlen_expr(const exprt &)
+inline cstrlen_exprt &to_cstrlen_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_cstrlen);
+  cstrlen_exprt &ret = static_cast<cstrlen_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// A predicate that indicates that the object pointed to is live.
+/// This is an experimental feature for CHC encodings -- do not use.
+class live_object_exprt : public unary_predicate_exprt
+{
+public:
+  explicit live_object_exprt(exprt pointer)
+    : unary_predicate_exprt(ID_live_object, std::move(pointer))
+  {
+    PRECONDITION(as_const(*this).pointer().type().id() == ID_pointer);
+  }
+
+  exprt &pointer()
+  {
+    return op0();
+  }
+
+  const exprt &pointer() const
+  {
+    return op0();
+  }
+};
+
+template <>
+inline bool can_cast_expr<live_object_exprt>(const exprt &base)
+{
+  return base.id() == ID_live_object;
+}
+
+inline void validate_expr(const live_object_exprt &value)
+{
+  validate_operands(value, 1, "live_object must have one operand");
+}
+
+/// \brief Cast an exprt to a \ref live_object_exprt
+///
+/// \a expr must be known to be \ref live_object_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref live_object_exprt
+inline const live_object_exprt &to_live_object_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_live_object);
+  const live_object_exprt &ret = static_cast<const live_object_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_live_object_expr(const exprt &)
+inline live_object_exprt &to_live_object_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_live_object);
+  live_object_exprt &ret = static_cast<live_object_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// A predicate that indicates that the object pointed to is writeable.
+/// This is an experimental feature for CHC encodings -- do not use.
+class writeable_object_exprt : public unary_predicate_exprt
+{
+public:
+  explicit writeable_object_exprt(exprt pointer)
+    : unary_predicate_exprt(ID_writeable_object, std::move(pointer))
+  {
+    PRECONDITION(as_const(*this).pointer().type().id() == ID_pointer);
+  }
+
+  exprt &pointer()
+  {
+    return op0();
+  }
+
+  const exprt &pointer() const
+  {
+    return op0();
+  }
+};
+
+template <>
+inline bool can_cast_expr<writeable_object_exprt>(const exprt &base)
+{
+  return base.id() == ID_writeable_object;
+}
+
+inline void validate_expr(const writeable_object_exprt &value)
+{
+  validate_operands(value, 1, "writeable_object must have one operand");
+}
+
+/// \brief Cast an exprt to a \ref writeable_object_exprt
+///
+/// \a expr must be known to be \ref writeable_object_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref writeable_object_exprt
+inline const writeable_object_exprt &to_writeable_object_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_writeable_object);
+  const writeable_object_exprt &ret =
+    static_cast<const writeable_object_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_writeable_object_expr(const exprt &)
+inline writeable_object_exprt &to_writeable_object_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_writeable_object);
+  writeable_object_exprt &ret = static_cast<writeable_object_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// A predicate that indicates that the objects pointed to are distinct
+class separate_exprt : public multi_ary_exprt
+{
+public:
+  explicit separate_exprt(exprt::operandst __operands)
+    : multi_ary_exprt(ID_separate, std::move(__operands), bool_typet())
+  {
+  }
+
+  separate_exprt(exprt __op0, exprt __op1)
+    : multi_ary_exprt(
+        std::move(__op0),
+        ID_separate,
+        std::move(__op1),
+        bool_typet())
+  {
+  }
+};
+
+template <>
+inline bool can_cast_expr<separate_exprt>(const exprt &base)
+{
+  return base.id() == ID_separate;
+}
+
+inline void validate_expr(const separate_exprt &value)
+{
+}
+
+/// \brief Cast an exprt to a \ref separate_exprt
+///
+/// \a expr must be known to be \ref separate_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref separate_exprt
+inline const separate_exprt &to_separate_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_separate);
+  const separate_exprt &ret = static_cast<const separate_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_separate_expr(const exprt &)
+inline separate_exprt &to_separate_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_separate);
+  separate_exprt &ret = static_cast<separate_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
 }
 
 #endif // CPROVER_UTIL_POINTER_EXPR_H

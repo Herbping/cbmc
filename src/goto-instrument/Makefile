@@ -17,10 +17,22 @@ SRC = accelerate/accelerate.cpp \
       branch.cpp \
       call_sequences.cpp \
       contracts/contracts.cpp \
+      contracts/dynamic-frames/dfcc_utils.cpp \
+      contracts/dynamic-frames/dfcc_library.cpp \
+      contracts/dynamic-frames/dfcc_is_fresh.cpp \
+      contracts/dynamic-frames/dfcc_is_freeable.cpp \
+      contracts/dynamic-frames/dfcc_instrument.cpp \
+      contracts/dynamic-frames/dfcc_spec_functions.cpp \
+      contracts/dynamic-frames/dfcc_contract_functions.cpp \
+      contracts/dynamic-frames/dfcc_wrapper_program.cpp \
+      contracts/dynamic-frames/dfcc_contract_handler.cpp \
+      contracts/dynamic-frames/dfcc_swap_and_wrap.cpp \
+      contracts/dynamic-frames/dfcc.cpp \
       contracts/havoc_assigns_clause_targets.cpp \
       contracts/instrument_spec_assigns.cpp \
       contracts/memory_predicates.cpp \
       contracts/utils.cpp \
+      contracts/inlining_decorator.cpp \
       concurrency.cpp \
       count_eloc.cpp \
       cover.cpp \
@@ -68,6 +80,9 @@ SRC = accelerate/accelerate.cpp \
       source_lines.cpp \
       splice_call.cpp \
       stack_depth.cpp \
+      synthesizer/enumerative_loop_invariant_synthesizer.cpp \
+      synthesizer/expr_enumerator.cpp \
+      synthesizer/synthesizer_utils.cpp \
       thread_instrumentation.cpp \
       undefined_functions.cpp \
       uninitialized.cpp \

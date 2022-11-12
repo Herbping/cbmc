@@ -149,7 +149,8 @@ exprt c_typecheck_baset::do_initializer_rec(
 
     string_constantt tmp1=to_string_constant(value);
     // adjust char type
-    tmp1.type().subtype() = to_array_type(full_type).element_type();
+    to_array_type(tmp1.type()).element_type() =
+      to_array_type(full_type).element_type();
 
     exprt tmp2=tmp1.to_array_expr();
 
@@ -271,7 +272,10 @@ void c_typecheck_baset::designator_enter(
 
     for(const auto &c : struct_type.components())
     {
-      if(c.type().id() != ID_code && !c.get_is_padding())
+      DATA_INVARIANT(
+        c.type().id() != ID_code, "struct member must not be of code type");
+
+      if(!c.get_is_padding())
       {
         entry.subtype = c.type();
         break;
@@ -456,9 +460,12 @@ exprt::operandst::const_iterator c_typecheck_baset::do_designated_initializer(
 
       DATA_INVARIANT(index<components.size(),
                      "member designator is bounded by components size");
-      DATA_INVARIANT(components[index].type().id()!=ID_code &&
-                     !components[index].get_is_padding(),
-                     "member designator points at data member");
+      DATA_INVARIANT(
+        components[index].type().id() != ID_code,
+        "struct member must not be of code type");
+      DATA_INVARIANT(
+        !components[index].get_is_padding(),
+        "member designator points at non-padding member");
 
       dest=&(dest->operands()[index]);
     }
@@ -736,8 +743,7 @@ void c_typecheck_baset::increment_designator(designatort &designator)
             (components[entry.index].get_is_padding() ||
              (components[entry.index].get_anonymous() &&
               components[entry.index].type().id() != ID_struct_tag &&
-              components[entry.index].type().id() != ID_union_tag) ||
-             components[entry.index].type().id() == ID_code))
+              components[entry.index].type().id() != ID_union_tag)))
       {
         entry.index++;
       }

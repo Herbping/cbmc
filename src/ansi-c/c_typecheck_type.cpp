@@ -84,7 +84,7 @@ void c_typecheck_baset::typecheck_type(typet &type)
     typecheck_array_type(to_array_type(type));
   else if(type.id()==ID_pointer)
   {
-    typecheck_type(type.subtype());
+    typecheck_type(to_pointer_type(type).base_type());
     INVARIANT(
       to_bitvector_type(type).get_width() > 0, "pointers must have width");
   }
@@ -126,9 +126,9 @@ void c_typecheck_baset::typecheck_type(typet &type)
 
     // A list of all modes is at
     // http://www.delorie.com/gnu/docs/gcc/gccint_53.html
-    typecheck_type(type.subtype());
+    typecheck_type(to_type_with_subtype(type).subtype());
 
-    typet underlying_type=type.subtype();
+    typet underlying_type = to_type_with_subtype(type).subtype();
 
     // gcc allows this, but clang doesn't; it's a compiler hint only,
     // but we'll try to interpret it the GCC way
@@ -219,36 +219,42 @@ void c_typecheck_baset::typecheck_type(typet &type)
       else if(gcc_attr_mode == "__V2SI__") // vector of 2 ints, deprecated
       {
         if(is_signed)
-          result=vector_typet(
-            signed_int_type(),
-            from_integer(2, size_type()));
+        {
+          result = vector_typet(
+            c_index_type(), signed_int_type(), from_integer(2, size_type()));
+        }
         else
-          result=vector_typet(
-            unsigned_int_type(),
-            from_integer(2, size_type()));
+        {
+          result = vector_typet(
+            c_index_type(), unsigned_int_type(), from_integer(2, size_type()));
+        }
       }
       else if(gcc_attr_mode == "__V4SI__") // vector of 4 ints, deprecated
       {
         if(is_signed)
-          result=vector_typet(
-            signed_int_type(),
-            from_integer(4, size_type()));
+        {
+          result = vector_typet(
+            c_index_type(), signed_int_type(), from_integer(4, size_type()));
+        }
         else
-          result=vector_typet(
-            unsigned_int_type(),
-            from_integer(4, size_type()));
+        {
+          result = vector_typet(
+            c_index_type(), unsigned_int_type(), from_integer(4, size_type()));
+        }
       }
       else // give up, just use subtype
-        result=type.subtype();
+        result = to_type_with_subtype(type).subtype();
 
       // save the location
       result.add_source_location()=type.source_location();
 
-      if(type.subtype().id()==ID_c_enum_tag)
+      if(to_type_with_subtype(type).subtype().id() == ID_c_enum_tag)
       {
-        const irep_idt &tag_name=
-          to_c_enum_tag_type(type.subtype()).get_identifier();
-        symbol_table.get_writeable_ref(tag_name).type.subtype()=result;
+        const irep_idt &tag_name =
+          to_c_enum_tag_type(to_type_with_subtype(type).subtype())
+            .get_identifier();
+        to_type_with_subtype(symbol_table.get_writeable_ref(tag_name).type)
+          .subtype() = result;
       }
 
       type=result;
@@ -264,15 +270,19 @@ void c_typecheck_baset::typecheck_type(typet &type)
       else if(gcc_attr_mode == "__TF__") // 128 bits
         result=gcc_float128_type();
       else if(gcc_attr_mode == "__V2SF__") // deprecated vector of 2 floats
-        result=vector_typet(float_type(), from_integer(2, size_type()));
+        result = vector_typet(
+          c_index_type(), float_type(), from_integer(2, size_type()));
       else if(gcc_attr_mode == "__V2DF__") // deprecated vector of 2 doubles
-        result=vector_typet(double_type(), from_integer(2, size_type()));
+        result = vector_typet(
+          c_index_type(), double_type(), from_integer(2, size_type()));
       else if(gcc_attr_mode == "__V4SF__") // deprecated vector of 4 floats
-        result=vector_typet(float_type(), from_integer(4, size_type()));
+        result = vector_typet(
+          c_index_type(), float_type(), from_integer(4, size_type()));
       else if(gcc_attr_mode == "__V4DF__") // deprecated vector of 4 doubles
-        result=vector_typet(double_type(), from_integer(4, size_type()));
+        result = vector_typet(
+          c_index_type(), double_type(), from_integer(4, size_type()));
       else // give up, just use subtype
-        result=type.subtype();
+        result = to_type_with_subtype(type).subtype();
 
       // save the location
       result.add_source_location()=type.source_location();
@@ -291,7 +301,7 @@ void c_typecheck_baset::typecheck_type(typet &type)
       else if(gcc_attr_mode == "__TC__") // 128 bits
         result=gcc_float128_type();
       else // give up, just use subtype
-        result=type.subtype();
+        result = to_type_with_subtype(type).subtype();
 
       // save the location
       result.add_source_location()=type.source_location();
@@ -425,7 +435,7 @@ void c_typecheck_baset::typecheck_custom_type(typet &type)
 void c_typecheck_baset::typecheck_code_type(code_typet &type)
 {
   // the return type is still 'subtype()'
-  type.return_type()=type.subtype();
+  type.return_type() = to_type_with_subtype(type).subtype();
   type.remove_subtype();
 
   code_typet::parameterst &parameters=type.parameters();
@@ -522,13 +532,10 @@ void c_typecheck_baset::typecheck_code_type(code_typet &type)
 
 void c_typecheck_baset::typecheck_array_type(array_typet &type)
 {
-  exprt &size=type.size();
-  const source_locationt size_source_location = size.find_source_location();
-
-  // check subtype
+  // Typecheck the element type.
   typecheck_type(type.element_type());
 
-  // we don't allow void as subtype
+  // We don't allow void as the element type.
   if(type.element_type().id() == ID_empty)
   {
     error().source_location=type.source_location();
@@ -536,7 +543,7 @@ void c_typecheck_baset::typecheck_array_type(array_typet &type)
     throw 0;
   }
 
-  // we don't allow incomplete structs or unions as subtype
+  // We don't allow incomplete structs or unions as element type.
   const typet &followed_subtype = follow(type.element_type());
 
   if(
@@ -549,7 +556,7 @@ void c_typecheck_baset::typecheck_array_type(array_typet &type)
     throw 0;
   }
 
-  // we don't allow functions as subtype
+  // We don't allow functions as element type.
   if(type.element_type().id() == ID_code)
   {
     // ISO/IEC 9899 6.7.5.2
@@ -558,10 +565,14 @@ void c_typecheck_baset::typecheck_array_type(array_typet &type)
     throw 0;
   }
 
-  // check size, if any
+  // We add the index type.
+  type.index_type_nonconst() = c_index_type();
 
-  if(size.is_not_nil())
+  // Check the array size, if given.
+  if(type.is_complete())
   {
+    exprt &size = type.size();
+    const source_locationt size_source_location = size.find_source_location();
     typecheck_expr(size);
     make_index_type(size);
 
@@ -663,7 +674,7 @@ void c_typecheck_baset::typecheck_vector_type(typet &type)
 
   typecheck_expr(size);
 
-  typet subtype = type.subtype();
+  typet subtype = to_type_with_subtype(type).subtype();
   typecheck_type(subtype);
 
   // we are willing to combine 'vector' with various
@@ -742,7 +753,8 @@ void c_typecheck_baset::typecheck_vector_type(typet &type)
   s /= *sub_size;
 
   // produce the type with ID_vector
-  vector_typet new_type(subtype, from_integer(s, signed_size_type()));
+  vector_typet new_type(
+    c_index_type(), subtype, from_integer(s, signed_size_type()));
   new_type.add_source_location() = source_location;
   new_type.size().add_source_location() = source_location;
   type = new_type;
@@ -950,6 +962,16 @@ void c_typecheck_baset::typecheck_compound_body(
           error().source_location = source_location;
           error() << "void-typed member not permitted" << eom;
           throw 0;
+        }
+
+        if(
+          new_component.type().id() == ID_c_bit_field &&
+          to_c_bit_field_type(new_component.type()).get_width() == 0 &&
+          !new_component.get_name().empty())
+        {
+          throw invalid_source_file_exceptiont{
+            "zero-width bit-field with declarator not permitted",
+            source_location};
         }
 
         components.push_back(new_component);
@@ -1362,7 +1384,7 @@ void c_typecheck_baset::typecheck_c_enum_type(typet &type)
   for(const auto &member : enum_members)
     body.push_back(member);
 
-  enum_tag_symbol.type.subtype()=underlying_type;
+  enum_tag_symbol.type.add_subtype() = underlying_type;
 
   // is it in the symbol table already?
   symbol_tablet::symbolst::const_iterator s_it=
@@ -1645,7 +1667,7 @@ void c_typecheck_baset::adjust_function_parameter(typet &type) const
   if(type.id()==ID_array)
   {
     source_locationt source_location=type.source_location();
-    type=pointer_type(type.subtype());
+    type = pointer_type(to_array_type(type).element_type());
     type.add_source_location()=source_location;
   }
   else if(type.id()==ID_code)

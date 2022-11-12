@@ -224,7 +224,7 @@ protected:
   void conversion_check(const exprt &, const guardt &);
   void float_overflow_check(const exprt &, const guardt &);
   void nan_check(const exprt &, const guardt &);
-  optionalt<exprt> rw_ok_check(exprt);
+  optionalt<exprt> expand_pointer_checks(exprt);
 
   std::string array_name(const exprt &);
 
@@ -618,8 +618,8 @@ void goto_check_ct::mod_by_zero_check(
 
   // add divison by zero subgoal
 
-  exprt zero = from_integer(0, expr.op1().type());
-  const notequal_exprt inequality(expr.op1(), std::move(zero));
+  exprt zero = from_integer(0, expr.divisor().type());
+  const notequal_exprt inequality(expr.divisor(), std::move(zero));
 
   add_guarded_property(
     inequality,
@@ -1454,15 +1454,8 @@ void goto_check_ct::pointer_primitive_check(
       return;
   }
 
-  const auto size_of_expr_opt =
-    size_of_expr(to_pointer_type(pointer.type()).base_type(), ns);
-
-  const exprt size = !size_of_expr_opt.has_value()
-                       ? from_integer(1, size_type())
-                       : size_of_expr_opt.value();
-
-  const conditionst &conditions =
-    get_pointer_points_to_valid_memory_conditions(pointer, size);
+  const conditionst &conditions = get_pointer_points_to_valid_memory_conditions(
+    pointer, from_integer(0, size_type()));
   for(const auto &c : conditions)
   {
     add_guarded_property(
@@ -1724,20 +1717,25 @@ void goto_check_ct::add_guarded_property(
 
   if(assertions.insert(std::make_pair(src_expr, guarded_expr)).second)
   {
-    auto t = new_code.add(
-      enable_assert_to_assume ? goto_programt::make_assumption(
-                                  std::move(guarded_expr), source_location)
-                              : goto_programt::make_assertion(
-                                  std::move(guarded_expr), source_location));
-
     std::string source_expr_string;
     get_language_from_mode(mode)->from_expr(src_expr, source_expr_string, ns);
 
-    t->source_location_nonconst().set_comment(
-      comment + " in " + source_expr_string);
-    t->source_location_nonconst().set_property_class(property_class);
+    source_locationt annotated_location = source_location;
+    annotated_location.set_comment(comment + " in " + source_expr_string);
+    annotated_location.set_property_class(property_class);
 
-    add_all_disable_named_check_pragmas(t->source_location_nonconst());
+    add_all_disable_named_check_pragmas(annotated_location);
+
+    if(enable_assert_to_assume)
+    {
+      new_code.add(goto_programt::make_assumption(
+        std::move(guarded_expr), annotated_location));
+    }
+    else
+    {
+      new_code.add(goto_programt::make_assertion(
+        std::move(guarded_expr), annotated_location));
+    }
   }
 }
 
@@ -1992,14 +1990,14 @@ void goto_check_ct::check(const exprt &expr)
   check_rec(expr, identity);
 }
 
-/// expand the r_ok, w_ok and rw_ok predicates
-optionalt<exprt> goto_check_ct::rw_ok_check(exprt expr)
+/// expand the r_ok, w_ok, rw_ok, pointer_in_range predicates
+optionalt<exprt> goto_check_ct::expand_pointer_checks(exprt expr)
 {
   bool modified = false;
 
   for(auto &op : expr.operands())
   {
-    auto op_result = rw_ok_check(op);
+    auto op_result = expand_pointer_checks(op);
     if(op_result.has_value())
     {
       op = *op_result;
@@ -2025,6 +2023,22 @@ optionalt<exprt> goto_check_ct::rw_ok_check(exprt expr)
     if(enable_simplify)
       simplify(c, ns);
     return c;
+  }
+  else if(expr.id() == ID_pointer_in_range)
+  {
+    const auto &pointer_in_range_expr = to_pointer_in_range_expr(expr);
+
+    auto expanded = pointer_in_range_expr.lower();
+
+    // rec. call
+    auto expanded_rec_opt = expand_pointer_checks(expanded);
+    if(expanded_rec_opt.has_value())
+      expanded = *expanded_rec_opt;
+
+    if(enable_simplify)
+      simplify(expanded, ns);
+
+    return expanded;
   }
   else if(modified)
     return std::move(expr);
@@ -2104,15 +2118,21 @@ void goto_check_ct::goto_check(
     {
       if(std::find(i.labels.begin(), i.labels.end(), label) != i.labels.end())
       {
-        auto t = new_code.add(
-          enable_assert_to_assume
-            ? goto_programt::make_assumption(false_exprt{}, i.source_location())
-            : goto_programt::make_assertion(
-                false_exprt{}, i.source_location()));
+        source_locationt annotated_location = i.source_location();
+        annotated_location.set_property_class("error label");
+        annotated_location.set_comment("error label " + label);
+        annotated_location.set("user-provided", true);
 
-        t->source_location_nonconst().set_property_class("error label");
-        t->source_location_nonconst().set_comment("error label " + label);
-        t->source_location_nonconst().set("user-provided", true);
+        if(enable_assert_to_assume)
+        {
+          new_code.add(
+            goto_programt::make_assumption(false_exprt{}, annotated_location));
+        }
+        else
+        {
+          new_code.add(
+            goto_programt::make_assertion(false_exprt{}, annotated_location));
+        }
       }
     }
 
@@ -2194,10 +2214,9 @@ void goto_check_ct::goto_check(
             side_effect_expr_nondett(bool_typet(), i.source_location()),
             std::move(address_of_expr),
             lhs);
-          goto_programt::targett t =
-            new_code.add(goto_programt::make_assignment(
-              std::move(lhs), std::move(rhs), i.source_location()));
-          t->code_nonconst().add_source_location() = i.source_location();
+          new_code.add(goto_programt::make_assignment(
+            code_assignt{std::move(lhs), std::move(rhs), i.source_location()},
+            i.source_location()));
         }
       }
     }
@@ -2228,7 +2247,7 @@ void goto_check_ct::goto_check(
       }
     }
 
-    i.transform([this](exprt expr) { return rw_ok_check(expr); });
+    i.transform([this](exprt expr) { return expand_pointer_checks(expr); });
 
     for(auto &instruction : new_code.instructions)
     {

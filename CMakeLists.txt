@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.8)
 
 # Compile with /usr/bin/clang on MacOS
 # See https://github.com/diffblue/cbmc/issues/4956
@@ -150,6 +150,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR
               "$<TARGET_FILE:unit>"
               "$<TARGET_FILE:goto-harness>"
               "$<TARGET_FILE:cbmc>"
+              "$<TARGET_FILE:cprover>"
               "$<TARGET_FILE:crangler>"
               "$<TARGET_FILE:driver>"
               "$<TARGET_FILE:goto-analyzer>"
@@ -215,6 +216,8 @@ cprover_default_properties(
     cbmc
     cbmc-lib
     cpp
+    cprover
+    cprover-lib
     crangler
     crangler-lib
     driver

@@ -141,8 +141,8 @@ protected:
   std::string convert_overflow(
     const exprt &src, unsigned &precedence);
 
-  std::string convert_quantifier(
-    const quantifier_exprt &,
+  std::string convert_binding(
+    const binding_exprt &,
     const std::string &symbol,
     unsigned precedence);
 
@@ -157,8 +157,7 @@ protected:
   std::string convert_index_designator(
     const exprt &src);
 
-  std::string convert_index(
-    const exprt &src, unsigned precedence);
+  std::string convert_index(const binary_exprt &, unsigned precedence);
 
   std::string
   convert_byte_extract(const byte_extract_exprt &, unsigned precedence);

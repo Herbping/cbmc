@@ -9,7 +9,7 @@ jobs:
   check-ubuntu-20_04-make-gcc:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Fetch dependencies
@@ -29,7 +29,7 @@ jobs:
           mv cvc5 /usr/local/bin
           cvc5 --version
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-20.04-make-${{ github.ref }}-${{ github.sha }}-PR
@@ -55,6 +55,8 @@ jobs:
           make -C jbmc/unit -j2 CXX="ccache g++" LIBS="$PWD/riss.git/release/lib/libriss-coprocessor.a -lpthread" IPASIR=$PWD/riss.git/riss
       - name: Print ccache stats
         run: ccache -s
+      - name: Checking completeness of help output
+        run: scripts/check_help.sh
       - name: Run unit tests
         run: |
           make -C unit test IPASIR=$PWD/riss.git/riss
@@ -75,7 +77,7 @@ jobs:
       CC: "ccache /usr/bin/clang"
       CXX: "ccache /usr/bin/clang++"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Fetch dependencies
@@ -97,7 +99,7 @@ jobs:
           mv cvc5 /usr/local/bin
           cvc5 --version
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-20.04-make-clang-${{ github.ref }}-${{ github.sha }}-PR
@@ -146,7 +148,7 @@ jobs:
       CC: "ccache /usr/bin/clang"
       CXX: "ccache /usr/bin/clang++"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Fetch dependencies
@@ -166,7 +168,7 @@ jobs:
           mv cvc5 /usr/local/bin
           cvc5 --version
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-20.04-make-clang-smt-z3-${{ github.ref }}-${{ github.sha }}-PR
@@ -187,7 +189,7 @@ jobs:
   check-ubuntu-20_04-cmake-gcc:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Fetch dependencies
@@ -207,7 +209,7 @@ jobs:
           mv cvc5 /usr/local/bin
           cvc5 --version
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-20.04-Release-${{ github.ref }}-${{ github.sha }}-PR
@@ -233,6 +235,8 @@ jobs:
         run: cd build; ninja -j2
       - name: Print ccache stats
         run: ccache -s
+      - name: Checking completeness of help output
+        run: scripts/check_help.sh build/bin
       - name: Check if package building works
         run: |
           cd build
@@ -244,7 +248,7 @@ jobs:
   check-ubuntu-22_04-cmake-gcc:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Fetch dependencies
@@ -264,7 +268,7 @@ jobs:
           mv cvc5 /usr/local/bin
           cvc5 --version
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-22.04-Release-${{ github.ref }}-${{ github.sha }}-PR
@@ -301,7 +305,7 @@ jobs:
   check-ubuntu-20_04-cmake-gcc-KNOWNBUG:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Fetch dependencies
@@ -313,7 +317,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -yq cmake ninja-build gcc g++ maven flex bison libxml2-utils ccache z3
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-20.04-Release-${{ github.ref }}-${{ github.sha }}-PR
@@ -348,7 +352,7 @@ jobs:
   check-ubuntu-20_04-cmake-gcc-THOROUGH:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Fetch dependencies
@@ -360,7 +364,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -yq cmake ninja-build gcc g++ maven flex bison libxml2-utils ccache z3
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-20.04-Release-${{ github.ref }}-${{ github.sha }}-PR
@@ -382,10 +386,10 @@ jobs:
       - name: Run tests
         run: cd build; ctest . -V -L THOROUGH -j2
 
-  check-macos-10_15-make-clang:
-    runs-on: macos-10.15
+  check-macos-11-make-clang:
+    runs-on: macos-11
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Fetch dependencies
@@ -399,7 +403,7 @@ jobs:
           mv cvc5 /usr/local/bin
           cvc5 --version
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-make-${{ github.ref }}-${{ github.sha }}-PR
@@ -432,52 +436,10 @@ jobs:
       - name: Run JBMC regression tests
         run: make -C jbmc/regression test-parallel JOBS=3
 
-  check-macos-11-cmake-clang:
-    runs-on: macos-11
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: recursive
-      - name: Fetch dependencies
-        run: brew install cmake ninja maven flex bison ccache z3
-      - name: Confirm z3 solver is available and log the version installed
-        run: z3 --version
-      - name: Download cvc5 binary and make sure it can be deployed
-        run: |
-          curl -L https://github.com/cvc5/cvc5/releases/download/cvc5-${{env.cvc5-version}}/cvc5-macOS --output cvc5
-          chmod u+x cvc5
-          mv cvc5 /usr/local/bin
-          cvc5 --version
-      - name: Prepare ccache
-        uses: actions/cache@v2
-        with:
-          path: .ccache
-          key: ${{ runner.os }}-Release-${{ github.ref }}-${{ github.sha }}-PR
-          restore-keys: |
-            ${{ runner.os }}-Release-${{ github.ref }}
-            ${{ runner.os }}-Release
-      - name: ccache environment
-        run: |
-          echo "CCACHE_BASEDIR=$PWD" >> $GITHUB_ENV
-          echo "CCACHE_DIR=$PWD/.ccache" >> $GITHUB_ENV
-      - name: Zero ccache stats and limit in size
-        run: ccache -z --max-size=500M
-      - name: Configure using CMake
-        run: |
-          mkdir build
-          cd build
-          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++ -Dsat_impl=glucose
-      - name: Build with Ninja
-        run: cd build; ninja -j3
-      - name: Print ccache stats
-        run: ccache -s
-      - name: Run CTest
-        run: cd build; ctest -V -L CORE . -j3
-
   check-macos-12-cmake-clang:
     runs-on: macos-12
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Fetch dependencies
@@ -491,7 +453,7 @@ jobs:
           mv cvc5 /usr/local/bin
           cvc5 --version
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-Release-${{ github.ref }}-${{ github.sha }}-PR
@@ -521,7 +483,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - uses: nuget/setup-nuget@v1
@@ -543,9 +505,9 @@ jobs:
       - name: Confirm cvc5 solver is available and log the version installed
         run: cvc5 --version
       - name: Setup Visual Studio environment
-        uses: microsoft/setup-msbuild@v1.0.2
+        uses: microsoft/setup-msbuild@v1
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-msbuild-${{ github.ref }}-${{ github.sha }}-PR
@@ -562,7 +524,7 @@ jobs:
         run: cmake --build build --config Release -- /p:UseMultiToolTask=true /p:CLToolExe=clcache
       - name: Print ccache stats
         run: clcache -s
-      - uses: ilammy/msvc-dev-cmd@v1.4.1
+      - uses: ilammy/msvc-dev-cmd@v1
       - name: Test cbmc
         run: |
           Set-Location build
@@ -573,7 +535,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - uses: nuget/setup-nuget@v1
@@ -597,11 +559,11 @@ jobs:
       - name: Confirm cvc5 solver is available and log the version installed
         run: cvc5 --version
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1.0.2
+        uses: microsoft/setup-msbuild@v1
       - name: Initialise Developer Command Line
         uses: ilammy/msvc-dev-cmd@v1
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-msbuild-make-${{ github.ref }}-${{ github.sha }}-PR
@@ -638,7 +600,7 @@ jobs:
   check-clang-format:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
           fetch-depth: 0
@@ -649,8 +611,8 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -yq clang-format
-      - name: Check updated lines of code match clang-format-10 style
+          sudo apt-get install --no-install-recommends -yq clang-format-11
+      - name: Check updated lines of code match clang-format-11 style
         env:
           BASE_BRANCH: ${{ github.base_ref }}
           MERGE_BRANCH: ${{ github.ref }}
@@ -659,7 +621,7 @@ jobs:
   check-cpplint:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
           fetch-depth: 0
@@ -682,7 +644,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - uses: nuget/setup-nuget@v1
@@ -694,9 +656,9 @@ jobs:
           nuget install clcache -OutputDirectory "c:\tools" -ExcludeVersion -Version 4.1.0
           echo "c:\tools\clcache\clcache-4.1.0" >> $env:GITHUB_PATH
       - name: Setup Visual Studio environment
-        uses: microsoft/setup-msbuild@v1.0.2
+        uses: microsoft/setup-msbuild@v1
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-msbuild-${{ github.ref }}-${{ github.sha }}-PKG
@@ -722,27 +684,36 @@ jobs:
           $cpack = "$(Split-Path -Parent (Get-Command cmake).Source)\cpack.exe"
           & $cpack . -C Release
           $msi_name = (Get-ChildItem -name *.msi).Name
-          Write-Output "::set-output name=msi_installer::build/$msi_name"
-          Write-Output "::set-output name=msi_name::$msi_name"
+          echo "msi_installer=build/$msi_name" >> $env:GITHUB_OUTPUT
+          echo "msi_name=$msi_name" >> $env:GITHUB_OUTPUT
 
   ubuntu-18_04-package:
     runs-on: ubuntu-18.04
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Fetch dependencies
         run: | 
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y g++ gdb flex bison cmake ninja-build maven jq libxml2-utils dpkg-dev ccache z3
+          sudo apt-get install --no-install-recommends -y g++ gdb flex bison cmake ninja-build maven jq libxml2-utils dpkg-dev ccache
           # remove libgcc-s1, which isn't normally available in Ubuntu 18.04
           target=$(dpkg-query -W --showformat='${Version}\n' gcc-8-base | head -n 1)
           # libgcc1 uses an epoch, thus the extra 1:
           sudo apt-get install -y --allow-downgrades --reinstall gcc g++ libgcc-s1- libstdc++6=$target liblsan0=$target libtsan0=$target libcc1-0=$target libgcc1=1:$target gdb=8.1.1-0ubuntu1
-      - name: Confirm z3 solver is available and log the version installed
-        run: z3 --version
+      - name: Download z3 4.11.0 from the python wheel package, extract it and make sure it can be deployed
+        run: |
+          sudo apt-get install --no-install-recommends -y unzip
+          # download the z3 python wheel package
+          wget -O z3.4.11.0.whl https://github.com/Z3Prover/z3/releases/download/z3-4.11.0/z3_solver-4.11.0.0-py2.py3-none-manylinux1_x86_64.whl
+          # unpack the bundle using python
+          unzip z3.4.11.0.whl
+          # make z3 executable and move it in /usr/local/bin
+          chmod u+x ./z3_solver-4.11.0.0.data/data/bin/z3
+          mv ./z3_solver-4.11.0.0.data/data/bin/z3 /usr/local/bin/
+          z3 --version
       - name: Download cvc-5 from the releases page and make sure it can be deployed
         run: |
           wget -O cvc5 https://github.com/cvc5/cvc5/releases/download/cvc5-${{env.cvc5-version}}/cvc5-Linux
@@ -750,7 +721,7 @@ jobs:
           mv cvc5 /usr/local/bin
           cvc5 --version
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-18.04-Release-${{ github.ref }}-${{ github.sha }}-PR
@@ -782,21 +753,21 @@ jobs:
           cd build
           ninja package
           deb_package_name="$(ls *.deb)"
-          echo "::set-output name=deb_package::./build/$deb_package_name"
-          echo "::set-output name=deb_package_name::ubuntu-18.04-$deb_package_name"
+          echo "deb_package=./build/$deb_package_name" >> $GITHUB_OUTPUT
+          echo "deb_package_name=ubuntu-18.04-$deb_package_name" >> $GITHUB_OUTPUT
 
 
   check-string-table:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Check for unused irep ids
         run: ./scripts/string_table_check.sh
 
   check-docker-image:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Download test dependencies
@@ -820,7 +791,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Clone repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Download testing and coverage dependencies
@@ -840,7 +811,7 @@ jobs:
           mv cvc5 /usr/local/bin
           cvc5 --version
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-20.04-Coverage-${{ github.ref }}-${{ github.sha }}-PR
@@ -864,7 +835,7 @@ jobs:
           echo "lcov_excl_line = UNREACHABLE" > ~/.lcovrc
           cmake --build build --target coverage -- -j2
       - name: Upload coverage statistics to Codecov
-        uses: codecov/codecov-action@v3.0.0
+        uses: codecov/codecov-action@v3
         with:
           files: build/html/coverage.info
           fail_ci_if_error: true

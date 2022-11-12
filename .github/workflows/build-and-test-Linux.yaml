@@ -9,7 +9,7 @@ jobs:
   CompileLinux:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: true
       - name: Install Packages
@@ -24,7 +24,7 @@ jobs:
           sudo apt-get install --no-install-recommends -y gawk jq
 
       - name: Prepare ccache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: .ccache
           key: ${{ runner.os }}-20.04-make-${{ github.ref }}-${{ github.sha }}-KERNEL
@@ -47,7 +47,7 @@ jobs:
       - name: Run (Docker Based) Linux Build test
         run: integration/linux/compile_linux.sh
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: CPROVER-faultyInput
           path: CPROVER/faultyInput/*

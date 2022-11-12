@@ -19,6 +19,7 @@ Date: June 2022
 
 #include <util/byte_operators.h>
 #include <util/expr_cast.h>
+#include <util/find_symbols.h>
 #include <util/message.h>
 
 #include <goto-programs/goto_model.h>
@@ -110,7 +111,7 @@ class function_cfg_infot : public cfg_infot
 {
 public:
   explicit function_cfg_infot(const goto_functiont &_goto_function)
-    : dirty_analysis(_goto_function), locals(_goto_function)
+    : is_dirty(_goto_function), locals(_goto_function)
   {
     parameters.insert(
       _goto_function.parameter_identifiers.begin(),
@@ -128,15 +129,11 @@ public:
   /// or is a local that is dirty.
   bool is_not_local_or_dirty_local(const irep_idt &ident) const override
   {
-    if(is_local(ident))
-      return dirty_analysis.get_dirty_ids().find(ident) !=
-             dirty_analysis.get_dirty_ids().end();
-    else
-      return true;
+    return is_local(ident) ? is_dirty(ident) : true;
   }
 
 private:
-  const dirtyt dirty_analysis;
+  const dirtyt is_dirty;
   const localst locals;
   std::unordered_set<irep_idt> parameters;
 };
@@ -146,7 +143,7 @@ class loop_cfg_infot : public cfg_infot
 {
 public:
   loop_cfg_infot(goto_functiont &_goto_function, const loopt &loop)
-    : dirty_analysis(_goto_function)
+    : is_dirty(_goto_function)
   {
     for(const auto &t : loop)
     {
@@ -166,8 +163,7 @@ public:
   bool is_not_local_or_dirty_local(const irep_idt &ident) const override
   {
     if(is_local(ident))
-      return dirty_analysis.get_dirty_ids().find(ident) !=
-             dirty_analysis.get_dirty_ids().end();
+      return is_dirty(ident);
     else
       return true;
   }
@@ -177,8 +173,12 @@ public:
     auto it = exprs.begin();
     while(it != exprs.end())
     {
+      const std::unordered_set<irep_idt> symbols = find_symbol_identifiers(*it);
+
       if(
-        it->id() == ID_symbol && is_local(to_symbol_expr(*it).get_identifier()))
+        std::find_if(symbols.begin(), symbols.end(), [this](const irep_idt &s) {
+          return is_local(s);
+        }) != symbols.end())
       {
         it = exprs.erase(it);
       }
@@ -190,8 +190,48 @@ public:
   }
 
 private:
-  const dirtyt dirty_analysis;
+  const dirtyt is_dirty;
   std::unordered_set<irep_idt> locals;
+};
+
+/// For a goto program. locals and dirty locals are inferred directly from
+/// the instruction sequence.
+class goto_program_cfg_infot : public cfg_infot
+{
+public:
+  explicit goto_program_cfg_infot(const goto_programt &goto_program)
+  {
+    // collect symbols declared in the insruction sequence as locals
+    goto_program.get_decl_identifiers(locals);
+
+    // collect dirty locals
+    goto_functiont goto_function;
+    goto_function.body.copy_from(goto_program);
+
+    dirtyt is_dirty(goto_function);
+    const auto &dirty_ids = is_dirty.get_dirty_ids();
+    dirty.insert(dirty_ids.begin(), dirty_ids.end());
+  }
+
+  /// Returns true iff `ident` is a loop local.
+  bool is_local(const irep_idt &ident) const override
+  {
+    return locals.find(ident) != locals.end();
+  }
+
+  /// Returns true iff the given `ident` is either not a loop local
+  /// or is a loop local that is dirty.
+  bool is_not_local_or_dirty_local(const irep_idt &ident) const override
+  {
+    if(is_local(ident))
+      return dirty.find(ident) != dirty.end();
+    else
+      return true;
+  }
+
+protected:
+  std::set<irep_idt> locals;
+  std::set<irep_idt> dirty;
 };
 
 #endif

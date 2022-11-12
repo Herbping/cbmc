@@ -18,9 +18,9 @@
 
 #include <solvers/prop/literal_expr.h>
 #include <solvers/smt2_incremental/convert_expr_to_smt.h>
-#include <solvers/smt2_incremental/smt_array_theory.h>
-#include <solvers/smt2_incremental/smt_bit_vector_theory.h>
-#include <solvers/smt2_incremental/smt_core_theory.h>
+#include <solvers/smt2_incremental/theories/smt_array_theory.h>
+#include <solvers/smt2_incremental/theories/smt_bit_vector_theory.h>
+#include <solvers/smt2_incremental/theories/smt_core_theory.h>
 
 #include <functional>
 #include <numeric>
@@ -124,9 +124,11 @@ static smt_termt convert_expr_to_smt(
   const nondet_symbol_exprt &nondet_symbol,
   const sub_expression_mapt &converted)
 {
-  UNIMPLEMENTED_FEATURE(
-    "Generation of SMT formula for nondet symbol expression: " +
-    nondet_symbol.pretty());
+  // A nondet_symbol is a reference to an unconstrained function. This function
+  // will already have been added as a dependency.
+  return smt_identifier_termt{
+    nondet_symbol.get_identifier(),
+    convert_type_to_smt_sort(nondet_symbol.type())};
 }
 
 /// \brief Makes a term which is true if \p input is not 0 / false.
@@ -351,6 +353,11 @@ static smt_termt convert_expr_to_smt(
   const concatenation_exprt &concatenation,
   const sub_expression_mapt &converted)
 {
+  if(operands_are_of_type<bitvector_typet>(concatenation))
+  {
+    return convert_multiary_operator_to_terms(
+      concatenation, converted, smt_bit_vector_theoryt::concat);
+  }
   UNIMPLEMENTED_FEATURE(
     "Generation of SMT formula for concatenation expression: " +
     concatenation.pretty());
@@ -360,7 +367,7 @@ static smt_termt convert_expr_to_smt(
   const bitand_exprt &bitwise_and_expr,
   const sub_expression_mapt &converted)
 {
-  if(operands_are_of_type<integer_bitvector_typet>(bitwise_and_expr))
+  if(operands_are_of_type<bitvector_typet>(bitwise_and_expr))
   {
     return convert_multiary_operator_to_terms(
       bitwise_and_expr, converted, smt_bit_vector_theoryt::make_and);
@@ -377,7 +384,7 @@ static smt_termt convert_expr_to_smt(
   const bitor_exprt &bitwise_or_expr,
   const sub_expression_mapt &converted)
 {
-  if(operands_are_of_type<integer_bitvector_typet>(bitwise_or_expr))
+  if(operands_are_of_type<bitvector_typet>(bitwise_or_expr))
   {
     return convert_multiary_operator_to_terms(
       bitwise_or_expr, converted, smt_bit_vector_theoryt::make_or);
@@ -394,7 +401,7 @@ static smt_termt convert_expr_to_smt(
   const bitxor_exprt &bitwise_xor,
   const sub_expression_mapt &converted)
 {
-  if(operands_are_of_type<integer_bitvector_typet>(bitwise_xor))
+  if(operands_are_of_type<bitvector_typet>(bitwise_xor))
   {
     return convert_multiary_operator_to_terms(
       bitwise_xor, converted, smt_bit_vector_theoryt::make_xor);
@@ -411,10 +418,7 @@ static smt_termt convert_expr_to_smt(
   const bitnot_exprt &bitwise_not,
   const sub_expression_mapt &converted)
 {
-  const bool operand_is_bitvector =
-    can_cast_type<integer_bitvector_typet>(bitwise_not.op().type());
-
-  if(operand_is_bitvector)
+  if(can_cast_type<bitvector_typet>(bitwise_not.op().type()))
   {
     return smt_bit_vector_theoryt::make_not(converted.at(bitwise_not.op()));
   }
@@ -429,9 +433,7 @@ static smt_termt convert_expr_to_smt(
   const unary_minus_exprt &unary_minus,
   const sub_expression_mapt &converted)
 {
-  const bool operand_is_bitvector =
-    can_cast_type<integer_bitvector_typet>(unary_minus.op().type());
-  if(operand_is_bitvector)
+  if(can_cast_type<integer_bitvector_typet>(unary_minus.op().type()))
   {
     return smt_bit_vector_theoryt::negate(converted.at(unary_minus.op()));
   }
@@ -722,15 +724,17 @@ static smt_termt convert_expr_to_smt(
   }
   else if(one_operand_pointer)
   {
-    UNIMPLEMENTED_FEATURE(
-      "convert_expr_to_smt::minus_exprt doesn't handle expressions where"
-      "only one operand is a pointer - this is because these expressions"
-      "are normally handled by convert_expr_to_smt::plus_exprt due to"
-      "transformations of the expressions by previous passes bringing"
-      "them into a form more suitably handled by that version of the function."
-      "If you are here, this is a mistake or something went wrong before."
-      "The expression that caused the problem is: " +
-      minus.pretty());
+    // It's semantically void to have an expression `3 - a` where `a`
+    // is a pointer.
+    INVARIANT(
+      lhs_is_pointer,
+      "minus expressions of pointer and integer expect lhs to be the pointer");
+    const auto lhs_base_type = to_pointer_type(minus.lhs().type()).base_type();
+
+    return smt_bit_vector_theoryt::subtract(
+      converted.at(minus.lhs()),
+      smt_bit_vector_theoryt::multiply(
+        converted.at(minus.rhs()), pointer_sizes.at(lhs_base_type)));
   }
   else
   {
@@ -904,8 +908,10 @@ static smt_termt convert_expr_to_smt(
   const array_of_exprt &array_of,
   const sub_expression_mapt &converted)
 {
-  UNIMPLEMENTED_FEATURE(
-    "Generation of SMT formula for array of expression: " + array_of.pretty());
+  // This function is unreachable as the `array_of_exprt` nodes are already
+  // fully converted by the incremental decision procedure functions
+  // (smt2_incremental_decision_proceduret::define_array_function).
+  UNHANDLED_CASE;
 }
 
 static smt_termt convert_expr_to_smt(
@@ -992,26 +998,25 @@ static smt_termt convert_expr_to_smt(
 }
 
 static smt_termt convert_array_update_to_smt(
-  const exprt &old,
-  const exprt &index,
-  const exprt &new_value,
+  const with_exprt &with,
   const sub_expression_mapt &converted)
 {
-  const smt_termt &old_array_term = converted.at(old);
-  const smt_termt &index_term = converted.at(index);
-  const smt_termt &value_term = converted.at(new_value);
-  return smt_array_theoryt::store(old_array_term, index_term, value_term);
+  smt_termt array = converted.at(with.old());
+  for(auto it = ++with.operands().begin(); it != with.operands().end(); it += 2)
+  {
+    const smt_termt &index_term = converted.at(it[0]);
+    const smt_termt &value_term = converted.at(it[1]);
+    array = smt_array_theoryt::store(array, index_term, value_term);
+  }
+  return array;
 }
 
 static smt_termt convert_expr_to_smt(
   const with_exprt &with,
   const sub_expression_mapt &converted)
 {
-  if(const auto array_type = type_try_dynamic_cast<array_typet>(with.type()))
-  {
-    return convert_array_update_to_smt(
-      with.old(), with.where(), with.new_value(), converted);
-  }
+  if(can_cast_type<array_typet>(with.type()))
+    return convert_array_update_to_smt(with, converted);
   // 'with' expression is also used to update struct fields, but for now we do
   // not support them, so we fail.
   UNIMPLEMENTED_FEATURE(
@@ -1046,20 +1051,37 @@ static smt_termt convert_expr_to_smt(
 
 static smt_termt convert_expr_to_smt(
   const is_invalid_pointer_exprt &is_invalid_pointer,
+  const smt_object_mapt &object_map,
   const sub_expression_mapt &converted)
 {
-  UNIMPLEMENTED_FEATURE(
-    "Generation of SMT formula for is invalid pointer expression: " +
-    is_invalid_pointer.pretty());
+  const exprt &pointer_expr(to_unary_expr(is_invalid_pointer).op());
+  const bitvector_typet *pointer_type =
+    type_try_dynamic_cast<bitvector_typet>(pointer_expr.type());
+  INVARIANT(pointer_type, "Pointer object should have a bitvector-based type.");
+  const std::size_t object_bits = config.bv_encoding.object_bits;
+  const std::size_t width = pointer_type->get_width();
+  INVARIANT(
+    width >= object_bits,
+    "Width should be at least as big as the number of object bits.");
+
+  const auto extract_op = smt_bit_vector_theoryt::extract(
+    width - 1, width - object_bits)(converted.at(pointer_expr));
+
+  const auto &invalid_pointer = object_map.at(make_invalid_pointer_expr());
+
+  const smt_termt invalid_pointer_address = smt_bit_vector_constant_termt(
+    invalid_pointer.unique_id, config.bv_encoding.object_bits);
+
+  return smt_core_theoryt::equal(invalid_pointer_address, extract_op);
 }
 
 static smt_termt convert_expr_to_smt(
-  const string_constantt &is_invalid_pointer,
+  const string_constantt &string_constant,
   const sub_expression_mapt &converted)
 {
   UNIMPLEMENTED_FEATURE(
-    "Generation of SMT formula for is invalid pointer expression: " +
-    is_invalid_pointer.pretty());
+    "Generation of SMT formula for string constant expression: " +
+    string_constant.pretty());
 }
 
 static smt_termt convert_expr_to_smt(
@@ -1334,9 +1356,10 @@ static smt_termt convert_expr_to_smt(
   const array_exprt &array_construction,
   const sub_expression_mapt &converted)
 {
-  UNIMPLEMENTED_FEATURE(
-    "Generation of SMT formula for array construction expression: " +
-    array_construction.pretty());
+  // This function is unreachable as the `array_exprt` nodes are already fully
+  // converted by the incremental decision procedure functions
+  // (smt2_incremental_decision_proceduret::define_array_function).
+  UNHANDLED_CASE;
 }
 
 static smt_termt convert_expr_to_smt(
@@ -1643,7 +1666,7 @@ static smt_termt dispatch_expr_to_smt_conversion(
     const auto is_invalid_pointer =
       expr_try_dynamic_cast<is_invalid_pointer_exprt>(expr))
   {
-    return convert_expr_to_smt(*is_invalid_pointer, converted);
+    return convert_expr_to_smt(*is_invalid_pointer, object_map, converted);
   }
   if(const auto string_constant = expr_try_dynamic_cast<string_constantt>(expr))
   {
@@ -1791,6 +1814,25 @@ at_scope_exitt<functiont> at_scope_exit(functiont exit_function)
 }
 #endif
 
+exprt lower_address_of_array_index(exprt expr)
+{
+  expr.visit_pre([](exprt &expr) {
+    const auto address_of_expr = expr_try_dynamic_cast<address_of_exprt>(expr);
+    if(!address_of_expr)
+      return;
+    const auto array_index_expr =
+      expr_try_dynamic_cast<index_exprt>(address_of_expr->object());
+    if(!array_index_expr)
+      return;
+    expr = plus_exprt{
+      address_of_exprt{
+        array_index_expr->array(),
+        type_checked_cast<pointer_typet>(address_of_expr->type())},
+      array_index_expr->index()};
+  });
+  return expr;
+}
+
 smt_termt convert_expr_to_smt(
   const exprt &expr,
   const smt_object_mapt &object_map,
@@ -1808,7 +1850,8 @@ smt_termt convert_expr_to_smt(
   const auto end_conversion = at_scope_exit([&]() { in_conversion = false; });
 #endif
   sub_expression_mapt sub_expression_map;
-  expr.visit_post([&](const exprt &expr) {
+  const auto lowered_expr = lower_address_of_array_index(expr);
+  lowered_expr.visit_post([&](const exprt &expr) {
     const auto find_result = sub_expression_map.find(expr);
     if(find_result != sub_expression_map.cend())
       return;
@@ -1816,5 +1859,5 @@ smt_termt convert_expr_to_smt(
       expr, sub_expression_map, object_map, pointer_sizes, object_size);
     sub_expression_map.emplace_hint(find_result, expr, std::move(term));
   });
-  return std::move(sub_expression_map.at(expr));
+  return std::move(sub_expression_map.at(lowered_expr));
 }

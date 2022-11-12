@@ -141,6 +141,10 @@ protected:
 
   std::unordered_set<irep_idt> summarized;
 
+  /// Name of loops we are going to unwind.
+  std::list<std::string> loop_names;
+
+public:
   /// Translates a function_pointer_obeys_contract_exprt into an assertion
   /// ```
   /// ASSERT function_pointer == contract;
@@ -194,30 +198,6 @@ protected:
     const irep_idt &wrapper_function,
     const irep_idt &mangled_function,
     goto_programt &dest);
-
-  /// This function recursively searches \p expression to find nested or
-  /// non-nested quantified expressions. When a quantified expression is found,
-  /// a fresh quantified variable is added to the symbol table and \p expression
-  /// is updated to use this fresh variable.
-  void add_quantified_variable(exprt &expression, const irep_idt &mode);
-
-  /// This function recursively identifies the "old" expressions within expr
-  /// and replaces them with correspoding history variables.
-  void replace_history_parameter(
-    exprt &expr,
-    std::map<exprt, exprt> &parameter2history,
-    source_locationt location,
-    const irep_idt &mode,
-    goto_programt &history,
-    const irep_idt &id);
-
-  /// This function creates and returns an instruction that corresponds to the
-  /// ensures clause. It also returns a list of instructions related to
-  /// initializing history variables, if required.
-  std::pair<goto_programt, goto_programt> create_ensures_instruction(
-    codet &expression,
-    source_locationt location,
-    const irep_idt &mode);
 };
 
 #endif // CPROVER_GOTO_INSTRUMENT_CONTRACTS_CONTRACTS_H

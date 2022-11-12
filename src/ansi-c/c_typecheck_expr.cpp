@@ -492,7 +492,9 @@ void c_typecheck_baset::typecheck_expr_main(exprt &expr)
   {
     // already type checked
   }
-  else if(expr.id() == ID_C_spec_assigns || expr.id() == ID_target_list)
+  else if(
+    expr.id() == ID_C_spec_assigns || expr.id() == ID_C_spec_frees ||
+    expr.id() == ID_target_list)
   {
     // already type checked
   }
@@ -718,7 +720,7 @@ void c_typecheck_baset::typecheck_expr_builtin_offsetof(exprt &expr)
 
       result = plus_exprt(result, mult_exprt(element_size_opt.value(), index));
 
-      typet tmp=type.subtype();
+      typet tmp = to_array_type(type).element_type();
       type=tmp;
     }
   }
@@ -928,7 +930,8 @@ void c_typecheck_baset::typecheck_side_effect_statement_expression(
 
     // arrays here turn into pointers (array decay)
     if(op.type().id()==ID_array)
-      implicit_typecast(op, pointer_type(op.type().subtype()));
+      implicit_typecast(
+        op, pointer_type(to_array_type(op.type()).element_type()));
 
     expr.type()=op.type();
   }
@@ -1441,8 +1444,10 @@ void c_typecheck_baset::typecheck_expr_rel_vector(binary_exprt &expr)
   // with the same dimension.
   auto subtype_width =
     to_bitvector_type(to_vector_type(o_type0).element_type()).get_width();
-  expr.type() =
-    vector_typet{signedbv_typet{subtype_width}, to_vector_type(o_type0).size()};
+  expr.type() = vector_typet{
+    to_vector_type(o_type0).index_type(),
+    signedbv_typet{subtype_width},
+    to_vector_type(o_type0).size()};
 
   // Replace the id as the semantics of these are point-wise application (and
   // the result is not of bool type).
@@ -1603,19 +1608,20 @@ void c_typecheck_baset::typecheck_expr_trinary(if_exprt &expr)
     // is one of them void * AND null? Convert that to the other.
     // (at least that's how GCC behaves)
     if(
-      operands[1].type().subtype().id() == ID_empty && tmp1.is_constant() &&
-      is_null_pointer(to_constant_expr(tmp1)))
+      to_pointer_type(operands[1].type()).base_type().id() == ID_empty &&
+      tmp1.is_constant() && is_null_pointer(to_constant_expr(tmp1)))
     {
       implicit_typecast(operands[1], operands[2].type());
     }
     else if(
-      operands[2].type().subtype().id() == ID_empty && tmp2.is_constant() &&
-      is_null_pointer(to_constant_expr(tmp2)))
+      to_pointer_type(operands[2].type()).base_type().id() == ID_empty &&
+      tmp2.is_constant() && is_null_pointer(to_constant_expr(tmp2)))
     {
       implicit_typecast(operands[2], operands[1].type());
     }
-    else if(operands[1].type().subtype().id()!=ID_code ||
-            operands[2].type().subtype().id()!=ID_code)
+    else if(
+      to_pointer_type(operands[1].type()).base_type().id() != ID_code ||
+      to_pointer_type(operands[2].type()).base_type().id() != ID_code)
     {
       // Make it void *.
       // gcc and clang issue a warning for this.
@@ -1626,8 +1632,10 @@ void c_typecheck_baset::typecheck_expr_trinary(if_exprt &expr)
     else
     {
       // maybe functions without parameter lists
-      const code_typet &c_type1=to_code_type(operands[1].type().subtype());
-      const code_typet &c_type2=to_code_type(operands[2].type().subtype());
+      const code_typet &c_type1 =
+        to_code_type(to_pointer_type(operands[1].type()).base_type());
+      const code_typet &c_type2 =
+        to_code_type(to_pointer_type(operands[2].type()).base_type());
 
       if(c_type1.return_type()==c_type2.return_type())
       {
@@ -1916,6 +1924,61 @@ void c_typecheck_baset::typecheck_expr_side_effect(side_effect_exprt &expr)
   }
 }
 
+void c_typecheck_baset::typecheck_typed_target_call(
+  side_effect_expr_function_callt &expr)
+{
+  INVARIANT(
+    expr.function().id() == ID_symbol &&
+      to_symbol_expr(expr.function()).get_identifier() == CPROVER_PREFIX
+        "typed_target",
+    "expression must be a " CPROVER_PREFIX "typed_target function call");
+
+  auto &f_op = to_symbol_expr(expr.function());
+
+  if(expr.arguments().size() != 1)
+  {
+    throw invalid_source_file_exceptiont{
+      "expected 1 argument for " CPROVER_PREFIX "typed_target, found " +
+        std::to_string(expr.arguments().size()),
+      expr.source_location()};
+  }
+
+  auto arg0 = expr.arguments().front();
+  typecheck_expr(arg0);
+  if(!is_assignable(arg0) || !arg0.get_bool(ID_C_lvalue))
+  {
+    throw invalid_source_file_exceptiont{
+      "argument of " CPROVER_PREFIX "typed_target must be assignable",
+      arg0.source_location()};
+  }
+
+  const auto &size = size_of_expr(arg0.type(), *this);
+  if(!size.has_value())
+  {
+    throw invalid_source_file_exceptiont{
+      "sizeof not defined for argument of " CPROVER_PREFIX
+      "typed_target of type " +
+        to_string(arg0.type()),
+      arg0.source_location()};
+  }
+
+  // rewrite call to "assignable"
+  f_op.set_identifier(CPROVER_PREFIX "assignable");
+  exprt::operandst arguments;
+  // pointer
+  arguments.push_back(address_of_exprt(arg0));
+  // size
+  arguments.push_back(size.value());
+  // is_pointer
+  if(arg0.type().id() == ID_pointer)
+    arguments.push_back(true_exprt());
+  else
+    arguments.push_back(false_exprt());
+
+  expr.arguments().swap(arguments);
+  typecheck_side_effect_function_call(expr);
+}
+
 void c_typecheck_baset::typecheck_side_effect_function_call(
   side_effect_expr_function_callt &expr)
 {
@@ -1943,8 +2006,14 @@ void c_typecheck_baset::typecheck_side_effect_function_call(
     if(symbol_table.symbols.find(identifier)==symbol_table.symbols.end())
     {
       // This is an undeclared function.
+
+      // Is it the polymorphic typed_target function ?
+      if(identifier == CPROVER_PREFIX "typed_target")
+      {
+        typecheck_typed_target_call(expr);
+      }
       // Is this a builtin?
-      if(!builtin_factory(identifier, symbol_table, get_message_handler()))
+      else if(!builtin_factory(identifier, symbol_table, get_message_handler()))
       {
         // yes, it's a builtin
       }
@@ -2004,9 +2073,10 @@ void c_typecheck_baset::typecheck_side_effect_function_call(
         // suffices to distinguish different implementations.
         if(parameters.front().type().id() == ID_pointer)
         {
-          identifier_with_type = id2string(identifier) + "_" +
-                                 type_to_partial_identifier(
-                                   parameters.front().type().subtype(), *this);
+          identifier_with_type =
+            id2string(identifier) + "_" +
+            type_to_partial_identifier(
+              to_pointer_type(parameters.front().type()).base_type(), *this);
         }
         else
         {
@@ -2284,6 +2354,169 @@ exprt c_typecheck_baset::do_special_functions(
 
     return buffer_size_expr;
   }
+  else if(identifier == CPROVER_PREFIX "is_list")
+  {
+    // experimental feature for CHC encodings -- do not use
+    if(expr.arguments().size() != 1)
+    {
+      error().source_location = f_op.source_location();
+      error() << "is_list expects one operand" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    if(
+      expr.arguments()[0].type().id() != ID_pointer ||
+      to_pointer_type(expr.arguments()[0].type()).base_type().id() !=
+        ID_struct_tag)
+    {
+      error().source_location = expr.arguments()[0].source_location();
+      error() << "is_list expects a struct-pointer operand" << eom;
+      throw 0;
+    }
+
+    predicate_exprt is_list_expr("is_list");
+    is_list_expr.operands() = expr.arguments();
+    is_list_expr.add_source_location() = source_location;
+
+    return std::move(is_list_expr);
+  }
+  else if(identifier == CPROVER_PREFIX "is_dll")
+  {
+    // experimental feature for CHC encodings -- do not use
+    if(expr.arguments().size() != 1)
+    {
+      error().source_location = f_op.source_location();
+      error() << "is_dll expects one operand" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    if(
+      expr.arguments()[0].type().id() != ID_pointer ||
+      to_pointer_type(expr.arguments()[0].type()).base_type().id() !=
+        ID_struct_tag)
+    {
+      error().source_location = expr.arguments()[0].source_location();
+      error() << "is_dll expects a struct-pointer operand" << eom;
+      throw 0;
+    }
+
+    predicate_exprt is_dll_expr("is_dll");
+    is_dll_expr.operands() = expr.arguments();
+    is_dll_expr.add_source_location() = source_location;
+
+    return std::move(is_dll_expr);
+  }
+  else if(identifier == CPROVER_PREFIX "is_cyclic_dll")
+  {
+    // experimental feature for CHC encodings -- do not use
+    if(expr.arguments().size() != 1)
+    {
+      error().source_location = f_op.source_location();
+      error() << "is_cyclic_dll expects one operand" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    if(
+      expr.arguments()[0].type().id() != ID_pointer ||
+      to_pointer_type(expr.arguments()[0].type()).base_type().id() !=
+        ID_struct_tag)
+    {
+      error().source_location = expr.arguments()[0].source_location();
+      error() << "is_cyclic_dll expects a struct-pointer operand" << eom;
+      throw 0;
+    }
+
+    predicate_exprt is_cyclic_dll_expr("is_cyclic_dll");
+    is_cyclic_dll_expr.operands() = expr.arguments();
+    is_cyclic_dll_expr.add_source_location() = source_location;
+
+    return std::move(is_cyclic_dll_expr);
+  }
+  else if(identifier == CPROVER_PREFIX "is_sentinel_dll")
+  {
+    // experimental feature for CHC encodings -- do not use
+    if(expr.arguments().size() != 2 && expr.arguments().size() != 3)
+    {
+      error().source_location = f_op.source_location();
+      error() << "is_sentinel_dll expects two or three operands" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    for(const auto &argument : expr.arguments())
+    {
+      if(
+        argument.type().id() != ID_pointer ||
+        to_pointer_type(argument.type()).base_type().id() != ID_struct_tag)
+      {
+        error().source_location = expr.arguments()[0].source_location();
+        error() << "is_sentinel_dll_node expects struct-pointer operands"
+                << eom;
+        throw 0;
+      }
+    }
+
+    predicate_exprt is_sentinel_dll_expr("is_sentinel_dll");
+    is_sentinel_dll_expr.operands() = expr.arguments();
+    is_sentinel_dll_expr.add_source_location() = source_location;
+
+    return std::move(is_sentinel_dll_expr);
+  }
+  else if(identifier == CPROVER_PREFIX "is_cstring")
+  {
+    // experimental feature for CHC encodings -- do not use
+    if(expr.arguments().size() != 1)
+    {
+      error().source_location = f_op.source_location();
+      error() << "is_cstring expects one operand" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    if(expr.arguments()[0].type().id() != ID_pointer)
+    {
+      error().source_location = expr.arguments()[0].source_location();
+      error() << "is_cstring expects a pointer operand" << eom;
+      throw 0;
+    }
+
+    is_cstring_exprt is_cstring_expr(expr.arguments()[0]);
+    is_cstring_expr.add_source_location() = source_location;
+
+    return std::move(is_cstring_expr);
+  }
+  else if(identifier == CPROVER_PREFIX "cstrlen")
+  {
+    // experimental feature for CHC encodings -- do not use
+    if(expr.arguments().size() != 1)
+    {
+      error().source_location = f_op.source_location();
+      error() << "cstrlen expects one operand" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    if(expr.arguments()[0].type().id() != ID_pointer)
+    {
+      error().source_location = expr.arguments()[0].source_location();
+      error() << "cstrlen expects a pointer operand" << eom;
+      throw 0;
+    }
+
+    cstrlen_exprt cstrlen_expr(expr.arguments()[0], size_type());
+    cstrlen_expr.add_source_location() = source_location;
+
+    return std::move(cstrlen_expr);
+  }
   else if(identifier==CPROVER_PREFIX "is_zero_string")
   {
     if(expr.arguments().size()!=1)
@@ -2335,6 +2568,73 @@ exprt c_typecheck_baset::do_special_functions(
     is_dynamic_object_expr.add_source_location() = source_location;
 
     return is_dynamic_object_expr;
+  }
+  else if(identifier == CPROVER_PREFIX "LIVE_OBJECT")
+  {
+    if(expr.arguments().size() != 1)
+    {
+      error().source_location = f_op.source_location();
+      error() << "live_object expects one argument" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    exprt live_object_expr = live_object_exprt(expr.arguments()[0]);
+    live_object_expr.add_source_location() = source_location;
+
+    return live_object_expr;
+  }
+  else if(identifier == CPROVER_PREFIX "pointer_in_range")
+  {
+    // experimental feature for CHC encodings -- do not use
+    if(expr.arguments().size() != 3)
+    {
+      error().source_location = f_op.source_location();
+      error() << "pointer_in_range expects three arguments" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    exprt pointer_in_range_expr = pointer_in_range_exprt(
+      expr.arguments()[0], expr.arguments()[1], expr.arguments()[2]);
+    pointer_in_range_expr.add_source_location() = source_location;
+
+    return pointer_in_range_expr;
+  }
+  else if(identifier == CPROVER_PREFIX "WRITEABLE_OBJECT")
+  {
+    if(expr.arguments().size() != 1)
+    {
+      error().source_location = f_op.source_location();
+      error() << "writeable_object expects one argument" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    exprt writeable_object_expr = writeable_object_exprt(expr.arguments()[0]);
+    writeable_object_expr.add_source_location() = source_location;
+
+    return writeable_object_expr;
+  }
+  else if(identifier == CPROVER_PREFIX "separate")
+  {
+    // experimental feature for CHC encodings -- do not use
+    if(expr.arguments().size() < 2)
+    {
+      error().source_location = f_op.source_location();
+      error() << "separate expects two or more arguments" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    exprt separate_expr = separate_exprt(expr.arguments());
+    separate_expr.add_source_location() = source_location;
+
+    return separate_expr;
   }
   else if(identifier==CPROVER_PREFIX "POINTER_OFFSET")
   {
@@ -2456,7 +2756,7 @@ exprt c_typecheck_baset::do_special_functions(
       throw 0;
     }
 
-    expr.type()=expr.arguments().front().type().subtype();
+    expr.type() = to_pointer_type(expr.arguments().front().type()).base_type();
 
     return expr;
   }
@@ -2732,6 +3032,18 @@ exprt c_typecheck_baset::do_special_functions(
       throw 0;
     }
 
+    const auto &param_id = expr.arguments().front().id();
+    if(!(param_id == ID_dereference || param_id == ID_member ||
+         param_id == ID_symbol || param_id == ID_ptrmember ||
+         param_id == ID_constant || param_id == ID_typecast ||
+         param_id == ID_index))
+    {
+      error().source_location = f_op.source_location();
+      error() << "Tracking history of " << param_id
+              << " expressions is not supported yet." << eom;
+      throw 0;
+    }
+
     irep_idt id = identifier == CPROVER_PREFIX "old" ? ID_old : ID_loop_entry;
 
     history_exprt old_expr(expr.arguments()[0], id);
@@ -2909,6 +3221,24 @@ exprt c_typecheck_baset::do_special_functions(
     ctz.add_source_location() = source_location;
 
     return std::move(ctz);
+  }
+  else if(
+    identifier == "__builtin_ffs" || identifier == "__builtin_ffsl" ||
+    identifier == "__builtin_ffsll")
+  {
+    if(expr.arguments().size() != 1)
+    {
+      error().source_location = f_op.source_location();
+      error() << identifier << " expects one operand" << eom;
+      throw 0;
+    }
+
+    typecheck_function_call_arguments(expr);
+
+    find_first_set_exprt ffs{expr.arguments().front(), expr.type()};
+    ffs.add_source_location() = source_location;
+
+    return std::move(ffs);
   }
   else if(identifier==CPROVER_PREFIX "equal")
   {
@@ -3096,21 +3426,22 @@ exprt c_typecheck_baset::do_special_functions(
     else
     {
       type_number =
-          type.id() == ID_empty
+        type.id() == ID_empty
           ? 0u
           : (type.id() == ID_bool || type.id() == ID_c_bool)
-            ? 4u
-            : (type.id() == ID_pointer || type.id() == ID_array)
-              ? 5u
-              : type.id() == ID_floatbv
-                ? 8u
-                : (type.id() == ID_complex && type.subtype().id() == ID_floatbv)
-                  ? 9u
-                  : type.id() == ID_struct
-                    ? 12u
-                    : type.id() == ID_union
-                      ? 13u
-                      : 1u; // int, short, char, enum_tag
+              ? 4u
+              : (type.id() == ID_pointer || type.id() == ID_array)
+                  ? 5u
+                  : type.id() == ID_floatbv
+                      ? 8u
+                      : (type.id() == ID_complex &&
+                         to_complex_type(type).subtype().id() == ID_floatbv)
+                          ? 9u
+                          : type.id() == ID_struct
+                              ? 12u
+                              : type.id() == ID_union
+                                  ? 13u
+                                  : 1u; // int, short, char, enum_tag
     }
 
     exprt tmp=from_integer(type_number, expr.type());
@@ -3303,9 +3634,9 @@ exprt c_typecheck_baset::typecheck_builtin_overflow(
       }
     }
     if(
-      !is__p_variant &&
-      (result.type().id() != ID_pointer ||
-       !is_signed_or_unsigned_bitvector(result.type().subtype())))
+      !is__p_variant && (result.type().id() != ID_pointer ||
+                         !is_signed_or_unsigned_bitvector(
+                           to_pointer_type(result.type()).base_type())))
     {
       raise_wrong_argument_error(result, 3, is__p_variant);
     }
@@ -3356,8 +3687,7 @@ void c_typecheck_baset::typecheck_function_call_arguments(
   const exprt &f_op=expr.function();
   const code_typet &code_type=to_code_type(f_op.type());
   exprt::operandst &arguments=expr.arguments();
-  const code_typet::parameterst &parameter_types=
-    code_type.parameters();
+  const code_typet::parameterst &parameters = code_type.parameters();
 
   // no. of arguments test
 
@@ -3370,24 +3700,24 @@ void c_typecheck_baset::typecheck_function_call_arguments(
     // We are generous on KnR; any number is ok.
     // We will in missing ones with "NIL".
 
-    while(parameter_types.size()>arguments.size())
+    while(parameters.size() > arguments.size())
       arguments.push_back(nil_exprt());
   }
   else if(code_type.has_ellipsis())
   {
-    if(parameter_types.size()>arguments.size())
+    if(parameters.size() > arguments.size())
     {
       error().source_location = expr.source_location();
       error() << "not enough function arguments" << eom;
       throw 0;
     }
   }
-  else if(parameter_types.size()!=arguments.size())
+  else if(parameters.size() != arguments.size())
   {
     error().source_location = expr.source_location();
     error() << "wrong number of function arguments: "
-            << "expected " << parameter_types.size()
-            << ", but got " << arguments.size() << eom;
+            << "expected " << parameters.size() << ", but got "
+            << arguments.size() << eom;
     throw 0;
   }
 
@@ -3399,23 +3729,19 @@ void c_typecheck_baset::typecheck_function_call_arguments(
     {
       // ignore
     }
-    else if(i<parameter_types.size())
+    else if(i < parameters.size())
     {
-      const code_typet::parametert &parameter_type=
-        parameter_types[i];
+      const code_typet::parametert &parameter = parameters[i];
 
-      const typet &op_type=parameter_type.type();
-
-      if(op_type.id()==ID_bool &&
-         op.id()==ID_side_effect &&
-         op.get(ID_statement)==ID_assign &&
-         op.type().id()!=ID_bool)
+      if(
+        parameter.is_boolean() && op.id() == ID_side_effect &&
+        op.get(ID_statement) == ID_assign && op.type().id() != ID_bool)
       {
         warning().source_location=expr.find_source_location();
         warning() << "assignment where Boolean argument is expected" << eom;
       }
 
-      implicit_typecast(op, op_type);
+      implicit_typecast(op, parameter.type());
     }
     else
     {
@@ -3423,8 +3749,8 @@ void c_typecheck_baset::typecheck_function_call_arguments(
 
       if(op.type().id() == ID_array)
       {
-        typet dest_type=pointer_type(void_type());
-        dest_type.subtype().set(ID_C_constant, true);
+        auto dest_type = pointer_type(void_type());
+        dest_type.base_type().set(ID_C_constant, true);
         implicit_typecast(op, dest_type);
       }
     }
@@ -3887,7 +4213,8 @@ void c_typecheck_baset::typecheck_side_effect_assignment(
   // Add a cast to the underlying type for bit fields.
   // In particular, sizeof(s.f=1) works for bit fields.
   if(op0.type().id()==ID_c_bit_field)
-    op0 = typecast_exprt(op0, op0.type().subtype());
+    op0 =
+      typecast_exprt(op0, to_c_bit_field_type(op0.type()).underlying_type());
 
   const typet o_type0=op0.type();
   const typet o_type1=op1.type();

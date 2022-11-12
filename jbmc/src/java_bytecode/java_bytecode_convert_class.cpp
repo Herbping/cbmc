@@ -120,7 +120,7 @@ private:
   ///
   /// An overlay method is a method with the annotation
   /// \@OverlayMethodImplementation. They should only appear in
-  /// [overlay classes](\ref java_class_loader.cpp::is_overlay_class). They
+  /// [overlay classes](\ref is_overlay_class). They
   /// will be loaded by JBMC instead of the method with the same signature
   /// in the underlying class. It is an error if there is no method with the
   /// same signature in the underlying class. It is an error if a method in
@@ -142,7 +142,7 @@ private:
   ///
   /// 2. If it has the annotation\@IgnoredMethodImplementation.
   /// This kind of ignord method is intended for use in
-  /// [overlay classes](\ref java_class_loader.cpp::is_overlay_class), in
+  /// [overlay classes](\ref is_overlay_class), in
   /// particular for methods which must exist in the overlay class so that
   /// it will compile, e.g. default constructors, but which we do not want
   /// to overlay the corresponding method in the
@@ -964,9 +964,11 @@ void add_java_array_types(symbol_tablet &symbol_table)
     code_declt declare_index(index_symexpr);
 
     dereference_exprt old_cell(
-      plus_exprt(old_data, index_symexpr), old_data.type().subtype());
+      plus_exprt(old_data, index_symexpr),
+      to_type_with_subtype(old_data.type()).subtype());
     dereference_exprt new_cell(
-      plus_exprt(new_data, index_symexpr), new_data.type().subtype());
+      plus_exprt(new_data, index_symexpr),
+      to_type_with_subtype(new_data.type()).subtype());
 
     const code_fort copy_loop = code_fort::from_index_bounds(
       from_integer(0, index_symexpr.type()),

@@ -8,14 +8,15 @@
 #include <util/namespace.h>
 #include <util/symbol_table.h>
 
+#include <solvers/smt2_incremental/ast/smt_commands.h>
+#include <solvers/smt2_incremental/ast/smt_responses.h>
+#include <solvers/smt2_incremental/ast/smt_sorts.h>
+#include <solvers/smt2_incremental/ast/smt_terms.h>
 #include <solvers/smt2_incremental/smt2_incremental_decision_procedure.h>
-#include <solvers/smt2_incremental/smt_array_theory.h>
-#include <solvers/smt2_incremental/smt_commands.h>
-#include <solvers/smt2_incremental/smt_core_theory.h>
-#include <solvers/smt2_incremental/smt_responses.h>
 #include <solvers/smt2_incremental/smt_solver_process.h>
-#include <solvers/smt2_incremental/smt_sorts.h>
-#include <solvers/smt2_incremental/smt_terms.h>
+#include <solvers/smt2_incremental/theories/smt_array_theory.h>
+#include <solvers/smt2_incremental/theories/smt_bit_vector_theory.h>
+#include <solvers/smt2_incremental/theories/smt_core_theory.h>
 #include <testing-utils/invariant.h>
 #include <testing-utils/use_catch.h>
 
@@ -23,6 +24,9 @@
 // means that we get error messages showing the smt formula expressed as SMT2
 // strings instead of `{?}` being printed. It works because catch uses the
 // appropriate overload of `operator<<` where it exists.
+#include <util/byte_operators.h>
+
+#include <goto-symex/path_storage.h>
 #include <solvers/smt2_incremental/smt_to_smt2_string.h>
 
 #include <deque>
@@ -80,7 +84,9 @@ public:
     _send(smt_command);
   }
 
-  smt_responset receive_response() override
+  smt_responset receive_response(
+    const std::unordered_map<irep_idt, smt_identifier_termt> &identifier_table)
+    override
   {
     return _receive();
   }
@@ -170,9 +176,7 @@ TEST_CASE(
       test.sent_commands ==
       std::vector<smt_commandt>{
         smt_set_option_commandt{smt_option_produce_modelst{true}},
-        smt_set_logic_commandt{
-          // NOLINTNEXTLINE(whitespace/line_length)
-          smt_logic_quantifier_free_arrays_uninterpreted_functions_bit_vectorst{}},
+        smt_set_logic_commandt{smt_logic_allt{}},
         test.object_size_function.declaration});
     test.sent_commands.clear();
     SECTION("Set symbol to true.")
@@ -306,6 +310,49 @@ TEST_CASE(
             "B0", {}, smt_identifier_termt{"bar", smt_bit_vector_sortt{8}}}});
     }
   }
+  SECTION("Handle single nondet_symbol")
+  {
+    // Using the standard way to create nondet_symbol_exprt.
+    ::symex_nondet_generatort generator;
+    const nondet_symbol_exprt nondet_symbol0 =
+      generator(bool_typet{}, source_locationt{});
+    const smt_identifier_termt nondet_symbol_term0{
+      nondet_symbol0.get_identifier(), smt_bool_sortt{}};
+    test.sent_commands.clear();
+    test.procedure.handle(nondet_symbol0);
+    REQUIRE(
+      test.sent_commands ==
+      std::vector<smt_commandt>{
+        smt_declare_function_commandt{nondet_symbol_term0, {}},
+        smt_define_function_commandt{"B0", {}, nondet_symbol_term0}});
+  }
+  SECTION("Handle multiple nested nondet_symbol")
+  {
+    ::symex_nondet_generatort generator;
+    const nondet_symbol_exprt nondet_symbol1 =
+      generator(bv_typet(42), source_locationt{});
+    const smt_identifier_termt nondet_symbol_term1{
+      nondet_symbol1.get_identifier(), smt_bit_vector_sortt{42}};
+    const nondet_symbol_exprt nondet_symbol2 =
+      generator(bv_typet(42), source_locationt{});
+    const smt_identifier_termt nondet_symbol_term2{
+      nondet_symbol2.get_identifier(), smt_bit_vector_sortt{42}};
+    // Check that the 2 calls to the generator returns unique nondet_symbols.
+    REQUIRE(
+      nondet_symbol1.get_identifier() != nondet_symbol_term2.identifier());
+    test.sent_commands.clear();
+    test.procedure.handle(equal_exprt{nondet_symbol1, nondet_symbol2});
+    // Checking that we defined 2 symbols and that they are correctly compared.
+    REQUIRE(
+      test.sent_commands ==
+      std::vector<smt_commandt>{
+        smt_declare_function_commandt{nondet_symbol_term1, {}},
+        smt_declare_function_commandt{nondet_symbol_term2, {}},
+        smt_define_function_commandt{
+          "B0",
+          {},
+          smt_core_theoryt::equal(nondet_symbol_term1, nondet_symbol_term2)}});
+  }
 }
 
 TEST_CASE(
@@ -414,6 +461,9 @@ TEST_CASE(
   const auto null_object_size_definition =
     test.object_size_function.make_definition(
       0, smt_bit_vector_constant_termt{0, 32});
+  const auto invalid_pointer_object_size_definition =
+    test.object_size_function.make_definition(
+      1, smt_bit_vector_constant_termt{0, 32});
   const symbolt foo = make_test_symbol("foo", signedbv_typet{16});
   const smt_identifier_termt foo_term{"foo", smt_bit_vector_sortt{16}};
   const exprt expr_42 = from_integer({42}, signedbv_typet{16});
@@ -425,13 +475,23 @@ TEST_CASE(
     test.procedure.set_to(equal_42, true);
     test.mock_responses.push_back(smt_check_sat_responset{smt_sat_responset{}});
     test.procedure();
+    std::vector<smt_commandt> expected_commands{
+      smt_declare_function_commandt{foo_term, {}},
+      smt_assert_commandt{smt_core_theoryt::equal(foo_term, term_42)},
+      invalid_pointer_object_size_definition,
+      null_object_size_definition,
+      smt_check_sat_commandt{}};
     REQUIRE(
-      test.sent_commands ==
-      std::vector<smt_commandt>{
-        smt_declare_function_commandt{foo_term, {}},
-        smt_assert_commandt{smt_core_theoryt::equal(foo_term, term_42)},
-        null_object_size_definition,
-        smt_check_sat_commandt{}});
+      (test.sent_commands.size() == expected_commands.size() &&
+       std::all_of(
+         expected_commands.begin(),
+         expected_commands.end(),
+         [&](const smt_commandt &command) -> bool {
+           return std::find(
+                    test.sent_commands.begin(),
+                    test.sent_commands.end(),
+                    command) != test.sent_commands.end();
+         })));
     SECTION("Get \"foo\" value back")
     {
       test.sent_commands.clear();
@@ -558,5 +618,284 @@ TEST_CASE(
       smt_declare_function_commandt{index_term, {}},
       smt_assert_commandt{smt_core_theoryt::equal(
         foo_term, smt_array_theoryt::select(array_term, index_term))}};
+    REQUIRE(test.sent_commands == expected_commands);
+
+    SECTION("Get values of array literal")
+    {
+      test.sent_commands.clear();
+      test.mock_responses = {
+        // get-value response for array_size
+        smt_get_value_responset{
+          {{{smt_bit_vector_constant_termt{2, 32}},
+            smt_bit_vector_constant_termt{2, 32}}}},
+        // get-value response for first element
+        smt_get_value_responset{
+          {{{smt_array_theoryt::select(
+              array_term, smt_bit_vector_constant_termt{0, 32})},
+            smt_bit_vector_constant_termt{9, 8}}}},
+        // get-value response for second element
+        smt_get_value_responset{
+          {{{smt_array_theoryt::select(
+              array_term, smt_bit_vector_constant_termt{1, 32})},
+            smt_bit_vector_constant_termt{12, 8}}}}};
+      REQUIRE(test.procedure.get(array_literal) == array_literal);
+    }
+  }
+  SECTION("array_of_exprt - all elements set to a given value")
+  {
+    const array_of_exprt array_of_expr{
+      from_integer(42, value_type), array_type};
+    test.sent_commands.clear();
+    test.procedure.set_to(
+      equal_exprt{
+        foo.symbol_expr(), index_exprt{array_of_expr, index.symbol_expr()}},
+      true);
+    const auto foo_term = smt_identifier_termt{"foo", smt_bit_vector_sortt{8}};
+    const auto array_term = smt_identifier_termt{
+      "array_0",
+      smt_array_sortt{smt_bit_vector_sortt{32}, smt_bit_vector_sortt{8}}};
+    const auto index_term =
+      smt_identifier_termt{"index", smt_bit_vector_sortt{32}};
+    const auto forall_term =
+      smt_identifier_termt{"array_0_index", smt_bit_vector_sortt{32}};
+    const std::vector<smt_commandt> expected_commands{
+      smt_declare_function_commandt{foo_term, {}},
+      smt_declare_function_commandt{array_term, {}},
+      smt_assert_commandt{smt_forall_termt{
+        {forall_term},
+        smt_core_theoryt::equal(
+          smt_array_theoryt::select(array_term, forall_term),
+          smt_bit_vector_constant_termt{42, 8})}},
+      smt_declare_function_commandt{index_term, {}},
+      smt_assert_commandt{smt_core_theoryt::equal(
+        foo_term, smt_array_theoryt::select(array_term, index_term))}};
+    REQUIRE(test.sent_commands == expected_commands);
+  }
+}
+
+TEST_CASE(
+  "smt2_incremental_decision_proceduret multi-ary with_exprt introduces "
+  "correct number of indexes.",
+  "[core][smt2_incremental]")
+{
+  auto test = decision_procedure_test_environmentt::make();
+  const signedbv_typet index_type{32};
+  const signedbv_typet value_type{8};
+  const array_typet array_type{value_type, from_integer(3, index_type)};
+  const auto original_array_symbol =
+    make_test_symbol("original_array", array_type);
+  const auto result_array_symbol = make_test_symbol("result_array", array_type);
+  with_exprt with_expr{
+    original_array_symbol.symbol_expr(),
+    from_integer(0, index_type),
+    from_integer(0, value_type)};
+  with_expr.add_to_operands(
+    from_integer(1, index_type), from_integer(1, value_type));
+  with_expr.add_to_operands(
+    from_integer(2, index_type), from_integer(2, value_type));
+  const equal_exprt equal_expr{result_array_symbol.symbol_expr(), with_expr};
+  test.sent_commands.clear();
+  test.procedure.set_to(equal_expr, true);
+
+  const smt_bit_vector_sortt smt_index_sort{32};
+  const smt_bit_vector_sortt smt_value_sort{8};
+  const smt_array_sortt smt_array_sort{smt_index_sort, smt_value_sort};
+  const smt_identifier_termt smt_original_array_term{
+    "original_array", smt_array_sort};
+  const smt_identifier_termt smt_result_array_term{
+    "result_array", smt_array_sort};
+  const smt_identifier_termt index_0_term{"index_0", smt_index_sort};
+  const smt_identifier_termt index_1_term{"index_1", smt_index_sort};
+  const smt_identifier_termt index_2_term{"index_2", smt_index_sort};
+  const smt_termt store_term = smt_array_theoryt::store(
+    smt_array_theoryt::store(
+      smt_array_theoryt::store(
+        smt_original_array_term,
+        index_0_term,
+        smt_bit_vector_constant_termt{0, smt_value_sort}),
+      index_1_term,
+      smt_bit_vector_constant_termt{1, smt_value_sort}),
+    index_2_term,
+    smt_bit_vector_constant_termt{2, smt_value_sort});
+  const auto smt_assertion = smt_assert_commandt{
+    smt_core_theoryt::equal(smt_result_array_term, store_term)};
+  const std::vector<smt_commandt> expected_commands{
+    smt_declare_function_commandt(smt_result_array_term, {}),
+    smt_declare_function_commandt(smt_original_array_term, {}),
+    smt_define_function_commandt{
+      index_0_term.identifier(),
+      {},
+      smt_bit_vector_constant_termt{0, smt_index_sort}},
+    smt_define_function_commandt{
+      index_1_term.identifier(),
+      {},
+      smt_bit_vector_constant_termt{1, smt_index_sort}},
+    smt_define_function_commandt{
+      index_2_term.identifier(),
+      {},
+      smt_bit_vector_constant_termt{2, smt_index_sort}},
+    smt_assertion};
+  REQUIRE(test.sent_commands == expected_commands);
+}
+
+TEST_CASE(
+  "smt2_incremental_decision_proceduret byte update-extract commands.",
+  "[core][smt2_incremental]")
+{
+  auto test = decision_procedure_test_environmentt::make();
+  SECTION("byte_extract - byte from int correctly extracted.")
+  {
+    const auto int64_type = signedbv_typet(64);
+    const auto byte_type = signedbv_typet(8);
+    const auto extracted_byte_symbol =
+      make_test_symbol("extracted_byte", byte_type);
+    const auto original_int_symbol =
+      make_test_symbol("original_int", int64_type);
+    const auto byte_extract = make_byte_extract(
+      original_int_symbol.symbol_expr(),
+      from_integer(1, int64_type),
+      byte_type);
+    const typecast_exprt typecast_expr{byte_extract, byte_type};
+    const equal_exprt equal_expr{
+      extracted_byte_symbol.symbol_expr(), typecast_expr};
+    test.sent_commands.clear();
+    test.procedure.set_to(equal_expr, true);
+    const smt_bit_vector_sortt smt_int64_type{64};
+    const smt_bit_vector_sortt smt_byte_type{8};
+    const smt_identifier_termt extracted_byte_term{
+      "extracted_byte", smt_byte_type};
+    const smt_identifier_termt original_int{"original_int", smt_int64_type};
+    const smt_termt smt_equal_term = smt_core_theoryt::equal(
+      extracted_byte_term,
+      smt_bit_vector_theoryt::extract(15, 8)(original_int));
+    const auto smt_assertion = smt_assert_commandt{smt_equal_term};
+    const std::vector<smt_commandt> expected_commands{
+      smt_declare_function_commandt(extracted_byte_term, {}),
+      smt_declare_function_commandt(original_int, {}),
+      smt_assertion};
+    REQUIRE(test.sent_commands == expected_commands);
+  }
+  SECTION("byte_extract - int from byte correctly extracted.")
+  {
+    const auto byte_type = signedbv_typet(8);
+    const auto int16_type = signedbv_typet(16);
+    const auto ptr_type = signedbv_typet(32);
+    const auto extracted_int_symbol =
+      make_test_symbol("extracted_int", int16_type);
+    const auto original_byte_array_symbol = make_test_symbol(
+      "original_byte_array", array_typet(byte_type, from_integer(2, ptr_type)));
+    const auto byte_extract = make_byte_extract(
+      original_byte_array_symbol.symbol_expr(),
+      from_integer(0, ptr_type),
+      int16_type);
+    const equal_exprt equal_expr{
+      extracted_int_symbol.symbol_expr(), byte_extract};
+    test.sent_commands.clear();
+    test.procedure.set_to(equal_expr, true);
+    const smt_bit_vector_sortt smt_int16_type{16};
+    const smt_bit_vector_sortt smt_ptr_type{32};
+    const smt_bit_vector_sortt smt_byte_type{8};
+    const smt_identifier_termt extracted_int_term{
+      "extracted_int", smt_int16_type};
+    const smt_identifier_termt original_byte_array_term{
+      "original_byte_array", smt_array_sortt{smt_ptr_type, smt_byte_type}};
+    const smt_termt smt_equal_term = smt_core_theoryt::equal(
+      extracted_int_term,
+      smt_bit_vector_theoryt::concat(
+        smt_array_theoryt::select(
+          original_byte_array_term,
+          smt_bit_vector_constant_termt{1, smt_ptr_type}),
+        smt_array_theoryt::select(
+          original_byte_array_term,
+          smt_bit_vector_constant_termt{0, smt_ptr_type})));
+    const auto smt_assertion = smt_assert_commandt{smt_equal_term};
+    const std::vector<smt_commandt> expected_commands{
+      smt_declare_function_commandt(extracted_int_term, {}),
+      smt_declare_function_commandt(original_byte_array_term, {}),
+      smt_assertion};
+    REQUIRE(test.sent_commands == expected_commands);
+  }
+  SECTION("byte_update - write bytes into int.")
+  {
+    const auto int64_type = signedbv_typet(64);
+    const auto byte_type = signedbv_typet(8);
+    const auto result_int_symbol = make_test_symbol("result_int", int64_type);
+    const auto original_int_symbol =
+      make_test_symbol("original_int", int64_type);
+    const auto byte_update = make_byte_update(
+      original_int_symbol.symbol_expr(),
+      from_integer(1, int64_type),
+      from_integer(0x0B, byte_type));
+    const equal_exprt equal_expr{result_int_symbol.symbol_expr(), byte_update};
+    test.sent_commands.clear();
+    test.procedure.set_to(equal_expr, true);
+    const smt_bit_vector_sortt smt_value_type{64};
+    const smt_identifier_termt result_int_term{"result_int", smt_value_type};
+    const smt_identifier_termt original_int_term{
+      "original_int", smt_value_type};
+    const smt_termt smt_equal_term = smt_core_theoryt::equal(
+      result_int_term,
+      smt_bit_vector_theoryt::make_or(
+        smt_bit_vector_theoryt::make_and(
+          original_int_term,
+          smt_bit_vector_constant_termt{0xFFFFFFFFFFFF00FF, 64}),
+        smt_bit_vector_constant_termt{0x0B00, 64}));
+    const auto smt_assertion = smt_assert_commandt{smt_equal_term};
+    const std::vector<smt_commandt> expected_commands{
+      smt_declare_function_commandt{result_int_term, {}},
+      smt_declare_function_commandt{original_int_term, {}},
+      smt_assertion};
+    REQUIRE(test.sent_commands == expected_commands);
+  }
+  SECTION("byte_update - writes int into byte array.")
+  {
+    const auto int32_type = signedbv_typet(32);
+    const auto int16_type = signedbv_typet(16);
+    const auto byte_type = signedbv_typet(8);
+    const array_typet byte_array_type{byte_type, from_integer(2, int32_type)};
+    const auto result_array_symbol =
+      make_test_symbol("result_array", byte_array_type);
+    const auto original_array_symbol =
+      make_test_symbol("original_array", byte_array_type);
+    const auto byte_update = make_byte_update(
+      original_array_symbol.symbol_expr(),
+      from_integer(0, int32_type),
+      from_integer(0x0102, int16_type));
+    const equal_exprt equal_expr{
+      result_array_symbol.symbol_expr(), byte_update};
+    test.sent_commands.clear();
+    test.procedure.set_to(equal_expr, true);
+    const smt_bit_vector_sortt smt_byte_type{8};
+    const smt_bit_vector_sortt smt_index_type{32};
+    const smt_array_sortt smt_array_type{smt_index_type, smt_byte_type};
+    const smt_identifier_termt result_array_term{
+      "result_array", smt_array_type};
+    const smt_identifier_termt original_array_term{
+      "original_array", smt_array_type};
+    const smt_identifier_termt index_0_term{"index_0", smt_index_type};
+    const smt_identifier_termt index_1_term{"index_1", smt_index_type};
+    const smt_termt smt_equal_term = smt_core_theoryt::equal(
+      result_array_term,
+      smt_array_theoryt::store(
+        smt_array_theoryt::store(
+          original_array_term,
+          index_0_term,
+          smt_bit_vector_constant_termt{2, smt_byte_type}),
+        index_1_term,
+        smt_bit_vector_constant_termt{1, smt_byte_type}));
+    const auto smt_assertion = smt_assert_commandt{smt_equal_term};
+    const std::vector<smt_commandt> expected_commands{
+      smt_declare_function_commandt{result_array_term, {}},
+      smt_declare_function_commandt{original_array_term, {}},
+      smt_define_function_commandt{
+        index_0_term.identifier(),
+        {},
+        smt_bit_vector_constant_termt{0, smt_index_type}},
+      smt_define_function_commandt{
+        index_1_term.identifier(),
+        {},
+        smt_bit_vector_constant_termt{1, smt_index_type}},
+      smt_assertion};
+    REQUIRE(test.sent_commands == expected_commands);
   }
 }

@@ -41,8 +41,7 @@ for example by walking a chain of pointers and updating a points-to set, but
 abstract value (for example, SKIP instructions). Therefore, not recommended for
 new code.
 
-Only current user in-tree is \ref value_set_analysis_fit and its close
-relatives, \ref value_set_analysis_fivrt and \ref value_set_analysis_fivrnst
+Only current user in-tree is \ref value_set_analysis_fit.
 
 \section analyses-specific-analyses Specific analyses:
 
@@ -96,7 +95,7 @@ To be documented.
 
 Implemented in `src/analyses/dependence_graph.h(cpp)`. It is a graph and an
 abstract interpreter at the same time. The abstract interpretation nature
-allows a dependence graph to [build itself](#Construction)
+allows a dependence graph to [build itself](Construction)
 (the graph) from a given GOTO program.
 
 A dependence graph extends the class `grapht` with `dep_nodet` as the type of

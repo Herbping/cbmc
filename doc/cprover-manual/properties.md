@@ -133,14 +133,15 @@ The goto-instrument program supports these checks:
 | `--error-label label`        |  check that given label is unreachable               |
 
 As all of these checks apply across the entire input program, we may wish to
-disable or enable them for selected statements in the program. 
-For example, unsigned overflows can be expected and acceptable in certain 
-instructions even when elsewhere we do not expect them. 
+disable or enable them for selected statements in the program.
+For example, unsigned overflows can be expected and acceptable in certain
+instructions even when elsewhere we do not expect them.
 As of version 5.12, CBMC supports selectively disabling or enabling
 automatically generated properties using pragmas.
 
 
 CPROVER pragmas are handled using a stack:
+
 - `#pragma CPROVER check push` pushes a new level on the pragma stack
 - `#pragma CPROVER check disable "<name_of_check>"` adds a disable pragma
   at the top of the stack
@@ -393,30 +394,3 @@ example, replacing functions or setting global variables with the `__CPROVER`
 prefix might make analysis impossible. To avoid doing this by accident, negative
 lookahead can be used. For example, `(?!__).*` matches all names not starting
 with `__`.
-
-### Malloc failure mode
-
-|Flag                    |  Check                                          |
-|------------------------|-------------------------------------------------|
-| `--malloc-fail-null`   |  in case malloc fails return NULL               |
-| `--malloc-fail-assert` |  in case malloc fails report as failed property |
-| `--malloc-may-fail`    |  malloc may non-deterministically fail          |
-
-Calling `malloc` may fail for a number of reasons and the function may return a
-NULL pointer. The users can choose if and how they want the `malloc`-related
-failures to occur. The option `--malloc-fail-null` results in `malloc` returning
-the NULL pointer when failing. The option `--malloc-fail-assert` places
-additional properties inside `malloc` that are checked and if failing the
-verification is terminated (by `assume(false)`). One such property is that the
-allocated size is not too large, i.e. internally representable. When neither of
-those two options are used, CBMC will assume that `malloc` does not fail.
-
-Malloc may also fail for external reasons which are not modelled by CProver. If
-you want to replicate this behaviour use the option `--malloc-may-fail` in
-conjunction with one of the above modes of failure.
-
-These malloc failure options need to be set when the C library model is added to
-the program. Typically this is upon invoking CBMC, but if the user has chosen to
-do so via `goto-instrument --add-library`, then the malloc failure mode needs to
-be specified with that `goto-instrument` invocation, i.e., as an option to
-`goto-instrument`.

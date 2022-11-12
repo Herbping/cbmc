@@ -113,7 +113,8 @@ static std::string architecture_string(const std::string &value, const char *s)
 template <typename T>
 static std::string architecture_string(T value, const char *s)
 {
-  return std::string("const int " CPROVER_PREFIX "architecture_") +
+  return std::string("const " CPROVER_PREFIX "integer " CPROVER_PREFIX
+                     "architecture_") +
          std::string(s) + "=" + std::to_string(value) + ";\n";
 }
 
@@ -216,6 +217,25 @@ void ansi_c_internal_additions(std::string &code)
     // This function needs to be declared, or otherwise can't be called
     // by the entry-point construction.
     "void " INITIALIZE_FUNCTION "(void);\n"
+    "\n"
+    // frame specifications for contracts
+    // Declares a range of bytes as assignable (internal representation)
+    "void " CPROVER_PREFIX "assignable(void *ptr,\n"
+    "  " CPROVER_PREFIX "size_t size,\n"
+    "  " CPROVER_PREFIX "bool is_ptr_to_ptr);\n"
+    // Declares a range of bytes as assignable
+    "void " CPROVER_PREFIX "object_upto(void *ptr, \n"
+    "  " CPROVER_PREFIX "size_t size);\n"
+    // Declares bytes from ptr to the end of the object as assignable
+    "void " CPROVER_PREFIX "object_from(void *ptr);\n"
+    // Declares the whole object pointed to by ptr as assignable
+    "void " CPROVER_PREFIX "object_whole(void *ptr);\n"
+    // Declares a pointer as freeable
+    "void " CPROVER_PREFIX "freeable(void *ptr);\n"
+    // True iff ptr satisfies the preconditions of the free stdlib function
+    CPROVER_PREFIX "bool " CPROVER_PREFIX "is_freeable(void *ptr);\n"
+    // True iff ptr was freed during function execution or loop execution
+    CPROVER_PREFIX "bool " CPROVER_PREFIX "was_freed(void *ptr);\n"
     "\n";
   // clang-format on
 

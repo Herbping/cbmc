@@ -2,13 +2,13 @@
 
 #include <util/mp_arith.h>
 
-#include <solvers/smt2_incremental/smt_bit_vector_theory.h>
-#include <solvers/smt2_incremental/smt_commands.h>
-#include <solvers/smt2_incremental/smt_core_theory.h>
-#include <solvers/smt2_incremental/smt_logics.h>
-#include <solvers/smt2_incremental/smt_sorts.h>
-#include <solvers/smt2_incremental/smt_terms.h>
+#include <solvers/smt2_incremental/ast/smt_commands.h>
+#include <solvers/smt2_incremental/ast/smt_logics.h>
+#include <solvers/smt2_incremental/ast/smt_sorts.h>
+#include <solvers/smt2_incremental/ast/smt_terms.h>
 #include <solvers/smt2_incremental/smt_to_smt2_string.h>
+#include <solvers/smt2_incremental/theories/smt_bit_vector_theory.h>
+#include <solvers/smt2_incremental/theories/smt_core_theory.h>
 #include <testing-utils/use_catch.h>
 
 TEST_CASE("Test smt_indext to string conversion", "[core][smt2_incremental]")
@@ -243,4 +243,17 @@ TEST_CASE("SMT exists term to string conversion", "[core][smt2_incremental]")
       smt_to_smt2_string(exists) ==
       "(exists ((i (_ BitVec 8)) (j Bool)) (or (= i i) j))");
   }
+}
+
+// This test is expected to fail so that we can test the error printing of the
+// unit test framework for regressions. It is not included in the [core] or
+// default set of tests, so that the usual output is not polluted with
+// irrelevant error messages.
+TEST_CASE(
+  "Catch2 printing of SMT data structures for test failures.",
+  "[smt_error_printing]" XFAIL)
+{
+  CHECK(smt_bool_sortt{} == smt_bit_vector_sortt{8});
+  CHECK(smt_bit_vector_constant_termt{42, 8} == smt_bool_literal_termt{false});
+  CHECK(smt_check_sat_commandt{} == smt_set_logic_commandt{smt_logic_allt{}});
 }

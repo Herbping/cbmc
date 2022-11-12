@@ -250,9 +250,11 @@ void cpp_typecheckt::typecheck_expr_trinary(if_exprt &expr)
       expr.type()=e2.type();
       expr.op2().swap(e2);
     }
-    else if(expr.op1().type().id()==ID_array &&
-            expr.op2().type().id()==ID_array &&
-            expr.op1().type().subtype() == expr.op2().type().subtype())
+    else if(
+      expr.op1().type().id() == ID_array &&
+      expr.op2().type().id() == ID_array &&
+      to_array_type(expr.op1().type()).element_type() ==
+        to_array_type(expr.op2().type()).element_type())
     {
       // array-to-pointer conversion
 
@@ -324,12 +326,13 @@ void cpp_typecheckt::typecheck_expr_sizeof(exprt &expr)
     {
       // sizeof(expr[index]) can be parsed as an array type!
 
-      if(type.subtype().id()==ID_cpp_name)
+      if(to_array_type(type).element_type().id() == ID_cpp_name)
       {
         cpp_typecheck_fargst fargs;
 
-        exprt symbol_expr=resolve(
-          to_cpp_name(static_cast<const irept &>(type.subtype())),
+        exprt symbol_expr = resolve(
+          to_cpp_name(
+            static_cast<const irept &>(to_array_type(type).element_type())),
           cpp_typecheck_resolvet::wantt::BOTH,
           fargs);
 
@@ -408,7 +411,7 @@ bool cpp_typecheckt::overloadable(const exprt &expr)
     typet t = it->type();
 
     if(is_reference(t))
-      t=t.subtype();
+      t = to_reference_type(t).base_type();
 
     if(
       t.id() == ID_struct || t.id() == ID_union || t.id() == ID_c_enum ||
@@ -692,7 +695,8 @@ void cpp_typecheckt::typecheck_expr_address_of(exprt &expr)
   if(op.id() == ID_address_of && op.get_bool(ID_C_implicit))
   {
     // must be the address of a function
-    code_typet &code_type=to_code_type(op.type().subtype());
+    code_typet &code_type =
+      to_code_type(to_pointer_type(op.type()).base_type());
 
     code_typet::parameterst &args=code_type.parameters();
     if(!args.empty() && args.front().get_this())
@@ -713,7 +717,8 @@ void cpp_typecheckt::typecheck_expr_address_of(exprt &expr)
   else if(op.id() == ID_ptrmember && to_unary_expr(op).op().id() == "cpp-this")
   {
     expr.type() = pointer_type(op.type());
-    expr.type().add(ID_to_member) = to_unary_expr(op).op().type().subtype();
+    expr.type().add(ID_to_member) =
+      to_pointer_type(to_unary_expr(op).op().type()).base_type();
     return;
   }
 
@@ -721,7 +726,7 @@ void cpp_typecheckt::typecheck_expr_address_of(exprt &expr)
   const bool is_ref=is_reference(expr.type());
   c_typecheck_baset::typecheck_expr_address_of(expr);
   if(is_ref)
-    expr.type()=reference_type(expr.type().subtype());
+    expr.type() = reference_type(to_pointer_type(expr.type()).base_type());
 }
 
 void cpp_typecheckt::typecheck_expr_throw(exprt &expr)
@@ -755,8 +760,8 @@ void cpp_typecheckt::typecheck_expr_new(exprt &expr)
 
   if(expr.type().id()==ID_array)
   {
-    // first typecheck subtype
-    typecheck_type(expr.type().subtype());
+    // first typecheck the element type
+    typecheck_type(to_array_type(expr.type()).element_type());
 
     // typecheck the size
     exprt &size=to_array_type(expr.type()).size();
@@ -773,8 +778,8 @@ void cpp_typecheckt::typecheck_expr_new(exprt &expr)
     expr.set(ID_size, to_array_type(expr.type()).size());
 
     // new actually returns a pointer, not an array
-    pointer_typet ptr_type=
-      pointer_type(expr.type().subtype());
+    pointer_typet ptr_type =
+      pointer_type(to_array_type(expr.type()).element_type());
     expr.type().swap(ptr_type);
   }
   else
@@ -788,7 +793,7 @@ void cpp_typecheckt::typecheck_expr_new(exprt &expr)
     expr.type().swap(ptr_type);
   }
 
-  exprt object_expr(ID_new_object, expr.type().subtype());
+  exprt object_expr(ID_new_object, to_pointer_type(expr.type()).base_type());
   object_expr.set(ID_C_lvalue, true);
 
   already_typechecked_exprt::make_already_typechecked(object_expr);
@@ -816,13 +821,15 @@ void cpp_typecheckt::typecheck_expr_new(exprt &expr)
 
   // we add the size of the object for convenience of the
   // runtime library
-  auto size_of_opt = size_of_expr(expr.type().subtype(), *this);
+  auto size_of_opt =
+    size_of_expr(to_pointer_type(expr.type()).base_type(), *this);
 
   if(size_of_opt.has_value())
   {
     auto &sizeof_expr = static_cast<exprt &>(expr.add(ID_sizeof));
     sizeof_expr = size_of_opt.value();
-    sizeof_expr.add(ID_C_c_sizeof_type) = expr.type().subtype();
+    sizeof_expr.add(ID_C_c_sizeof_type) =
+      to_pointer_type(expr.type()).base_type();
   }
 }
 
@@ -1023,14 +1030,14 @@ void cpp_typecheckt::typecheck_expr_delete(exprt &expr)
 
   // remove any const-ness of the argument
   // (which would impair the call to the destructor)
-  pointer_type.subtype().remove(ID_C_constant);
+  to_pointer_type(pointer_type).base_type().remove(ID_C_constant);
 
   // delete expressions are always void
   expr.type()=typet(ID_empty);
 
   // we provide the right destructor, for the convenience
   // of later stages
-  exprt new_object(ID_new_object, pointer_type.subtype());
+  exprt new_object(ID_new_object, to_pointer_type(pointer_type).base_type());
   new_object.add_source_location()=expr.source_location();
   new_object.set(ID_C_lvalue, true);
 
@@ -1635,13 +1642,13 @@ void cpp_typecheckt::typecheck_side_effect_function_call(
       }
 
       // get the virtual table
-      typet this_type=
-        to_code_type(expr.function().type()).parameters().front().type();
-      irep_idt vtable_name=
-        this_type.subtype().get_string(ID_identifier) +"::@vtable_pointer";
+      auto this_type = to_pointer_type(
+        to_code_type(expr.function().type()).parameters().front().type());
+      irep_idt vtable_name =
+        this_type.base_type().get_string(ID_identifier) + "::@vtable_pointer";
 
-      const struct_typet &vt_struct=
-        to_struct_type(follow(this_type.subtype()));
+      const struct_typet &vt_struct =
+        to_struct_type(follow(this_type.base_type()));
 
       const struct_typet::componentt &vt_compo=
         vt_struct.get_component(vtable_name);
@@ -1652,7 +1659,7 @@ void cpp_typecheckt::typecheck_side_effect_function_call(
 
       // look for the right entry
       irep_idt vtentry_component_name =
-        vt_compo.type().subtype().get_string(ID_identifier) +
+        to_pointer_type(vt_compo.type()).base_type().get_string(ID_identifier) +
         "::" + expr.function().type().get_string(ID_C_virtual_name);
 
       exprt vtentry_member(ID_ptrmember);
@@ -1719,14 +1726,14 @@ void cpp_typecheckt::typecheck_side_effect_function_call(
 
     assert(parameters.size()>=1);
 
-    const typet &this_type=parameters[0].type();
+    const auto &this_type = to_pointer_type(parameters[0].type());
 
     // change type from 'constructor' to object type
-    expr.type()=this_type.subtype();
+    expr.type() = this_type.base_type();
 
     // create temporary object
     side_effect_exprt tmp_object_expr(
-      ID_temporary_object, this_type.subtype(), expr.source_location());
+      ID_temporary_object, this_type.base_type(), expr.source_location());
     tmp_object_expr.set(ID_C_lvalue, true);
     tmp_object_expr.set(ID_mode, ID_cpp);
 
@@ -1808,7 +1815,7 @@ void cpp_typecheckt::typecheck_side_effect_function_call(
 
       if(
         operand.type().id() != ID_pointer &&
-        operand.type() == parameter.type().subtype())
+        operand.type() == to_pointer_type(parameter.type()).base_type())
       {
         address_of_exprt tmp(operand, pointer_type(operand.type()));
         tmp.add_source_location()=operand.source_location();
@@ -1869,7 +1876,7 @@ void cpp_typecheckt::typecheck_function_call_arguments(
         exprt temporary;
         new_temporary(
           arg_it->source_location(),
-          parameter.type().subtype(),
+          to_reference_type(parameter.type()).base_type(),
           already_typechecked_exprt{*arg_it},
           temporary);
         arg_it->swap(temporary);
@@ -2010,7 +2017,7 @@ void cpp_typecheckt::typecheck_side_effect_assignment(side_effect_exprt &expr)
   typet type0 = to_binary_expr(expr).op0().type();
 
   if(is_reference(type0))
-    type0=type0.subtype();
+    type0 = to_reference_type(type0).base_type();
 
   if(cpp_is_pod(type0))
   {
@@ -2187,7 +2194,9 @@ void cpp_typecheckt::convert_pmop(exprt &expr)
     throw 0;
   }
 
-  typet t0 = op0.type().id() == ID_pointer ? op0.type().subtype() : op0.type();
+  typet t0 = op0.type().id() == ID_pointer
+               ? to_pointer_type(op0.type()).base_type()
+               : op0.type();
 
   typet t1((const typet &)op1.type().find(ID_to_member));
 

@@ -125,7 +125,7 @@ bool rename_symbolt::rename(typet &dest) const
   bool result=true;
 
   if(dest.has_subtype())
-    if(!rename(dest.subtype()))
+    if(!rename(to_type_with_subtype(dest).subtype()))
       result=false;
 
   for(typet &subtype : to_type_with_subtypes(dest).subtypes())
@@ -168,6 +168,14 @@ bool rename_symbolt::rename(typet &dest) const
     if(spec_assigns.is_not_nil() && have_to_rename(spec_assigns))
     {
       rename(static_cast<exprt &>(dest.add(ID_C_spec_assigns)));
+      result = false;
+    }
+
+    const exprt &spec_frees =
+      static_cast<const exprt &>(dest.find(ID_C_spec_frees));
+    if(spec_frees.is_not_nil() && have_to_rename(spec_frees))
+    {
+      rename(static_cast<exprt &>(dest.add(ID_C_spec_frees)));
       result = false;
     }
 

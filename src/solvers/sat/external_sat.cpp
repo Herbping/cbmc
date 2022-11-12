@@ -21,7 +21,7 @@ external_satt::external_satt(message_handlert &message_handler, std::string cmd)
 {
 }
 
-const std::string external_satt::solver_text()
+std::string external_satt::solver_text() const
 {
   return "External SAT solver";
 }
@@ -109,7 +109,7 @@ external_satt::resultt external_satt::parse_result(std::string solver_output)
 
     if(line[0] == 'v')
     {
-      auto assignments = split_string(line, ' ');
+      auto assignments = split_string(line, ' ', false, true);
 
       // remove the first element which should be 'v' identifying
       // the line as the satisfying assignments

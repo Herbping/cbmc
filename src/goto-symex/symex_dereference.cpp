@@ -63,7 +63,7 @@ exprt goto_symext::address_arithmetic(
       address_of_exprt &a=to_address_of_expr(result);
 
       // turn &a of type T[i][j] into &(a[0][0])
-      for(const typet *t = &(a.type().subtype());
+      for(const typet *t = &(to_type_with_subtype(a.type()).subtype());
           t->id() == ID_array && expr.type() != *t;
           t = &(to_array_type(*t).element_type()))
         a.object() = index_exprt(a.object(), from_integer(0, c_index_type()));
@@ -400,7 +400,8 @@ void goto_symext::dereference_rec(
       tc_op.id() == ID_address_of &&
       to_address_of_expr(tc_op).object().type().id() == ID_array &&
       expr.type() ==
-        pointer_type(to_address_of_expr(tc_op).object().type().subtype()))
+        pointer_type(to_array_type(to_address_of_expr(tc_op).object().type())
+                       .element_type()))
     {
       expr = address_of_exprt(index_exprt(
         to_address_of_expr(tc_op).object(), from_integer(0, c_index_type())));

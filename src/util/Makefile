@@ -8,6 +8,7 @@ SRC = arith_tools.cpp \
       c_types.cpp \
       cmdline.cpp \
       config.cpp \
+      console.cpp \
       cout_message.cpp \
       dstring.cpp \
       endianness_map.cpp \
@@ -28,6 +29,7 @@ SRC = arith_tools.cpp \
       fresh_symbol.cpp \
       get_base_name.cpp \
       get_module.cpp \
+      help_formatter.cpp \
       identifier.cpp \
       ieee_float.cpp \
       interval_union.cpp \
@@ -92,6 +94,7 @@ SRC = arith_tools.cpp \
       string_hash.cpp \
       string_utils.cpp \
       structured_data.cpp \
+      substitute_symbols.cpp \
       symbol.cpp \
       symbol_table_base.cpp \
       symbol_table.cpp \

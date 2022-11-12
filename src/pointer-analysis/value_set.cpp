@@ -595,7 +595,12 @@ void value_sett::get_value_set_rec(
       // integer-to-pointer
 
       if(op.is_zero())
-        insert(dest, exprt(ID_null_object, expr_type.subtype()), mp_integer{0});
+      {
+        insert(
+          dest,
+          exprt(ID_null_object, to_type_with_subtype(expr_type).subtype()),
+          mp_integer{0});
+      }
       else
       {
         // see if we have something for the integer
@@ -674,11 +679,12 @@ void value_sett::get_value_set_rec(
 
       if(ptr_operand.has_value() && i.has_value())
       {
-        typet pointer_sub_type = ptr_operand->type().subtype();
-        if(pointer_sub_type.id()==ID_empty)
-          pointer_sub_type=char_type();
+        typet pointer_base_type =
+          to_pointer_type(ptr_operand->type()).base_type();
+        if(pointer_base_type.id() == ID_empty)
+          pointer_base_type = char_type();
 
-        auto size = pointer_offset_size(pointer_sub_type, ns);
+        auto size = pointer_offset_size(pointer_base_type, ns);
 
         if(!size.has_value() || (*size) == 0)
         {
@@ -758,6 +764,24 @@ void value_sett::get_value_set_rec(
       offset.reset();
 
       insert(dest, it->first, offset);
+    }
+  }
+  else if(expr.id() == ID_lshr || expr.id() == ID_ashr || expr.id() == ID_shl)
+  {
+    const binary_exprt &binary_expr = to_binary_expr(expr);
+
+    object_mapt pointer_expr_set;
+    get_value_set_rec(
+      binary_expr.op0(), pointer_expr_set, "", binary_expr.op0().type(), ns);
+
+    for(const auto &object_map_entry : pointer_expr_set.read())
+    {
+      offsett offset = object_map_entry.second;
+
+      // kill any offset
+      offset.reset();
+
+      insert(dest, object_map_entry.first, offset);
     }
   }
   else if(expr.id()==ID_side_effect)
@@ -1192,7 +1216,10 @@ void value_sett::get_reference_set_rec(
 
       if(object.id()==ID_unknown)
         insert(dest, exprt(ID_unknown, expr.type()));
-      else
+      else if(
+        object.type().id() == ID_struct ||
+        object.type().id() == ID_struct_tag || object.type().id() == ID_union ||
+        object.type().id() == ID_union_tag)
       {
         offsett o = it->second;
 
@@ -1218,6 +1245,8 @@ void value_sett::get_reference_set_rec(
         else
           insert(dest, exprt(ID_unknown, expr.type()));
       }
+      else
+        insert(dest, exprt(ID_unknown, expr.type()));
     }
 
     return;
@@ -1257,8 +1286,10 @@ void value_sett::assign(
       const typet &subtype = c.type();
       const irep_idt &name = c.get_name();
 
-      // ignore methods and padding
-      if(subtype.id() == ID_code || c.get_is_padding())
+      // ignore padding
+      DATA_INVARIANT(
+        subtype.id() != ID_code, "struct member must not be of code type");
+      if(c.get_is_padding())
         continue;
 
       member_exprt lhs_member(lhs, name, subtype);
@@ -1763,8 +1794,10 @@ void value_sett::erase_struct_union_symbol(
     const typet &subtype = c.type();
     const irep_idt &name = c.get_name();
 
-    // ignore methods and padding
-    if(subtype.id() == ID_code || c.get_is_padding())
+    // ignore padding
+    DATA_INVARIANT(
+      subtype.id() != ID_code, "struct/union member must not be of code type");
+    if(c.get_is_padding())
       continue;
 
     erase_symbol_rec(subtype, erase_prefix + "." + id2string(name), ns);

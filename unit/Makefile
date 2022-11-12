@@ -59,6 +59,7 @@ SRC += analyses/ai/ai.cpp \
        goto-checker/report_util/is_property_less_than.cpp \
        goto-instrument/cover_instrument.cpp \
        goto-instrument/cover/cover_only.cpp \
+       goto-instrument/expr_enumerator/expr_enumerator.cpp \
        goto-programs/allocate_objects.cpp \
        goto-programs/goto_program_assume.cpp \
        goto-programs/goto_program_dead.cpp \
@@ -100,21 +101,21 @@ SRC += analyses/ai/ai.cpp \
        solvers/sat/satcheck_minisat2.cpp \
        solvers/smt2/smt2_conv.cpp \
        solvers/smt2/smt2irep.cpp \
+       solvers/smt2_incremental/ast/smt_commands.cpp \
+       solvers/smt2_incremental/ast/smt_index.cpp \
+       solvers/smt2_incremental/ast/smt_responses.cpp \
+       solvers/smt2_incremental/ast/smt_sorts.cpp \
+       solvers/smt2_incremental/ast/smt_terms.cpp \
        solvers/smt2_incremental/construct_value_expr_from_smt.cpp \
        solvers/smt2_incremental/convert_expr_to_smt.cpp \
        solvers/smt2_incremental/object_tracking.cpp \
        solvers/smt2_incremental/smt2_incremental_decision_procedure.cpp \
-       solvers/smt2_incremental/smt_array_theory.cpp \
-       solvers/smt2_incremental/smt_bit_vector_theory.cpp \
-       solvers/smt2_incremental/smt_commands.cpp \
-       solvers/smt2_incremental/smt_core_theory.cpp \
-       solvers/smt2_incremental/smt_index.cpp \
        solvers/smt2_incremental/smt_object_size.cpp \
        solvers/smt2_incremental/smt_response_validation.cpp \
-       solvers/smt2_incremental/smt_responses.cpp \
-       solvers/smt2_incremental/smt_sorts.cpp \
-       solvers/smt2_incremental/smt_terms.cpp \
        solvers/smt2_incremental/smt_to_smt2_string.cpp \
+       solvers/smt2_incremental/theories/smt_array_theory.cpp \
+       solvers/smt2_incremental/theories/smt_bit_vector_theory.cpp \
+       solvers/smt2_incremental/theories/smt_core_theory.cpp \
        solvers/strings/array_pool/array_pool.cpp \
        solvers/strings/string_constraint_generator_valueof/calculate_max_string_length.cpp \
        solvers/strings/string_constraint_generator_valueof/get_numeric_value_from_character.cpp \
@@ -135,6 +136,7 @@ SRC += analyses/ai/ai.cpp \
        util/expr_iterator.cpp \
        util/file_util.cpp \
        util/format.cpp \
+       util/format_expr.cpp \
        util/format_number_range.cpp \
        util/get_base_name.cpp \
        util/graph.cpp \
@@ -243,6 +245,7 @@ BMC_DEPS =../src/cbmc/c_test_input_generator$(OBJEXT) \
           ../src/goto-instrument/nondet_static$(OBJEXT) \
           ../src/goto-instrument/full_slicer$(OBJEXT) \
           ../src/goto-instrument/unwindset$(OBJEXT) \
+          ../src/goto-instrument/synthesizer/expr_enumerator$(OBJEXT) \
           ../src/xmllang/xmllang$(LIBEXT) \
           ../src/goto-symex/goto-symex$(LIBEXT) \
           ../src/jsil/jsil$(LIBEXT) \

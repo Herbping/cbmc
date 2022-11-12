@@ -37,7 +37,6 @@ public:
   remove_function_pointerst(
     message_handlert &_message_handler,
     symbol_tablet &_symbol_table,
-    bool _add_safety_assertion,
     bool only_resolve_const_fps,
     const goto_functionst &goto_functions);
 
@@ -51,7 +50,6 @@ protected:
   message_handlert &message_handler;
   const namespacet ns;
   symbol_tablet &symbol_table;
-  bool add_safety_assertion;
 
   // We can optionally halt the FP removal if we aren't able to use
   // remove_const_function_pointerst to successfully narrow to a small
@@ -81,13 +79,11 @@ protected:
 remove_function_pointerst::remove_function_pointerst(
   message_handlert &_message_handler,
   symbol_tablet &_symbol_table,
-  bool _add_safety_assertion,
   bool only_resolve_const_fps,
   const goto_functionst &goto_functions)
   : message_handler(_message_handler),
     ns(_symbol_table),
     symbol_table(_symbol_table),
-    add_safety_assertion(_add_safety_assertion),
     only_resolve_const_fps(only_resolve_const_fps)
 {
   for(const auto &s : symbol_table.symbols)
@@ -242,7 +238,8 @@ static void fix_return_type(
   dest.add(goto_programt::make_assignment(code_assignt(
     old_lhs,
     make_byte_extract(
-      tmp_symbol_expr, from_integer(0, c_index_type()), old_lhs.type()))));
+      tmp_symbol_expr, from_integer(0, c_index_type()), old_lhs.type()),
+    function_call.source_location())));
 }
 
 void remove_function_pointerst::remove_function_pointer(
@@ -343,8 +340,7 @@ void remove_function_pointerst::remove_function_pointer(
     goto_program,
     function_id,
     target,
-    functions,
-    add_safety_assertion);
+    functions);
 }
 
 static std::string function_pointer_assertion_comment(
@@ -385,8 +381,7 @@ void remove_function_pointer(
   goto_programt &goto_program,
   const irep_idt &function_id,
   goto_programt::targett target,
-  const std::unordered_set<symbol_exprt, irep_hash> &functions,
-  const bool add_safety_assertion)
+  const std::unordered_set<symbol_exprt, irep_hash> &functions)
 {
   const exprt &function = target->call_function();
   const exprt &pointer = to_dereference_expr(function).pointer();
@@ -394,7 +389,8 @@ void remove_function_pointer(
   // the final target is a skip
   goto_programt final_skip;
 
-  goto_programt::targett t_final = final_skip.add(goto_programt::make_skip());
+  goto_programt::targett t_final =
+    final_skip.add(goto_programt::make_skip(target->source_location()));
 
   // build the calls and gotos
 
@@ -413,11 +409,13 @@ void remove_function_pointer(
     goto_programt tmp;
     fix_return_type(function_id, new_call, symbol_table, tmp);
 
-    auto call = new_code_calls.add(goto_programt::make_function_call(new_call));
+    auto call = new_code_calls.add(
+      goto_programt::make_function_call(new_call, target->source_location()));
     new_code_calls.destructive_append(tmp);
 
     // goto final
-    new_code_calls.add(goto_programt::make_goto(t_final, true_exprt()));
+    new_code_calls.add(goto_programt::make_goto(
+      t_final, true_exprt(), target->source_location()));
 
     // goto to call
     const address_of_exprt address_of(fun, pointer_type(fun.type()));
@@ -425,20 +423,18 @@ void remove_function_pointer(
     const auto casted_address =
       typecast_exprt::conditional_cast(address_of, pointer.type());
 
-    new_code_gotos.add(
-      goto_programt::make_goto(call, equal_exprt(pointer, casted_address)));
+    new_code_gotos.add(goto_programt::make_goto(
+      call, equal_exprt(pointer, casted_address), target->source_location()));
   }
 
   // fall-through
-  if(add_safety_assertion)
-  {
-    goto_programt::targett t =
-      new_code_gotos.add(goto_programt::make_assertion(false_exprt()));
-    t->source_location_nonconst().set_property_class("pointer dereference");
-    t->source_location_nonconst().set_comment(
-      function_pointer_assertion_comment(functions));
-  }
-  new_code_gotos.add(goto_programt::make_assumption(false_exprt()));
+  source_locationt annotated_location = target->source_location();
+  annotated_location.set_property_class("pointer dereference");
+  annotated_location.set_comment(function_pointer_assertion_comment(functions));
+  new_code_gotos.add(
+    goto_programt::make_assertion(false_exprt(), annotated_location));
+  new_code_gotos.add(
+    goto_programt::make_assumption(false_exprt(), target->source_location()));
 
   goto_programt new_code;
 
@@ -446,20 +442,6 @@ void remove_function_pointer(
   new_code.destructive_append(new_code_gotos);
   new_code.destructive_append(new_code_calls);
   new_code.destructive_append(final_skip);
-
-  // set locations
-  for(auto &instruction : new_code.instructions)
-  {
-    source_locationt &source_location = instruction.source_location_nonconst();
-
-    irep_idt property_class = source_location.get_property_class();
-    irep_idt comment = source_location.get_comment();
-    source_location = target->source_location();
-    if(!property_class.empty())
-      source_location.set_property_class(property_class);
-    if(!comment.empty())
-      source_location.set_comment(comment);
-  }
 
   goto_programt::targett next_target=target;
   next_target++;
@@ -539,53 +521,16 @@ void remove_function_pointerst::operator()(goto_functionst &functions)
     functions.compute_location_numbers();
 }
 
-bool remove_function_pointers(
-  message_handlert &_message_handler,
-  symbol_tablet &symbol_table,
-  const goto_functionst &goto_functions,
-  goto_programt &goto_program,
-  const irep_idt &function_id,
-  bool add_safety_assertion,
-  bool only_remove_const_fps)
-{
-  remove_function_pointerst
-    rfp(
-      _message_handler,
-      symbol_table,
-      add_safety_assertion,
-      only_remove_const_fps,
-      goto_functions);
-
-  return rfp.remove_function_pointers(goto_program, function_id);
-}
-
 void remove_function_pointers(
   message_handlert &_message_handler,
-  symbol_tablet &symbol_table,
-  goto_functionst &goto_functions,
-  bool add_safety_assertion,
-  bool only_remove_const_fps)
-{
-  remove_function_pointerst
-    rfp(
-      _message_handler,
-      symbol_table,
-      add_safety_assertion,
-      only_remove_const_fps,
-      goto_functions);
-
-  rfp(goto_functions);
-}
-
-void remove_function_pointers(message_handlert &_message_handler,
   goto_modelt &goto_model,
-  bool add_safety_assertion,
   bool only_remove_const_fps)
 {
-  remove_function_pointers(
+  remove_function_pointerst rfp(
     _message_handler,
     goto_model.symbol_table,
-    goto_model.goto_functions,
-    add_safety_assertion,
-    only_remove_const_fps);
+    only_remove_const_fps,
+    goto_model.goto_functions);
+
+  rfp(goto_model.goto_functions);
 }

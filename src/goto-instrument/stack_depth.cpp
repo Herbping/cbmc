@@ -15,6 +15,7 @@ Date: November 2011
 
 #include <util/arith_tools.h>
 #include <util/bitvector_types.h>
+#include <util/c_types.h>
 
 #include <goto-programs/goto_convert_functions.h>
 #include <goto-programs/goto_model.h>
@@ -26,7 +27,7 @@ static symbol_exprt add_stack_depth_symbol(
   message_handlert &message_handler)
 {
   const irep_idt identifier="$stack_depth";
-  unsignedbv_typet type(sizeof(std::size_t)*8);
+  typet type = size_type();
 
   symbolt new_symbol;
   new_symbol.name=identifier;
@@ -69,12 +70,12 @@ static void stack_depth(
   goto_programt::targett first=goto_program.instructions.begin();
 
   binary_relation_exprt guard(symbol, ID_le, max_depth);
-  goto_programt::targett assert_ins = goto_program.insert_before(
-    first, goto_programt::make_assertion(guard, first->source_location()));
-
-  assert_ins->source_location_nonconst().set_comment(
+  source_locationt annotated_location = first->source_location();
+  annotated_location.set_comment(
     "Stack depth exceeds " + std::to_string(i_depth));
-  assert_ins->source_location_nonconst().set_property_class("stack-depth");
+  annotated_location.set_property_class("stack-depth");
+  goto_program.insert_before(
+    first, goto_programt::make_assertion(guard, annotated_location));
 
   goto_program.insert_before(
     first,

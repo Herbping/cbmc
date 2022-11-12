@@ -348,18 +348,18 @@ simplify_exprt::simplify_pointer_offset(const pointer_offset_exprt &expr)
     if(ptr_expr.size()!=1 || int_expr.empty())
       return unchanged(expr);
 
-    typet pointer_sub_type=ptr_expr.front().type().subtype();
-    if(pointer_sub_type.id()==ID_empty)
-      pointer_sub_type=char_type();
+    typet pointer_base_type =
+      to_pointer_type(ptr_expr.front().type()).base_type();
+    if(pointer_base_type.id() == ID_empty)
+      pointer_base_type = char_type();
 
-    auto element_size = pointer_offset_size(pointer_sub_type, ns);
+    auto element_size = pointer_offset_size(pointer_base_type, ns);
 
     if(!element_size.has_value())
       return unchanged(expr);
 
-    // this might change the type of the pointer!
     exprt pointer_offset_expr = simplify_pointer_offset(
-      to_pointer_offset_expr(pointer_offset(ptr_expr.front())));
+      pointer_offset_exprt(ptr_expr.front(), expr.type()));
 
     exprt sum;
 

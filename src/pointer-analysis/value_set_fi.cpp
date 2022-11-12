@@ -180,7 +180,8 @@ void value_set_fit::flatten_rec(
       if(fi==values.end())
       {
         // this is some static object, keep it in.
-        const symbol_exprt se(o.get(ID_identifier), o.type().subtype());
+        const symbol_exprt se(
+          o.get(ID_identifier), to_type_with_subtype(o.type()).subtype());
         insert(dest, se, mp_integer{0});
       }
       else
@@ -466,8 +467,7 @@ void value_set_fit::get_value_set_rec(
     }
     else if(v_it!=values.end())
     {
-      typet t("#REF#");
-      t.subtype() = expr.type();
+      type_with_subtypet t("#REF#", expr.type());
       symbol_exprt sym(ident, t);
       insert(dest, sym, mp_integer{0});
       return;
@@ -521,7 +521,10 @@ void value_set_fit::get_value_set_rec(
     // check if NULL
     if(is_null_pointer(to_constant_expr(expr)))
     {
-      insert(dest, exprt(ID_null_object, expr.type().subtype()), mp_integer{0});
+      insert(
+        dest,
+        exprt(ID_null_object, to_pointer_type(expr.type()).base_type()),
+        mp_integer{0});
       return;
     }
   }
@@ -629,7 +632,8 @@ void value_set_fit::get_value_set_rec(
       PRECONDITION(suffix.empty());
       assert(expr.type().id()==ID_pointer);
 
-      dynamic_object_exprt dynamic_object(expr.type().subtype());
+      dynamic_object_exprt dynamic_object(
+        to_pointer_type(expr.type()).base_type());
       dynamic_object.set_instance(
         (from_function << 16) | from_target_index);
       dynamic_object.valid()=true_exprt();
@@ -834,7 +838,9 @@ void value_set_fit::get_reference_set_sharing_rec(
             insert(dest, t2_object_entry);
         }
         else
-          insert(dest, exprt(ID_unknown, obj.type().subtype()));
+          insert(
+            dest,
+            exprt(ID_unknown, to_type_with_subtype(obj.type()).subtype()));
       }
       else
         insert(dest, object_entry);
@@ -916,11 +922,10 @@ void value_set_fit::get_reference_set_sharing_rec(
       if(object.id()==ID_unknown)
         insert(dest, exprt(ID_unknown, expr.type()));
       else if(
-        object.id() == ID_dynamic_object && obj_type.id() != ID_struct &&
-        obj_type.id() != ID_union && obj_type.id() != ID_struct_tag &&
-        obj_type.id() != ID_union_tag)
+        obj_type.id() != ID_struct && obj_type.id() != ID_union &&
+        obj_type.id() != ID_struct_tag && obj_type.id() != ID_union_tag)
       {
-        // we catch dynamic objects of the wrong type,
+        // we catch objects of the wrong type,
         // to avoid non-integral typecasts.
         insert(dest, exprt(ID_unknown, expr.type()));
       }
@@ -987,8 +992,11 @@ void value_set_fit::assign(
       const typet &subtype=c_it->type();
       const irep_idt &name = c_it->get_name();
 
-      // ignore methods
-      if(subtype.id()==ID_code)
+      // ignore padding
+      DATA_INVARIANT(
+        subtype.id() != ID_code,
+        "struct/union member must not be of code type");
+      if(c_it->get_is_padding())
         continue;
 
       member_exprt lhs_member(lhs, name, subtype);
@@ -1087,7 +1095,7 @@ void value_set_fit::assign(
         const index_exprt op0_index(
           to_with_expr(rhs).old(),
           exprt(ID_unknown, c_index_type()),
-          type.subtype());
+          to_array_type(type).element_type());
 
         assign(lhs_index, op0_index, ns);
         assign(lhs_index, to_with_expr(rhs).new_value(), ns);
@@ -1095,7 +1103,9 @@ void value_set_fit::assign(
       else
       {
         const index_exprt rhs_index(
-          rhs, exprt(ID_unknown, c_index_type()), type.subtype());
+          rhs,
+          exprt(ID_unknown, c_index_type()),
+          to_array_type(type).element_type());
         assign(lhs_index, rhs_index, ns);
       }
     }
@@ -1133,7 +1143,8 @@ void value_set_fit::assign_rec(
     const irep_idt &ident = lhs.get(ID_identifier);
     object_mapt temp;
     gvs_recursion_sett recset;
-    get_value_set_rec(lhs, temp, "", lhs.type().subtype(), ns, recset);
+    get_value_set_rec(
+      lhs, temp, "", to_type_with_subtype(lhs.type()).subtype(), ns, recset);
 
     if(recursion_set.find(ident)!=recursion_set.end())
     {

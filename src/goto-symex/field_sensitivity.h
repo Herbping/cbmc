@@ -108,7 +108,7 @@ public:
     const ssa_exprt &lhs,
     const exprt &rhs,
     symex_targett &target,
-    bool allow_pointer_unsoundness);
+    bool allow_pointer_unsoundness) const;
 
   /// Turn an expression \p expr into a field-sensitive SSA expression.
   /// Field-sensitive SSA expressions have individual symbols for each
@@ -128,6 +128,7 @@ public:
   apply(const namespacet &ns, goto_symex_statet &state, exprt expr, bool write)
     const;
   /// \copydoc apply(const namespacet&,goto_symex_statet&,exprt,bool) const
+  NODISCARD
   exprt apply(
     const namespacet &ns,
     goto_symex_statet &state,
@@ -142,6 +143,7 @@ public:
   /// \return Expanded expression; for example, for a \p ssa_expr of some struct
   ///   type, a `struct_exprt` with each component now being an SSA expression
   ///   is built.
+  NODISCARD
   exprt get_fields(
     const namespacet &ns,
     goto_symex_statet &state,
@@ -154,12 +156,10 @@ public:
   /// \param expr: the expression to evaluate
   /// \return False, if and only if, \p expr would be a single field-sensitive
   /// SSA expression.
+  NODISCARD
   bool is_divisible(const ssa_exprt &expr) const;
 
 private:
-  /// whether or not to invoke \ref field_sensitivityt::apply
-  bool run_apply = true;
-
   const std::size_t max_field_sensitivity_array_size;
 
   const bool should_simplify;
@@ -170,8 +170,9 @@ private:
     const exprt &lhs_fs,
     const exprt &ssa_rhs,
     symex_targett &target,
-    bool allow_pointer_unsoundness);
+    bool allow_pointer_unsoundness) const;
 
+  NODISCARD
   exprt simplify_opt(exprt e, const namespacet &ns) const;
 };
 

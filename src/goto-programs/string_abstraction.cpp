@@ -46,7 +46,8 @@ bool string_abstractiont::build_wrap(
   if(
     dest.type() != a_t &&
     !(dest.type().id() == ID_array && a_t.id() == ID_pointer &&
-      dest.type().subtype() == a_t.subtype()))
+      to_array_type(dest.type()).element_type() ==
+        to_pointer_type(a_t).base_type()))
   {
     messaget log{message_handler};
     log.warning() << "warning: inconsistent abstract type for "
@@ -59,7 +60,8 @@ bool string_abstractiont::build_wrap(
 
 bool string_abstractiont::is_ptr_string_struct(const typet &type) const
 {
-  return type.id() == ID_pointer && type.subtype() == string_struct;
+  return type.id() == ID_pointer &&
+         to_pointer_type(type).base_type() == string_struct;
 }
 
 static inline bool is_ptr_argument(const typet &type)
@@ -304,10 +306,10 @@ void string_abstractiont::make_decl_and_def(goto_programt &dest,
 {
   const symbolt &symbol=ns.lookup(identifier);
   symbol_exprt sym_expr=symbol.symbol_expr();
-
-  goto_programt::targett decl1 =
-    dest.add(goto_programt::make_decl(sym_expr, ref_instr->source_location()));
-  decl1->code_nonconst().add_source_location() = ref_instr->source_location();
+  code_declt decl{sym_expr};
+  decl.add_source_location() = ref_instr->source_location();
+  dest.add(
+    goto_programt::make_decl(std::move(decl), ref_instr->source_location()));
 
   exprt val=symbol.value;
   // initialize pointers with suitable objects
@@ -320,11 +322,9 @@ void string_abstractiont::make_decl_and_def(goto_programt &dest,
   // may still be nil (structs, then assignments have been done already)
   if(val.is_not_nil())
   {
-    goto_programt::targett assignment1 =
-      dest.add(goto_programt::make_assignment(
-        code_assignt(sym_expr, val), ref_instr->source_location()));
-    assignment1->code_nonconst().add_source_location() =
-      ref_instr->source_location();
+    code_assignt assignment{sym_expr, val, ref_instr->source_location()};
+    dest.add(
+      goto_programt::make_assignment(assignment, ref_instr->source_location()));
   }
 }
 
@@ -334,10 +334,16 @@ exprt string_abstractiont::make_val_or_dummy_rec(goto_programt &dest,
 {
   if(symbol.type.id() == ID_array || symbol.type.id() == ID_pointer)
   {
-    const typet &source_subt =
-      is_ptr_string_struct(symbol.type) ? source_type : source_type.subtype();
+    const typet &source_subt = is_ptr_string_struct(symbol.type)
+                                 ? source_type
+                                 : to_type_with_subtype(source_type).subtype();
     symbol_exprt sym_expr = add_dummy_symbol_and_value(
-      dest, ref_instr, symbol, irep_idt(), symbol.type.subtype(), source_subt);
+      dest,
+      ref_instr,
+      symbol,
+      irep_idt(),
+      to_type_with_subtype(symbol.type).subtype(),
+      source_subt);
 
     if(symbol.type.id() == ID_array)
       return array_of_exprt(sym_expr, to_array_type(symbol.type));
@@ -376,11 +382,9 @@ exprt string_abstractiont::make_val_or_dummy_rec(goto_programt &dest,
 
         member_exprt member(symbol.symbol_expr(), it2->get_name(), it2->type());
 
-        goto_programt::targett assignment1 =
-          dest.add(goto_programt::make_assignment(
-            code_assignt(member, sym_expr), ref_instr->source_location()));
-        assignment1->code_nonconst().add_source_location() =
-          ref_instr->source_location();
+        code_assignt assignment{member, sym_expr, ref_instr->source_location()};
+        dest.add(goto_programt::make_assignment(
+          code_assignt(member, sym_expr), ref_instr->source_location()));
       }
 
       ++seen;
@@ -423,13 +427,15 @@ symbol_exprt string_abstractiont::add_dummy_symbol_and_value(
   symbol_exprt sym_expr=new_symbol.symbol_expr();
 
   // make sure it is declared before the recursive call
-  goto_programt::targett decl =
-    dest.add(goto_programt::make_decl(sym_expr, ref_instr->source_location()));
-  decl->code_nonconst().add_source_location() = ref_instr->source_location();
+  code_declt decl{sym_expr};
+  decl.add_source_location() = ref_instr->source_location();
+  dest.add(
+    goto_programt::make_decl(std::move(decl), ref_instr->source_location()));
 
   // set the value - may be nil
   if(
-    source_type.id() == ID_array && is_char_type(source_type.subtype()) &&
+    source_type.id() == ID_array &&
+    is_char_type(to_array_type(source_type).element_type()) &&
     type == string_struct)
   {
     new_symbol.value = struct_exprt(
@@ -448,12 +454,10 @@ symbol_exprt string_abstractiont::add_dummy_symbol_and_value(
 
   if(new_symbol.value.is_not_nil())
   {
-    goto_programt::targett assignment1 =
-      dest.add(goto_programt::make_assignment(
-        code_assignt(sym_expr, new_symbol.value),
-        ref_instr->source_location()));
-    assignment1->code_nonconst().add_source_location() =
-      ref_instr->source_location();
+    code_assignt assignment{
+      sym_expr, new_symbol.value, ref_instr->source_location()};
+    dest.add(
+      goto_programt::make_assignment(assignment, ref_instr->source_location()));
   }
 
   goto_model.symbol_table.insert(std::move(new_symbol));
@@ -561,7 +565,8 @@ void string_abstractiont::abstract_function_call(
         abstract_type.id()==ID_pointer)
     {
       INVARIANT(
-        str_args.back().type().subtype() == abstract_type.subtype(),
+        to_array_type(str_args.back().type()).element_type() ==
+          to_pointer_type(abstract_type).base_type(),
         "argument array type differs from formal parameter pointer type");
 
       index_exprt idx(str_args.back(), from_integer(0, c_index_type()));
@@ -706,11 +711,14 @@ const typet &string_abstractiont::build_abstraction_type_rec(const typet &type,
   if(type.id() == ID_array || type.id() == ID_pointer)
   {
     // char* or void* or char[]
-    if(is_char_type(type.subtype()) || type.subtype().id() == ID_empty)
+    if(
+      is_char_type(to_type_with_subtype(type).subtype()) ||
+      to_type_with_subtype(type).subtype().id() == ID_empty)
       map_entry.first->second=pointer_type(string_struct);
     else
     {
-      const typet &subt = build_abstraction_type_rec(type.subtype(), known);
+      const typet &subt =
+        build_abstraction_type_rec(to_type_with_subtype(type).subtype(), known);
       if(!subt.is_nil())
       {
         if(type.id() == ID_array)
@@ -787,7 +795,8 @@ bool string_abstractiont::build(const exprt &object, exprt &dest, bool write)
 
     return dest.type() != abstract_type ||
            (dest.type().id() == ID_array && abstract_type.id() == ID_pointer &&
-            dest.type().subtype() == abstract_type.subtype());
+            to_array_type(dest.type()).element_type() ==
+              to_pointer_type(abstract_type).base_type());
   }
 
   if(object.id()==ID_string_constant)
@@ -801,7 +810,9 @@ bool string_abstractiont::build(const exprt &object, exprt &dest, bool write)
     return build_symbol_constant(str_len, str_len+1, dest);
   }
 
-  if(object.id()==ID_array && is_char_type(object.type().subtype()))
+  if(
+    object.id() == ID_array &&
+    is_char_type(to_array_type(object.type()).element_type()))
     return build_array(to_array_expr(object), dest, write);
 
   // other constants aren't useful
@@ -817,24 +828,32 @@ bool string_abstractiont::build(const exprt &object, exprt &dest, bool write)
   if(object.id()==ID_member)
   {
     const member_exprt &o_mem=to_member_expr(object);
-    dest=member_exprt(exprt(), o_mem.get_component_name(), abstract_type);
-    return build_wrap(
-      o_mem.struct_op(), to_member_expr(dest).compound(), write);
+    exprt compound;
+    if(build_wrap(o_mem.struct_op(), compound, write))
+      return true;
+    dest = member_exprt{
+      std::move(compound), o_mem.get_component_name(), abstract_type};
+    return false;
   }
 
   if(object.id()==ID_dereference)
   {
     const dereference_exprt &o_deref=to_dereference_expr(object);
-    dest=dereference_exprt(exprt(), abstract_type);
-    return build_wrap(
-      o_deref.pointer(), to_dereference_expr(dest).pointer(), write);
+    exprt pointer;
+    if(build_wrap(o_deref.pointer(), pointer, write))
+      return true;
+    dest = dereference_exprt{std::move(pointer)};
+    return false;
   }
 
   if(object.id()==ID_index)
   {
     const index_exprt &o_index=to_index_expr(object);
-    dest=index_exprt(exprt(), o_index.index(), abstract_type);
-    return build_wrap(o_index.array(), to_index_expr(dest).array(), write);
+    exprt array;
+    if(build_wrap(o_index.array(), array, write))
+      return true;
+    dest = index_exprt{std::move(array), o_index.index()};
+    return false;
   }
 
   // handle pointer stuff
@@ -920,8 +939,9 @@ bool string_abstractiont::build_pointer(const exprt &object,
     dest=address_of_exprt(dest);
     return false;
   }
-  else if(ptr.pointer.id()==ID_symbol &&
-      is_char_type(object.type().subtype()))
+  else if(
+    ptr.pointer.id() == ID_symbol &&
+    is_char_type(to_pointer_type(object.type()).base_type()))
     // recursive call; offset will be handled by pointer_offset in SIZE/LENGTH
     // checks
     return build_wrap(ptr.pointer, dest, write);
@@ -1046,8 +1066,12 @@ void string_abstractiont::build_new_symbol(const symbolt &symbol,
   if(symbol.is_static_lifetime)
   {
     goto_programt::targett dummy_loc =
-      initialization.add(goto_programt::instructiont());
-    dummy_loc->source_location_nonconst() = symbol.location;
+      initialization.add(goto_programt::instructiont{
+        codet{ID_nil},
+        symbol.location,
+        goto_program_instruction_typet::NO_INSTRUCTION_TYPE,
+        {},
+        {}});
     make_decl_and_def(initialization, dummy_loc, identifier, symbol.name);
     initialization.instructions.erase(dummy_loc);
   }
@@ -1147,11 +1171,9 @@ goto_programt::targett string_abstractiont::abstract_pointer_assign(
 
   if(lhs.type().id()==ID_pointer && !unknown)
   {
-    goto_programt::instructiont assignment;
-    assignment = goto_programt::make_assignment(
-      code_assignt(new_lhs, new_rhs), target->source_location());
-    assignment.code_nonconst().add_source_location() =
-      target->source_location();
+    goto_programt::instructiont assignment = goto_programt::make_assignment(
+      code_assignt(new_lhs, new_rhs, target->source_location()),
+      target->source_location());
     dest.insert_before_swap(target, assignment);
 
     return std::next(target);
@@ -1239,18 +1261,14 @@ goto_programt::targett string_abstractiont::char_assign(
     i1.is_not_nil(),
     "failed to create is_zero-component for the left-hand-side");
 
-  goto_programt::targett assignment1 = tmp.add(goto_programt::make_assignment(
-    code_assignt(i1, from_integer(1, i1.type())), target->source_location()));
-  assignment1->code_nonconst().add_source_location() =
-    target->source_location();
+  tmp.add(goto_programt::make_assignment(
+    code_assignt(i1, from_integer(1, i1.type()), target->source_location()),
+    target->source_location()));
 
-  goto_programt::targett assignment2 = tmp.add(goto_programt::make_assignment(
-    code_assignt(lhs, rhs), target->source_location()));
-  assignment2->code_nonconst().add_source_location() =
-    target->source_location();
-
-  move_lhs_arithmetic(
-    assignment2->code_nonconst().op0(), assignment2->code_nonconst().op1());
+  code_assignt assignment{lhs, rhs, target->source_location()};
+  move_lhs_arithmetic(assignment.lhs(), assignment.rhs());
+  tmp.add(
+    goto_programt::make_assignment(assignment, target->source_location()));
 
   dest.insert_before_swap(target, tmp);
   ++target;
@@ -1345,32 +1363,26 @@ goto_programt::targett string_abstractiont::value_assignments_string_struct(
   // copy all the values
   goto_programt tmp;
 
-  {
-    goto_programt::targett assignment = tmp.add(goto_programt::make_assignment(
+  tmp.add(goto_programt::make_assignment(
+    code_assignt{
       member(lhs, whatt::IS_ZERO),
       member(rhs, whatt::IS_ZERO),
-      target->source_location()));
-    assignment->code_nonconst().add_source_location() =
-      target->source_location();
-  }
+      target->source_location()},
+    target->source_location()));
 
-  {
-    goto_programt::targett assignment = tmp.add(goto_programt::make_assignment(
+  tmp.add(goto_programt::make_assignment(
+    code_assignt{
       member(lhs, whatt::LENGTH),
       member(rhs, whatt::LENGTH),
-      target->source_location()));
-    assignment->code_nonconst().add_source_location() =
-      target->source_location();
-  }
+      target->source_location()},
+    target->source_location()));
 
-  {
-    goto_programt::targett assignment = tmp.add(goto_programt::make_assignment(
+  tmp.add(goto_programt::make_assignment(
+    code_assignt{
       member(lhs, whatt::SIZE),
       member(rhs, whatt::SIZE),
-      target->source_location()));
-    assignment->code_nonconst().add_source_location() =
-      target->source_location();
-  }
+      target->source_location()},
+    target->source_location()));
 
   goto_programt::targett last=target;
   ++last;

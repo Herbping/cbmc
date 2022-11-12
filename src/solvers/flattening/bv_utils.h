@@ -179,21 +179,19 @@ public:
   static bvt
   extension(const bvt &bv, std::size_t new_size, representationt rep);
 
-  bvt sign_extension(const bvt &bv, std::size_t new_size)
+  static bvt sign_extension(const bvt &bv, std::size_t new_size)
   {
     return extension(bv, new_size, representationt::SIGNED);
   }
 
-  bvt zero_extension(const bvt &bv, std::size_t new_size)
+  static bvt zero_extension(const bvt &bv, std::size_t new_size)
   {
     return extension(bv, new_size, representationt::UNSIGNED);
   }
 
-  bvt zeros(std::size_t new_size) const
+  static bvt zeros(std::size_t new_size)
   {
-    bvt result;
-    result.resize(new_size, const_literal(false));
-    return result;
+    return bvt(new_size, const_literal(false));
   }
 
   void set_equal(const bvt &a, const bvt &b);

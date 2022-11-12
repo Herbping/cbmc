@@ -3,8 +3,8 @@ main.c
 --enforce-contract foo
 ^EXIT=(1|64)$
 ^SIGNAL=0$
-^.*error: function calls in assigns clause targets must be to __CPROVER_object_from, __CPROVER_object_slice$
+^.*error: expecting void return type for function 'bar' called in assigns clause$
 ^CONVERSION ERROR$
 --
 --
-Check that function call expressions are rejected in assigns clauses.
+Check that non-void function call expressions are rejected in assigns clauses.

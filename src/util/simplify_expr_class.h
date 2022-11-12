@@ -45,6 +45,7 @@ class div_exprt;
 class exprt;
 class extractbit_exprt;
 class extractbits_exprt;
+class find_first_set_exprt;
 class floatbv_typecast_exprt;
 class function_application_exprt;
 class ieee_float_op_exprt;
@@ -146,6 +147,7 @@ public:
   // These below all return 'true' if the simplification wasn't applicable.
   // If false is returned, the expression has changed.
   NODISCARD resultt<> simplify_typecast(const typecast_exprt &);
+  bool simplify_typecast_preorder(typecast_exprt &);
   NODISCARD resultt<> simplify_extractbit(const extractbit_exprt &);
   NODISCARD resultt<> simplify_extractbits(const extractbits_exprt &);
   NODISCARD resultt<> simplify_concatenation(const concatenation_exprt &);
@@ -223,6 +225,9 @@ public:
 
   /// Try to simplify bit-reversing to a constant expression.
   NODISCARD resultt<> simplify_bitreverse(const bitreverse_exprt &);
+
+  /// Try to simplify find-first-set to a constant expression.
+  NODISCARD resultt<> simplify_ffs(const find_first_set_exprt &);
 
   // auxiliary
   bool simplify_if_implies(

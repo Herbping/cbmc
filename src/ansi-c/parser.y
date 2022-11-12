@@ -209,6 +209,7 @@ extern char *yyansi_ctext;
 %token TOK_CPROVER_ENSURES_CONTRACT "__CPROVER_ensures_contract"
 %token TOK_CPROVER_ENSURES  "__CPROVER_ensures"
 %token TOK_CPROVER_ASSIGNS "__CPROVER_assigns"
+%token TOK_CPROVER_FREES "__CPROVER_frees"
 %token TOK_IMPLIES     "==>"
 %token TOK_EQUIVALENT  "<==>"
 %token TOK_XORXOR      "^^"
@@ -297,6 +298,8 @@ identifier:
           TOK_IDENTIFIER
         | TOK_CPROVER_ID TOK_STRING
         {
+          // construct an identifier from a string that would otherwise not be a
+          // valid identifier in C
           $$=$1;
           parser_stack($$).id(ID_symbol);
           irep_idt value=parser_stack($2).get(ID_value);
@@ -1340,7 +1343,7 @@ atomic_specifier:
         {
           $$=$1;
           parser_stack($$).id(ID_atomic_type_specifier);
-          stack_type($$).subtype()=stack_type($3);
+          stack_type($$).add_subtype()=stack_type($3);
         }
         ;
 
@@ -1530,7 +1533,7 @@ elaborated_type_name:
         
 array_of_construct:
           TOK_ARRAY_OF '<' type_name '>'
-        { $$=$1; stack_type($$).subtype().swap(parser_stack($2)); }
+        { $$=$1; stack_type($$).add_subtype().swap(parser_stack($2)); }
         ;
 
 pragma_packed:
@@ -1787,7 +1790,7 @@ member_declarator:
         | bit_field_size gcc_type_attribute_opt
         {
           $$=$1;
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
 
           if(parser_stack($2).is_not_nil()) // type attribute
             $$=merge($2, $$);
@@ -1807,7 +1810,7 @@ member_identifier_declarator:
         | bit_field_size gcc_type_attribute_opt
         {
           $$=$1;
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
 
           if(parser_stack($2).is_not_nil()) // type attribute
             $$=merge($2, $$);
@@ -1828,7 +1831,7 @@ bit_field_size:
           $$=$1;
           set($$, ID_c_bit_field);
           stack_type($$).set(ID_size, parser_stack($2));
-          stack_type($$).subtype().id(ID_abstract);
+          stack_type($$).add_subtype().id(ID_abstract);
         }
         ;
 
@@ -3235,7 +3238,7 @@ unary_identifier_declarator:
           // The below is deliberately not using pointer_type();
           // the width is added during conversion.
           stack_type($1).id(ID_frontend_pointer);
-          stack_type($1).subtype()=typet(ID_abstract);
+          stack_type($1).add_subtype()=typet(ID_abstract);
           $2=merge($2, $1); // dest=$2
           make_subtype($3, $2); // dest=$3
           $$=$3;
@@ -3317,6 +3320,7 @@ cprover_function_contract:
           parser_stack($$).add_to_operands(std::move(tmp));
         }
         | cprover_contract_assigns
+        | cprover_contract_frees
         ;
 
 unary_expression_list:
@@ -3394,6 +3398,21 @@ cprover_contract_assigns_opt:
         | cprover_contract_assigns
         ;
 
+cprover_contract_frees:
+         TOK_CPROVER_FREES '(' conditional_target_list_opt_semicol ')'
+        {
+          $$=$1;
+          set($$, ID_C_spec_frees);
+          mto($$, $3);
+        }
+        | TOK_CPROVER_FREES '(' ')'
+        {
+          $$=$1;
+          set($$, ID_C_spec_frees);
+          parser_stack($$).add_to_operands(exprt(ID_target_list));
+        }
+        ;
+
 cprover_function_contract_sequence:
           cprover_function_contract
         | cprover_function_contract_sequence cprover_function_contract
@@ -3407,6 +3426,19 @@ cprover_function_contract_sequence_opt:
           /* nothing */
           { init($$); }
         | cprover_function_contract_sequence
+        {
+          // Function contracts should either be attached to a
+          // top-level function declaration or top-level function
+          // definition.  Any embedded function pointer scopes should
+          // be disallowed.
+          int contract_in_global_scope = (PARSER.scopes.size() == 1);
+          int contract_in_top_level_function_scope = (PARSER.scopes.size() == 2);
+          if(!contract_in_global_scope && !contract_in_top_level_function_scope)
+          {
+            yyansi_cerror("Function contracts allowed only at top-level declarations.");
+            YYABORT;
+          }
+        }
         ;
 
 postfixing_abstract_declarator:
@@ -3418,7 +3450,7 @@ postfixing_abstract_declarator:
         {
           $$=$1;
           set($$, ID_code);
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
           stack_type($$).add(ID_parameters);
           stack_type($$).set(ID_C_KnR, true);
         }
@@ -3435,7 +3467,7 @@ postfixing_abstract_declarator:
         {
           $$=$1;
           set($$, ID_code);
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
           stack_type($$).add(ID_parameters).get_sub().
             swap((irept::subt &)(to_type_with_subtypes(stack_type($3)).subtypes()));
           PARSER.pop_scope();
@@ -3447,15 +3479,41 @@ postfixing_abstract_declarator:
 parameter_postfixing_abstract_declarator:
           array_abstract_declarator
         | '(' ')'
+          {
+            // Set function name (last declarator) in source location
+            // before parsing function contracts.  Only do this if we
+            // are at a global scope.
+            if (PARSER.current_scope().prefix.empty()) {
+              PARSER.set_function(PARSER.current_scope().last_declarator);
+            }
+            // Use last declarator (i.e., function name) to name
+            // the scope.
+            PARSER.new_scope(
+              id2string(PARSER.current_scope().last_declarator)+"::");
+          }
           cprover_function_contract_sequence_opt
         {
           set($1, ID_code);
           stack_type($1).add(ID_parameters);
-          stack_type($1).subtype()=typet(ID_abstract);
-          $$ = merge($3, $1);
+          stack_type($1).add_subtype()=typet(ID_abstract);
+          PARSER.pop_scope();
+
+          // Clear function name in source location after parsing if
+          // at global scope.
+          if (PARSER.current_scope().prefix.empty()) {
+            PARSER.set_function(irep_idt());
+          }
+
+          $$ = merge($4, $1);
         }
         | '('
           {
+            // Set function name (last declarator) in source location
+            // before parsing function contracts.  Only do this if we
+            // are at a global scope.
+            if (PARSER.current_scope().prefix.empty()) {
+              PARSER.set_function(PARSER.current_scope().last_declarator);
+            }
             // Use last declarator (i.e., function name) to name
             // the scope.
             PARSER.new_scope(
@@ -3467,10 +3525,16 @@ parameter_postfixing_abstract_declarator:
           cprover_function_contract_sequence_opt
         {
           set($1, ID_code);
-          stack_type($1).subtype()=typet(ID_abstract);
+          stack_type($1).add_subtype()=typet(ID_abstract);
           stack_type($1).add(ID_parameters).get_sub().
             swap((irept::subt &)(to_type_with_subtypes(stack_type($3)).subtypes()));
           PARSER.pop_scope();
+
+          // Clear function name in source location after parsing if
+          // at global scope.
+          if (PARSER.current_scope().prefix.empty()) {
+            PARSER.set_function(irep_idt());
+          }
 
           if(parser_stack($5).is_not_nil())
           {
@@ -3487,7 +3551,7 @@ array_abstract_declarator:
         {
           $$=$1;
           set($$, ID_array);
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
           stack_type($$).add(ID_size).make_nil();
         }
         | '[' attribute_type_qualifier_storage_class_list ']'
@@ -3496,7 +3560,7 @@ array_abstract_declarator:
           // The type qualifier belongs to the array, not the
           // contents of the array, nor the size.
           set($1, ID_array);
-          stack_type($1).subtype()=typet(ID_abstract);
+          stack_type($1).add_subtype()=typet(ID_abstract);
           stack_type($1).add(ID_size).make_nil();
           $$=merge($2, $1);
         }
@@ -3505,7 +3569,7 @@ array_abstract_declarator:
           // these should be allowed in prototypes only
           $$=$1;
           set($$, ID_array);
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
           stack_type($$).add(ID_size).make_nil();
         }
         | '[' constant_expression ']'
@@ -3513,7 +3577,7 @@ array_abstract_declarator:
           $$=$1;
           set($$, ID_array);
           stack_type($$).add(ID_size).swap(parser_stack($2));
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
         }
         | '[' attribute_type_qualifier_storage_class_list constant_expression ']'
         {
@@ -3521,7 +3585,7 @@ array_abstract_declarator:
           // contents of the array, nor the size.
           set($1, ID_array);
           stack_type($1).add(ID_size).swap(parser_stack($3));
-          stack_type($1).subtype()=typet(ID_abstract);
+          stack_type($1).add_subtype()=typet(ID_abstract);
           $$=merge($2, $1); // dest=$2
         }
         | array_abstract_declarator '[' constant_expression ']'
@@ -3530,7 +3594,7 @@ array_abstract_declarator:
           $$=$1;
           set($2, ID_array);
           stack_type($2).add(ID_size).swap(parser_stack($3));
-          stack_type($2).subtype()=typet(ID_abstract);
+          stack_type($2).add_subtype()=typet(ID_abstract);
           make_subtype($1, $2);
         }
         | array_abstract_declarator '[' '*' ']'
@@ -3540,7 +3604,7 @@ array_abstract_declarator:
           $$=$1;
           set($2, ID_array);
           stack_type($2).add(ID_size).make_nil();
-          stack_type($2).subtype()=typet(ID_abstract);
+          stack_type($2).add_subtype()=typet(ID_abstract);
           make_subtype($1, $2);
         }
         ;
@@ -3552,7 +3616,7 @@ unary_abstract_declarator:
           // The below is deliberately not using pointer_type();
           // the width is added during conversion.
           stack_type($$).id(ID_frontend_pointer);
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
         }
         | '*' attribute_type_qualifier_list
         {
@@ -3561,7 +3625,7 @@ unary_abstract_declarator:
           // The below is deliberately not using pointer_type();
           // the width is added during conversion.
           stack_type($1).id(ID_frontend_pointer);
-          stack_type($1).subtype()=typet(ID_abstract);
+          stack_type($1).add_subtype()=typet(ID_abstract);
           $$=merge($2, $1);
         }
         | '*' abstract_declarator
@@ -3576,7 +3640,7 @@ unary_abstract_declarator:
           // The below is deliberately not using pointer_type();
           // the width is added during conversion.
           stack_type($1).id(ID_frontend_pointer);
-          stack_type($1).subtype()=typet(ID_abstract);
+          stack_type($1).add_subtype()=typet(ID_abstract);
           $2=merge($2, $1); // dest=$2
           make_subtype($3, $2); // dest=$3
           $$=$3;
@@ -3587,7 +3651,7 @@ unary_abstract_declarator:
           // http://en.wikipedia.org/wiki/Blocks_(C_language_extension)
           $$=$1;
           set($$, ID_block_pointer);
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
         }
         ;
 
@@ -3598,7 +3662,7 @@ parameter_unary_abstract_declarator:
           // The below is deliberately not using pointer_type();
           // the width is added during conversion.
           stack_type($$).id(ID_frontend_pointer);
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
         }
         | '*' attribute_type_qualifier_list
         {
@@ -3607,7 +3671,7 @@ parameter_unary_abstract_declarator:
           // The below is deliberately not using pointer_type();
           // the width is added during conversion.
           stack_type($1).id(ID_frontend_pointer);
-          stack_type($1).subtype()=typet(ID_abstract);
+          stack_type($1).add_subtype()=typet(ID_abstract);
           $$=merge($2, $1);
         }
         | '*' parameter_abstract_declarator
@@ -3622,7 +3686,7 @@ parameter_unary_abstract_declarator:
           // The below is deliberately not using pointer_type();
           // the width is added during conversion.
           stack_type($1).id(ID_frontend_pointer);
-          stack_type($1).subtype()=typet(ID_abstract);
+          stack_type($1).add_subtype()=typet(ID_abstract);
           $2=merge($2, $1); // dest=$2
           make_subtype($3, $2); // dest=$3
           $$=$3;
@@ -3633,7 +3697,7 @@ parameter_unary_abstract_declarator:
           // http://en.wikipedia.org/wiki/Blocks_(C_language_extension)
           $$=$1;
           set($$, ID_block_pointer);
-          stack_type($$).subtype()=typet(ID_abstract);
+          stack_type($$).add_subtype()=typet(ID_abstract);
         }
         ;
 

@@ -674,6 +674,54 @@ void c_typecheck_baset::apply_asm_label(
   }
 }
 
+void c_typecheck_baset::check_history_expr_return_value(
+  const exprt &expr,
+  std::string &clause_type)
+{
+  disallow_subexpr_by_id(
+    expr, ID_old, CPROVER_PREFIX "old is not allowed in " + clause_type + ".");
+  disallow_subexpr_by_id(
+    expr,
+    ID_loop_entry,
+    CPROVER_PREFIX "loop_entry is not allowed in " + clause_type + ".");
+
+  const irep_idt id = CPROVER_PREFIX "return_value";
+  auto pred = [&](const exprt &expr) {
+    if(!can_cast_expr<symbol_exprt>(expr))
+      return false;
+
+    return to_symbol_expr(expr).get_identifier() == id;
+  };
+
+  if(!has_subexpr(expr, pred))
+    return;
+
+  throw invalid_source_file_exceptiont(
+    id2string(id) + " is not allowed in " + id2string(clause_type) + ".",
+    expr.source_location());
+}
+
+void c_typecheck_baset::check_was_freed(
+  const exprt &expr,
+  std::string &clause_type)
+{
+  const irep_idt id = CPROVER_PREFIX "was_freed";
+
+  auto pred = [&](const exprt &expr) {
+    if(!can_cast_expr<symbol_exprt>(expr))
+      return false;
+
+    return to_symbol_expr(expr).get_identifier() == id;
+  };
+
+  if(has_subexpr(expr, pred))
+  {
+    throw invalid_source_file_exceptiont(
+      id2string(id) + " is not allowed in " + clause_type + ".",
+      expr.source_location());
+  }
+}
+
 void c_typecheck_baset::typecheck_declaration(
   ansi_c_declarationt &declaration)
 {
@@ -768,15 +816,6 @@ void c_typecheck_baset::typecheck_declaration(
 
       typecheck_symbol(symbol);
 
-      auto check_history_expr = [&](const exprt expr) {
-        disallow_subexpr_by_id(
-          expr, ID_old, CPROVER_PREFIX "old is not allowed in preconditions.");
-        disallow_subexpr_by_id(
-          expr,
-          ID_loop_entry,
-          CPROVER_PREFIX "loop_entry is not allowed in preconditions.");
-      };
-
       // check the contract, if any
       symbolt &new_symbol = symbol_table.get_writeable_ref(identifier);
       if(
@@ -822,7 +861,8 @@ void c_typecheck_baset::typecheck_declaration(
         for(auto &expr : code_type.requires_contract())
         {
           typecheck_spec_function_pointer_obeys_contract(expr);
-          check_history_expr(expr);
+          std::string clause_type = "function pointer preconditions";
+          check_history_expr_return_value(expr, clause_type);
           lambda_exprt lambda{temporary_parameter_symbols, expr};
           lambda.add_source_location() = expr.source_location();
           expr.swap(lambda);
@@ -832,7 +872,9 @@ void c_typecheck_baset::typecheck_declaration(
         {
           typecheck_expr(requires);
           implicit_typecast_bool(requires);
-          check_history_expr(requires);
+          std::string clause_type = "preconditions";
+          check_history_expr_return_value(requires, clause_type);
+          check_was_freed(requires, clause_type);
           lambda_exprt lambda{temporary_parameter_symbols, requires};
           lambda.add_source_location() = requires.source_location();
           requires.swap(lambda);
@@ -841,9 +883,19 @@ void c_typecheck_baset::typecheck_declaration(
         typecheck_spec_assigns(code_type.assigns());
         for(auto &assigns : code_type.assigns())
         {
+          std::string clause_type = "assigns clauses";
+          check_history_expr_return_value(assigns, clause_type);
           lambda_exprt lambda{temporary_parameter_symbols, assigns};
           lambda.add_source_location() = assigns.source_location();
           assigns.swap(lambda);
+        }
+
+        typecheck_spec_frees(code_type.frees());
+        for(auto &frees : code_type.frees())
+        {
+          lambda_exprt lambda{temporary_parameter_symbols, frees};
+          lambda.add_source_location() = frees.source_location();
+          frees.swap(lambda);
         }
 
         for(auto &expr : code_type.ensures_contract())
@@ -877,8 +929,8 @@ void c_typecheck_baset::typecheck_declaration(
         // create a contract symbol
         symbolt contract;
         contract.name = "contract::" + id2string(new_symbol.name);
-        contract.base_name = new_symbol.name;
-        contract.pretty_name = new_symbol.name;
+        contract.base_name = new_symbol.base_name;
+        contract.pretty_name = new_symbol.pretty_name;
         contract.is_property = true;
         contract.type = code_type;
         contract.mode = new_symbol.mode;
@@ -898,6 +950,7 @@ void c_typecheck_baset::typecheck_declaration(
         // Remove the contract from the original symbol as we have created a
         // dedicated contract symbol.
         new_symbol.type.remove(ID_C_spec_assigns);
+        new_symbol.type.remove(ID_C_spec_frees);
         new_symbol.type.remove(ID_C_spec_ensures);
         new_symbol.type.remove(ID_C_spec_ensures_contract);
         new_symbol.type.remove(ID_C_spec_requires);

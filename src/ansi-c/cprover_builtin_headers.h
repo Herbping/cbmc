@@ -16,6 +16,15 @@ __CPROVER_bool __CPROVER_r_ok();
 __CPROVER_bool __CPROVER_w_ok();
 __CPROVER_bool __CPROVER_rw_ok();
 
+// experimental features for CHC encodings -- do not use
+__CPROVER_bool __CPROVER_is_list(); // a singly-linked null-terminated dynamically-allocated list
+__CPROVER_bool __CPROVER_is_dll();
+__CPROVER_bool __CPROVER_is_cyclic_dll();
+__CPROVER_bool __CPROVER_is_sentinel_dll();
+__CPROVER_bool __CPROVER_is_cstring(const char *);
+__CPROVER_size_t __CPROVER_cstrlen(const char *);
+__CPROVER_bool __CPROVER_separate(const void *, const void *, ...);
+
 // bitvector analysis
 __CPROVER_bool __CPROVER_get_flag(const void *, const char *);
 void __CPROVER_set_must(const void *, const char *);
@@ -37,15 +46,20 @@ void __CPROVER_atomic_end();
 void __CPROVER_fence(const char *kind, ...);
 
 // contract-related functions
+__CPROVER_bool __CPROVER_is_freeable(const void *mem);
+__CPROVER_bool __CPROVER_was_freed(const void *mem);
 __CPROVER_bool __CPROVER_is_fresh(const void *mem, __CPROVER_size_t size);
 void __CPROVER_old(const void *);
 void __CPROVER_loop_entry(const void *);
 
 // pointers
+__CPROVER_bool __CPROVER_LIVE_OBJECT(const void *);
+__CPROVER_bool __CPROVER_WRITEABLE_OBJECT(const void *);
 __CPROVER_size_t __CPROVER_POINTER_OBJECT(const void *);
 __CPROVER_ssize_t __CPROVER_POINTER_OFFSET(const void *);
 __CPROVER_size_t __CPROVER_OBJECT_SIZE(const void *);
 __CPROVER_bool __CPROVER_DYNAMIC_OBJECT(const void *);
+__CPROVER_bool __CPROVER_pointer_in_range(const void *, const void *, const void *);
 void __CPROVER_allocated_memory(__CPROVER_size_t address, __CPROVER_size_t extent);
 
 // float stuff
@@ -124,6 +138,10 @@ __CPROVER_bool __CPROVER_overflow_unary_minus();
 __CPROVER_bool __CPROVER_enum_is_in_range();
 
 // contracts
-__CPROVER_size_t __CPROVER_object_from(void *); 
-__CPROVER_size_t __CPROVER_object_slice(void *, __CPROVER_size_t);
+void __CPROVER_assignable(void *ptr, __CPROVER_size_t size,
+  __CPROVER_bool is_ptr_to_ptr);
+void __CPROVER_object_whole(void *ptr);
+void __CPROVER_object_from(void *ptr);
+void __CPROVER_object_upto(void *ptr, __CPROVER_size_t size);
+void __CPROVER_freeable(void *ptr);
 // clang-format on

@@ -164,11 +164,12 @@ bool is_java_array_type(const typet &type)
 {
   if(
     !can_cast_type<pointer_typet>(type) ||
-    !can_cast_type<struct_tag_typet>(type.subtype()))
+    !can_cast_type<struct_tag_typet>(to_pointer_type(type).base_type()))
   {
     return false;
   }
-  const auto &subtype_struct_tag = to_struct_tag_type(type.subtype());
+  const auto &subtype_struct_tag =
+    to_struct_tag_type(to_pointer_type(type).base_type());
   return is_java_array_tag(subtype_struct_tag.get_identifier());
 }
 
@@ -177,8 +178,9 @@ bool is_java_array_type(const typet &type)
 /// an array type.
 bool is_multidim_java_array_type(const typet &type)
 {
-  return is_java_array_type(type) && is_java_array_type(java_array_element_type(
-                                       to_struct_tag_type(type.subtype())));
+  return is_java_array_type(type) &&
+         is_java_array_type(java_array_element_type(
+           to_struct_tag_type(to_pointer_type(type).base_type())));
 }
 
 /// Returns the underlying element type and array dimensionality of Java struct
@@ -190,8 +192,8 @@ java_array_dimension_and_element_type(const struct_tag_typet &type)
   typet underlying_type;
   for(underlying_type = java_reference_type(type);
       is_java_array_type(underlying_type);
-      underlying_type =
-        java_array_element_type(to_struct_tag_type(underlying_type.subtype())))
+      underlying_type = java_array_element_type(to_struct_tag_type(
+        to_java_reference_type(underlying_type).base_type())))
   {
     ++array_dimensions;
   }
@@ -539,7 +541,7 @@ size_t find_closing_semi_colon_for_reference_type(
 java_reference_typet java_reference_array_type(const struct_tag_typet &subtype)
 {
   java_reference_typet result = java_array_type('a');
-  result.subtype().set(ID_element_type, java_reference_type(subtype));
+  result.base_type().set(ID_element_type, java_reference_type(subtype));
   return result;
 }
 
@@ -658,7 +660,7 @@ optionalt<typet> java_type_from_string(
       if(subtype_letter == 'a')
       {
         return java_reference_array_type(
-          to_struct_tag_type(subtype->subtype()));
+          to_struct_tag_type(to_java_reference_type(*subtype).base_type()));
       }
       else
         return java_array_type(subtype_letter);
@@ -682,7 +684,8 @@ optionalt<typet> java_type_from_string(
     return java_generic_parametert(
       type_var_name,
       to_struct_tag_type(
-        java_type_from_string("Ljava/lang/Object;")->subtype()));
+        to_java_reference_type(*java_type_from_string("Ljava/lang/Object;"))
+          .base_type()));
   }
   case 'L':
     {
@@ -783,7 +786,8 @@ std::vector<typet> java_generic_type_from_string(
     java_generic_parametert type_var_type(
       type_var_name,
       to_struct_tag_type(
-        java_type_from_string(bound_type, class_name)->subtype()));
+        to_java_reference_type(*java_type_from_string(bound_type, class_name))
+          .base_type()));
 
     types.push_back(type_var_type);
     signature=signature.substr(var_sep+1, std::string::npos);
@@ -805,7 +809,8 @@ static std::string slash_to_dot(const std::string &src)
 struct_tag_typet java_classname(const std::string &id)
 {
   if(!id.empty() && id[0]=='[')
-    return to_struct_tag_type(java_type_from_string(id)->subtype());
+    return to_struct_tag_type(
+      to_java_reference_type(*java_type_from_string(id)).base_type());
 
   std::string class_name=id;
 
@@ -892,11 +897,13 @@ bool equal_java_types(const typet &type1, const typet &type2)
   bool arrays_with_same_element_type = true;
   if(
     type1.id() == ID_pointer && type2.id() == ID_pointer &&
-    type1.subtype().id() == ID_struct_tag &&
-    type2.subtype().id() == ID_struct_tag)
+    to_pointer_type(type1).base_type().id() == ID_struct_tag &&
+    to_pointer_type(type2).base_type().id() == ID_struct_tag)
   {
-    const auto &subtype_symbol1 = to_struct_tag_type(type1.subtype());
-    const auto &subtype_symbol2 = to_struct_tag_type(type2.subtype());
+    const auto &subtype_symbol1 =
+      to_struct_tag_type(to_pointer_type(type1).base_type());
+    const auto &subtype_symbol2 =
+      to_struct_tag_type(to_pointer_type(type2).base_type());
     if(
       subtype_symbol1.get_identifier() == subtype_symbol2.get_identifier() &&
       is_java_array_tag(subtype_symbol1.get_identifier()))
@@ -952,7 +959,8 @@ void get_dependencies_from_generic_parameters_rec(
   // Java reference type
   else if(t.id() == ID_pointer)
   {
-    get_dependencies_from_generic_parameters_rec(t.subtype(), refs);
+    get_dependencies_from_generic_parameters_rec(
+      to_pointer_type(t).base_type(), refs);
   }
 
   // method type with parameters and return value
@@ -1102,9 +1110,10 @@ std::string pretty_java_type(const typet &type)
     return "byte";
   else if(is_reference(type))
   {
-    if(type.subtype().id() == ID_struct_tag)
+    if(to_reference_type(type).base_type().id() == ID_struct_tag)
     {
-      const auto &struct_tag_type = to_struct_tag_type(type.subtype());
+      const auto &struct_tag_type =
+        to_struct_tag_type(to_reference_type(type).base_type());
       const irep_idt &id = struct_tag_type.get_identifier();
       if(is_java_array_tag(id))
         return pretty_java_type(java_array_element_type(struct_tag_type)) +

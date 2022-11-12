@@ -49,16 +49,19 @@ void goto_convertt::remove_assignment(
   if(statement==ID_assign)
   {
     auto &old_assignment = to_side_effect_expr_assign(expr);
+    exprt new_lhs = skip_typecast(old_assignment.lhs());
 
-    if(result_is_used && !address_taken && needs_cleaning(old_assignment.lhs()))
+    if(
+      result_is_used && !address_taken &&
+      assignment_lhs_needs_temporary(old_assignment.lhs()))
     {
       if(!old_assignment.rhs().is_constant())
         make_temp_symbol(old_assignment.rhs(), "assign", dest, mode);
 
-      replacement_expr_opt = old_assignment.rhs();
+      replacement_expr_opt =
+        typecast_exprt::conditional_cast(old_assignment.rhs(), new_lhs.type());
     }
 
-    exprt new_lhs = skip_typecast(old_assignment.lhs());
     exprt new_rhs =
       typecast_exprt::conditional_cast(old_assignment.rhs(), new_lhs.type());
     code_assignt new_assignment(std::move(new_lhs), std::move(new_rhs));
@@ -113,6 +116,7 @@ void goto_convertt::remove_assignment(
     }
 
     const binary_exprt &binary_expr = to_binary_expr(expr);
+    exprt new_lhs = skip_typecast(binary_expr.op0());
     const typet &op0_type = binary_expr.op0().type();
 
     PRECONDITION(
@@ -122,13 +126,15 @@ void goto_convertt::remove_assignment(
     exprt rhs = binary_exprt{binary_expr.op0(), new_id, binary_expr.op1()};
     rhs.add_source_location() = expr.source_location();
 
-    if(result_is_used && !address_taken && needs_cleaning(binary_expr.op0()))
+    if(
+      result_is_used && !address_taken &&
+      assignment_lhs_needs_temporary(binary_expr.op0()))
     {
       make_temp_symbol(rhs, "assign", dest, mode);
-      replacement_expr_opt = rhs;
+      replacement_expr_opt =
+        typecast_exprt::conditional_cast(rhs, new_lhs.type());
     }
 
-    exprt new_lhs = skip_typecast(binary_expr.op0());
     rhs = typecast_exprt::conditional_cast(rhs, new_lhs.type());
     rhs.add_source_location() = expr.source_location();
     code_assignt assignment(new_lhs, rhs);
@@ -212,8 +218,8 @@ void goto_convertt::remove_pre(
 
   if(constant_type.id() == ID_complex)
   {
-    exprt real = from_integer(1, constant_type.subtype());
-    exprt imag = from_integer(0, constant_type.subtype());
+    exprt real = from_integer(1, to_complex_type(constant_type).subtype());
+    exprt imag = from_integer(0, to_complex_type(constant_type).subtype());
     constant = complex_exprt(real, imag, to_complex_type(constant_type));
   }
   else
@@ -223,12 +229,25 @@ void goto_convertt::remove_pre(
     op, statement == ID_preincrement ? ID_plus : ID_minus, std::move(constant)};
   rhs.add_source_location() = expr.source_location();
 
+  // Is there a typecast, e.g., for _Bool? If so, transform
+  // t1(op : t2) := op+1  -->  op := t2(op+1)
+  exprt lhs;
+  if(op.id() == ID_typecast)
+  {
+    lhs = to_typecast_expr(op).op();
+    rhs = typecast_exprt(rhs, lhs.type());
+  }
+  else
+  {
+    lhs = op;
+  }
+
   const bool cannot_use_lhs =
-    result_is_used && !address_taken && needs_cleaning(op);
+    result_is_used && !address_taken && assignment_lhs_needs_temporary(lhs);
   if(cannot_use_lhs)
     make_temp_symbol(rhs, "pre", dest, mode);
 
-  code_assignt assignment(op, rhs);
+  code_assignt assignment(lhs, rhs);
   assignment.add_source_location()=expr.find_source_location();
 
   convert(assignment, dest, mode);
@@ -236,11 +255,14 @@ void goto_convertt::remove_pre(
   if(result_is_used)
   {
     if(cannot_use_lhs)
-      expr.swap(rhs);
+    {
+      auto tmp = typecast_exprt::conditional_cast(rhs, expr.type());
+      expr.swap(tmp);
+    }
     else
     {
       // revert to argument of pre-inc/pre-dec
-      exprt tmp = op;
+      auto tmp = typecast_exprt::conditional_cast(lhs, expr.type());
       expr.swap(tmp);
     }
   }
@@ -291,8 +313,8 @@ void goto_convertt::remove_post(
 
   if(constant_type.id() == ID_complex)
   {
-    exprt real = from_integer(1, constant_type.subtype());
-    exprt imag = from_integer(0, constant_type.subtype());
+    exprt real = from_integer(1, to_complex_type(constant_type).subtype());
+    exprt imag = from_integer(0, to_complex_type(constant_type).subtype());
     constant = complex_exprt(real, imag, to_complex_type(constant_type));
   }
   else

@@ -1409,6 +1409,7 @@ inline notequal_exprt &to_notequal_expr(exprt &expr)
 class index_exprt:public binary_exprt
 {
 public:
+  // _array must have either index or vector type.
   // When _array has array_type, the type of _index
   // must be array_type.index_type().
   // This will eventually be enforced using a precondition.
@@ -1419,6 +1420,9 @@ public:
         std::move(_index),
         to_type_with_subtype(_array.type()).subtype())
   {
+    const auto &array_op_type = _array.type();
+    PRECONDITION(
+      array_op_type.id() == ID_array || array_op_type.id() == ID_vector);
   }
 
   index_exprt(exprt _array, exprt _index, typet _type)
@@ -1428,6 +1432,9 @@ public:
         std::move(_index),
         std::move(_type))
   {
+    const auto &array_op_type = array().type();
+    PRECONDITION(
+      array_op_type.id() == ID_array || array_op_type.id() == ID_vector);
   }
 
   exprt &array()
@@ -2789,12 +2796,20 @@ public:
   member_exprt(exprt op, const irep_idt &component_name, typet _type)
     : unary_exprt(ID_member, std::move(op), std::move(_type))
   {
+    const auto &compound_type_id = compound().type().id();
+    PRECONDITION(
+      compound_type_id == ID_struct_tag || compound_type_id == ID_union_tag ||
+      compound_type_id == ID_struct || compound_type_id == ID_union);
     set_component_name(component_name);
   }
 
   member_exprt(exprt op, const struct_typet::componentt &c)
     : unary_exprt(ID_member, std::move(op), c.type())
   {
+    const auto &compound_type_id = compound().type().id();
+    PRECONDITION(
+      compound_type_id == ID_struct_tag || compound_type_id == ID_union_tag ||
+      compound_type_id == ID_struct || compound_type_id == ID_union);
     set_component_name(c.get_name());
   }
 
@@ -3526,6 +3541,79 @@ template <>
 inline bool can_cast_expr<class_method_descriptor_exprt>(const exprt &base)
 {
   return base.id() == ID_virtual_function;
+}
+
+/// \brief Expression that introduces a new symbol that is equal to the operand.
+/// This expression corresponds to the SMT-LIB2 feature 'named term'.
+/// The symbol is not bound, i.e., visible outside of this expression.
+/// The expression roughly corresponds to Python's "walrus operator", but
+/// is not a side effect.
+class named_term_exprt : public binary_exprt
+{
+public:
+  explicit named_term_exprt(symbol_exprt symbol, exprt value)
+    : binary_exprt(
+        std::move(symbol),
+        ID_named_term,
+        value, // not moved, for type
+        value.type())
+  {
+    PRECONDITION(symbol.type() == type());
+  }
+
+  const symbol_exprt &symbol() const
+  {
+    return static_cast<const symbol_exprt &>(op0());
+  }
+
+  symbol_exprt &symbol()
+  {
+    return static_cast<symbol_exprt &>(op0());
+  }
+
+  const exprt &value() const
+  {
+    return op1();
+  }
+
+  exprt &value()
+  {
+    return op1();
+  }
+};
+
+template <>
+inline bool can_cast_expr<named_term_exprt>(const exprt &base)
+{
+  return base.id() == ID_named_term;
+}
+
+inline void validate_expr(const named_term_exprt &value)
+{
+  validate_operands(value, 2, "'named term' must have two operands");
+}
+
+/// \brief Cast an exprt to a \ref named_term_exprt
+///
+/// \a expr must be known to be \ref named_term_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref named_term_exprt
+inline const named_term_exprt &to_named_term_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_named_term);
+  const named_term_exprt &ret = static_cast<const named_term_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
+}
+
+/// \copydoc to_array_comprehension_expr(const exprt &)
+inline named_term_exprt &to_named_term_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_named_term);
+  named_term_exprt &ret = static_cast<named_term_exprt &>(expr);
+  validate_expr(ret);
+  return ret;
 }
 
 #endif // CPROVER_UTIL_STD_EXPR_H

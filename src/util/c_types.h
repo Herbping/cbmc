@@ -370,7 +370,7 @@ public:
   {
     return !ensures().empty() || !ensures_contract().empty() ||
            !requires().empty() || !requires_contract().empty() ||
-           !assigns().empty();
+           !assigns().empty() || !frees().empty();
   }
 
   const exprt::operandst &assigns() const
@@ -381,6 +381,16 @@ public:
   exprt::operandst &assigns()
   {
     return static_cast<exprt &>(add(ID_C_spec_assigns)).operands();
+  }
+
+  const exprt::operandst &frees() const
+  {
+    return static_cast<const exprt &>(find(ID_C_spec_frees)).operands();
+  }
+
+  exprt::operandst &frees()
+  {
+    return static_cast<exprt &>(add(ID_C_spec_frees)).operands();
   }
 
   const exprt::operandst &requires_contract() const
@@ -463,10 +473,6 @@ DEPRECATED(
   SINCE(2022, 1, 13, "use c_index_type() or array_typet::index_type() instead"))
 bitvector_typet index_type();
 
-DEPRECATED(SINCE(2022, 1, 13, "use c_enum_constant_type() instead"))
-bitvector_typet enum_constant_type();
-
-bitvector_typet c_enum_constant_type();
 bitvector_typet c_index_type();
 signedbv_typet signed_int_type();
 unsignedbv_typet unsigned_int_type();

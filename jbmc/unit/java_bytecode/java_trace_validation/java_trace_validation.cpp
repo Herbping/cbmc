@@ -6,28 +6,30 @@ Author: Diffblue Ltd.
 
 \*******************************************************************/
 
+#include <util/byte_operators.h>
+#include <util/pointer_expr.h>
+#include <util/symbol_table.h>
+
 #include <goto-programs/goto_trace.h>
 
 #include <java_bytecode/java_trace_validation.h>
 #include <java_bytecode/java_types.h>
-
 #include <testing-utils/message.h>
 #include <testing-utils/use_catch.h>
 
-#include <util/byte_operators.h>
-#include <util/pointer_expr.h>
-#include <util/symbol_table.h>
+#include <climits>
 
 TEST_CASE("java trace validation", "[core][java_trace_validation]")
 {
   const exprt plain_expr = exprt();
   const exprt expr_with_data = exprt("id", java_int_type());
-  const symbol_exprt valid_symbol_expr = symbol_exprt("id", java_int_type());
+  const symbol_exprt valid_symbol_expr =
+    symbol_exprt("id", struct_typet{{{"member", java_int_type()}}});
   const symbol_exprt invalid_symbol_expr = symbol_exprt(java_int_type());
   const member_exprt valid_member =
     member_exprt(valid_symbol_expr, "member", java_int_type());
-  const member_exprt invalid_member =
-    member_exprt(plain_expr, "member", java_int_type());
+  exprt invalid_member = unary_exprt{ID_member, plain_expr, java_int_type()};
+  invalid_member.set(ID_component_name, "member");
   const constant_exprt invalid_constant = constant_exprt("", java_int_type());
   const constant_exprt valid_constant = constant_exprt("0", java_int_type());
   const index_exprt valid_index = index_exprt(
@@ -35,9 +37,9 @@ TEST_CASE("java trace validation", "[core][java_trace_validation]")
   const index_exprt index_plain =
     index_exprt(exprt(ID_nil, array_typet(typet(), nil_exprt())), exprt());
   const byte_extract_exprt byte_little_endian = byte_extract_exprt(
-    ID_byte_extract_little_endian, exprt(), exprt(), typet());
-  const byte_extract_exprt byte_big_endian =
-    byte_extract_exprt(ID_byte_extract_big_endian, exprt(), exprt(), typet());
+    ID_byte_extract_little_endian, exprt(), exprt(), CHAR_BIT, typet());
+  const byte_extract_exprt byte_big_endian = byte_extract_exprt(
+    ID_byte_extract_big_endian, exprt(), exprt(), CHAR_BIT, typet());
   const address_of_exprt valid_address = address_of_exprt(valid_symbol_expr);
   const address_of_exprt invalid_address = address_of_exprt(exprt());
   const struct_exprt struct_plain =
@@ -88,7 +90,8 @@ TEST_CASE("java trace validation", "[core][java_trace_validation]")
     INFO("valid member structure")
     REQUIRE(check_member_structure(valid_member));
     INFO("invalid member structure, no symbol operand")
-    REQUIRE_FALSE(check_member_structure(invalid_member));
+    REQUIRE_FALSE(check_member_structure(
+      static_cast<const member_exprt &>(invalid_member)));
   }
 
   SECTION("can_evaluate_to_constant")

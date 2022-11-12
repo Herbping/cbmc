@@ -832,22 +832,22 @@ std::string expr2ct::convert_trinary(
   return dest;
 }
 
-std::string expr2ct::convert_quantifier(
-  const quantifier_exprt &src,
+std::string expr2ct::convert_binding(
+  const binding_exprt &src,
   const std::string &symbol,
   unsigned precedence)
 {
   // our made-up syntax can only do one symbol
-  if(src.op0().operands().size() != 1)
+  if(src.variables().size() != 1)
     return convert_norep(src, precedence);
 
   unsigned p0, p1;
 
-  std::string op0 = convert_with_precedence(src.symbol(), p0);
+  std::string op0 = convert_with_precedence(src.variables().front(), p0);
   std::string op1 = convert_with_precedence(src.where(), p1);
 
   std::string dest=symbol+" { ";
-  dest += convert(src.symbol().type());
+  dest += convert(src.variables().front().type());
   dest+=" "+op0+"; ";
   dest+=op1;
   dest+=" }";
@@ -1401,15 +1401,10 @@ std::string expr2ct::convert_unary_post(
   return dest;
 }
 
-std::string expr2ct::convert_index(
-  const exprt &src,
-  unsigned precedence)
+std::string expr2ct::convert_index(const binary_exprt &src, unsigned precedence)
 {
-  if(src.operands().size()!=2)
-    return convert_norep(src, precedence);
-
   unsigned p;
-  std::string op = convert_with_precedence(to_index_expr(src).array(), p);
+  std::string op = convert_with_precedence(src.op0(), p);
 
   std::string dest;
   if(precedence>p)
@@ -1419,7 +1414,7 @@ std::string expr2ct::convert_index(
     dest+=')';
 
   dest+='[';
-  dest += convert(to_index_expr(src).index());
+  dest += convert(src.op1());
   dest+=']';
 
   return dest;
@@ -1789,9 +1784,9 @@ std::string expr2ct::convert_constant(
   else if(type.id()==ID_c_enum ||
           type.id()==ID_c_enum_tag)
   {
-    typet c_enum_type=
-      type.id()==ID_c_enum?to_c_enum_type(type):
-                           ns.follow_tag(to_c_enum_tag_type(type));
+    c_enum_typet c_enum_type = type.id() == ID_c_enum
+                                 ? to_c_enum_type(type)
+                                 : ns.follow_tag(to_c_enum_tag_type(type));
 
     if(c_enum_type.id()!=ID_c_enum)
       return convert_norep(src, precedence);
@@ -1809,8 +1804,9 @@ std::string expr2ct::convert_constant(
     }
 
     // lookup failed or enum is to be output as integer
-    const bool is_signed = c_enum_type.subtype().id() == ID_signedbv;
-    const auto width = to_bitvector_type(c_enum_type.subtype()).get_width();
+    const bool is_signed = c_enum_type.underlying_type().id() == ID_signedbv;
+    const auto width =
+      to_bitvector_type(c_enum_type.underlying_type()).get_width();
 
     std::string value_as_string =
       integer2string(bvrep2integer(value, width, is_signed));
@@ -1838,8 +1834,12 @@ std::string expr2ct::convert_constant(
   {
     const auto width = to_bitvector_type(type).get_width();
 
-    mp_integer int_value =
-      bvrep2integer(value, width, type.id() == ID_signedbv);
+    mp_integer int_value = bvrep2integer(
+      value,
+      width,
+      type.id() == ID_signedbv ||
+        (type.id() == ID_c_bit_field &&
+         to_c_bit_field_type(type).underlying_type().id() == ID_signedbv));
 
     const irep_idt &c_type =
       type.id() == ID_c_bit_field
@@ -2078,8 +2078,8 @@ std::string expr2ct::convert_struct(
 
   for(const auto &component : struct_type.components())
   {
-    if(o_it->type().id()==ID_code)
-      continue;
+    DATA_INVARIANT(
+      o_it->type().id() != ID_code, "struct member must not be of code type");
 
     if(component.get_is_padding() && !include_padding_components)
     {
@@ -3680,15 +3680,14 @@ std::string expr2ct::convert_with_precedence(
       to_plus_expr(pointer).op0().type().id() == ID_pointer)
     {
       // Note that index[pointer] is legal C, but we avoid it nevertheless.
-      return convert(
-        index_exprt(to_plus_expr(pointer).op0(), to_plus_expr(pointer).op1()));
+      return convert_index(to_binary_expr(pointer), precedence = 16);
     }
     else
       return convert_unary(to_unary_expr(src), "*", precedence = 15);
   }
 
   else if(src.id()==ID_index)
-    return convert_index(src, precedence=16);
+    return convert_index(to_binary_expr(src), precedence = 16);
 
   else if(src.id()==ID_member)
     return convert_member(to_member_expr(src), precedence=16);
@@ -3821,16 +3820,13 @@ std::string expr2ct::convert_with_precedence(
     return convert_trinary(to_if_expr(src), "?", ":", precedence = 3);
 
   else if(src.id()==ID_forall)
-    return convert_quantifier(
-      to_quantifier_expr(src), "forall", precedence = 2);
+    return convert_binding(to_quantifier_expr(src), "forall", precedence = 2);
 
   else if(src.id()==ID_exists)
-    return convert_quantifier(
-      to_quantifier_expr(src), "exists", precedence = 2);
+    return convert_binding(to_quantifier_expr(src), "exists", precedence = 2);
 
   else if(src.id()==ID_lambda)
-    return convert_quantifier(
-      to_quantifier_expr(src), "LAMBDA", precedence = 2);
+    return convert_binding(to_lambda_expr(src), "LAMBDA", precedence = 2);
 
   else if(src.id()==ID_with)
     return convert_with(src, precedence=16);
@@ -3993,6 +3989,10 @@ optionalt<std::string> expr2ct::convert_function(const exprt &src)
     {ID_count_leading_zeros, "__builtin_clz"},
     {ID_count_trailing_zeros, "__builtin_ctz"},
     {ID_dynamic_object, "DYNAMIC_OBJECT"},
+    {ID_live_object, "LIVE_OBJECT"},
+    {ID_writeable_object, "WRITEABLE_OBJECT"},
+    {ID_find_first_set, "__builtin_ffs"},
+    {ID_separate, "SEPARATE"},
     {ID_floatbv_div, "FLOAT/"},
     {ID_floatbv_minus, "FLOAT-"},
     {ID_floatbv_mult, "FLOAT*"},

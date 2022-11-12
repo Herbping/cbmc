@@ -3,6 +3,7 @@
 # listed with decreasing runtimes (i.e. longest running at the top)
 DIRS = cbmc \
        cbmc-library \
+       cprover \
        crangler \
        goto-analyzer \
        ansi-c \
@@ -13,6 +14,7 @@ DIRS = cbmc \
        cbmc-incr-oneloop \
        cbmc-incr-smt2 \
        cbmc-incr \
+       cbmc-output-file \
        cbmc-with-incr \
        array-refinement-with-incr \
        goto-instrument-chc \
@@ -36,6 +38,7 @@ DIRS = cbmc \
        statement-list \
        systemc \
        contracts \
+       contracts-dfcc \
        acceleration \
        k-induction \
        goto-harness \

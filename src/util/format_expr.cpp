@@ -150,6 +150,8 @@ static std::ostream &format_rec(std::ostream &os, const unary_exprt &src)
     os << "clz";
   else if(src.id() == ID_count_trailing_zeros)
     os << "ctz";
+  else if(src.id() == ID_find_first_set)
+    os << "ffs";
   else
     return os << src.pretty();
 
@@ -613,6 +615,11 @@ format_expr_configt::find_formatter(const exprt &expr)
 }
 
 format_expr_configt format_expr_config;
+
+void add_format_hook(irep_idt id, format_expr_configt::formattert formatter)
+{
+  format_expr_config.expr_map[id] = std::move(formatter);
+}
 
 std::ostream &format_rec(std::ostream &os, const exprt &expr)
 {

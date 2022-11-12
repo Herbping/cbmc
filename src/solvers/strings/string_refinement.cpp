@@ -291,13 +291,12 @@ void string_refinementt::set_to(const exprt &expr, bool value)
 }
 
 /// Add association for each char pointer in the equation
-/// \param symbol_solver: a union_find_replacet object to keep track of
-///   char pointer equations
+/// \param [in,out] symbol_solver: a union_find_replacet object to keep track of
+///   char pointer equations. Char pointers that have been set equal by an
+///   equation are associated to the same element.
 /// \param equations: vector of equations
 /// \param ns: namespace
 /// \param stream: output stream
-/// \return union_find_replacet where char pointer that have been set equal
-///   by an equation are associated to the same element
 static void add_equations_for_symbol_resolution(
   union_find_replacet &symbol_solver,
   const std::vector<exprt> &equations,
@@ -1886,8 +1885,8 @@ exprt string_refinementt::get(const exprt &expr) const
 
       if(const auto n = numeric_cast<std::size_t>(length))
       {
-        const interval_sparse_arrayt sparse_array(
-          from_integer(CHARACTER_FOR_UNKNOWN, arr.type().subtype()));
+        const interval_sparse_arrayt sparse_array(from_integer(
+          CHARACTER_FOR_UNKNOWN, to_array_type(arr.type()).element_type()));
         return sparse_array.concretize(*n, length.type());
       }
     }

@@ -264,8 +264,8 @@ optionalt<bvt> bv_pointerst::convert_address_of_rec(const exprt &expr)
       UNREACHABLE;
 
     // get size
-    auto size = pointer_offset_size(array_type.element_type(), ns);
-    CHECK_RETURN(size.has_value() && *size >= 0);
+    auto size = size_of_expr(array_type.element_type(), ns);
+    CHECK_RETURN(size.has_value());
 
     bv = offset_arithmetic(type, bv, *size, index);
     CHECK_RETURN(bv.size()==bits);
@@ -409,6 +409,11 @@ bvt bv_pointerst::convert_pointer_type(const exprt &expr)
 
     CHECK_RETURN(bv_opt->size() == bits);
     return *bv_opt;
+  }
+  else if(expr.id() == ID_object_address)
+  {
+    const auto &object_address_expr = to_object_address_expr(expr);
+    return add_addr(object_address_expr.object_expr());
   }
   else if(expr.id()==ID_constant)
   {
@@ -727,17 +732,12 @@ bvt bv_pointerst::convert_bitvector(const exprt &expr)
     to_typecast_expr(expr).op().type().id() == ID_pointer)
   {
     // pointer to int
-    bvt op0 = convert_pointer_type(to_typecast_expr(expr).op());
+    bvt op0 = convert_bv(to_typecast_expr(expr).op());
 
     // squeeze it in!
     std::size_t width=boolbv_width(expr.type());
 
     return bv_utils.zero_extension(op0, width);
-  }
-  else if(expr.id() == ID_object_address)
-  {
-    const auto &object_address_expr = to_object_address_expr(expr);
-    return add_addr(object_address_expr.object_expr());
   }
 
   return SUB::convert_bitvector(expr);
@@ -769,11 +769,12 @@ static std::string bits_to_string(const propt &prop, const bvt &bv)
 exprt bv_pointerst::bv_get_rec(
   const exprt &expr,
   const bvt &bv,
-  std::size_t offset,
-  const typet &type) const
+  std::size_t offset) const
 {
+  const typet &type = expr.type();
+
   if(type.id() != ID_pointer)
-    return SUB::bv_get_rec(expr, bv, offset, type);
+    return SUB::bv_get_rec(expr, bv, offset);
 
   const pointer_typet &pt = to_pointer_type(type);
   const std::size_t bits = boolbv_width(pt);
@@ -841,6 +842,28 @@ bvt bv_pointerst::offset_arithmetic(
   bv_index=bv_utils.extension(bv_index, offset_bits, rep);
 
   return offset_arithmetic(type, bv, factor, bv_index);
+}
+
+bvt bv_pointerst::offset_arithmetic(
+  const pointer_typet &type,
+  const bvt &bv,
+  const exprt &factor,
+  const exprt &index)
+{
+  bvt bv_factor = convert_bv(factor);
+  bvt bv_index =
+    convert_bv(typecast_exprt::conditional_cast(index, factor.type()));
+
+  bv_utilst::representationt rep = factor.type().id() == ID_signedbv
+                                     ? bv_utilst::representationt::SIGNED
+                                     : bv_utilst::representationt::UNSIGNED;
+
+  bv_index = bv_utils.multiplier(bv_index, bv_factor, rep);
+
+  const std::size_t offset_bits = get_offset_width(type);
+  bv_index = bv_utils.extension(bv_index, offset_bits, rep);
+
+  return offset_arithmetic(type, bv, 1, bv_index);
 }
 
 bvt bv_pointerst::offset_arithmetic(
@@ -957,9 +980,26 @@ void bv_pointerst::do_postponed(
       PRECONDITION(size_bv.size() == postponed.bv.size());
 
       literalt l1=bv_utils.equal(bv, saved_bv);
+      if(l1.is_true())
+      {
+        for(std::size_t i = 0; i < postponed.bv.size(); ++i)
+          prop.set_equal(postponed.bv[i], size_bv[i]);
+        break;
+      }
+      else if(l1.is_false())
+        continue;
+#define COMPACT_OBJECT_SIZE_EQ
+#ifndef COMPACT_OBJECT_SIZE_EQ
       literalt l2=bv_utils.equal(postponed.bv, size_bv);
 
       prop.l_set_to_true(prop.limplies(l1, l2));
+#else
+      for(std::size_t i = 0; i < postponed.bv.size(); ++i)
+      {
+        prop.lcnf({!l1, !postponed.bv[i], size_bv[i]});
+        prop.lcnf({!l1, postponed.bv[i], !size_bv[i]});
+      }
+#endif
     }
   }
   else
