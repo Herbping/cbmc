@@ -691,6 +691,7 @@ exprt instrument_spec_assignst::inclusion_check_full(
                     (!include_stack_allocated ||
                      (from_static_local.empty() && from_stack_alloc.empty()));
 
+  exprt result = false_exprt();
   // inclusion check expression
   if(no_targets)
   {
@@ -700,7 +701,12 @@ exprt instrument_spec_assignst::inclusion_check_full(
     if(allow_null_lhs)
       return null_pointer(car.target_start_address());
     else
-      return false_exprt{};
+    {
+      auto &checked_assigns =
+        static_cast<exprt &>(result.add(ID_checked_assigns));
+      checked_assigns = car.target();
+      return result;
+    }
   }
 
   // Build a disjunction over all tracked locations
@@ -747,11 +753,25 @@ exprt instrument_spec_assignst::inclusion_check_full(
   log.debug() << "}" << messaget::eom;
 
   if(allow_null_lhs)
-    return or_exprt{
+  {
+    result = or_exprt{
       null_pointer(car.target_start_address()),
       and_exprt{car.valid_var(), disjunction(disjuncts)}};
+
+    auto &checked_assigns =
+      static_cast<exprt &>(result.add(ID_checked_assigns));
+    checked_assigns = car.target();
+    return result;
+  }
   else
-    return and_exprt{car.valid_var(), disjunction(disjuncts)};
+  {
+    result = and_exprt{car.valid_var(), disjunction(disjuncts)};
+
+    auto &checked_assigns =
+      static_cast<exprt &>(result.add(ID_checked_assigns));
+    checked_assigns = car.target();
+    return result;
+  }
 }
 
 const car_exprt &instrument_spec_assignst::create_car_from_spec_assigns(

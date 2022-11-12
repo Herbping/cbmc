@@ -146,6 +146,7 @@ void code_contractst::check_apply_loop_contracts(
   exprt decreases_clause,
   const irep_idt &mode)
 {
+  const auto loop_number = loop_end->loop_number;
   const auto loop_head_location = loop_head->source_location();
 
   // Vector representing a (possibly multidimensional) decreases clause
@@ -231,10 +232,15 @@ void code_contractst::check_apply_loop_contracts(
     new_tmp_symbol(
       bool_typet(), loop_head_location, mode, symbol_table, "__entered_loop")
       .symbol_expr();
-  pre_loop_head_instrs.add(
-    goto_programt::make_decl(entered_loop, loop_head_location));
-  pre_loop_head_instrs.add(
-    goto_programt::make_assignment(entered_loop, false_exprt{}));
+
+  auto decl_entered_loop =
+    goto_programt::make_decl(entered_loop, loop_head_location);
+  decl_entered_loop.loop_number = loop_number;
+  pre_loop_head_instrs.add(std::move(decl_entered_loop));
+  auto assign_entered_loop =
+    goto_programt::make_assignment(entered_loop, false_exprt{});
+  assign_entered_loop.loop_number = loop_number;
+  pre_loop_head_instrs.add(std::move(assign_entered_loop));
 
   // Create a snapshot of the invariant so that we can check the base case,
   // if the loop is not vacuous and must be abstracted with contracts.
