@@ -5,8 +5,6 @@ var classcode__contractst =
     [ "apply_function_contract", "classcode__contractst.html#a23235d91ecb26eb050ea72e1679a1ec7", null ],
     [ "apply_loop_contract", "classcode__contractst.html#a384938548a16b9729ab055335078d398", null ],
     [ "apply_loop_contracts", "classcode__contractst.html#a481adf4209178c6c05270908690c2bff", null ],
-    [ "assert_function_pointer_obeys_contract", "classcode__contractst.html#aeaa4c3462ad0171fd1598972f70d1cc4", null ],
-    [ "assume_function_pointer_obeys_contract", "classcode__contractst.html#a0651cbc32c14781e4af9f5e6812ae1a8", null ],
     [ "check_all_functions_found", "classcode__contractst.html#a39316dcec36f0a77c21f173c31c5966e", null ],
     [ "check_apply_loop_contracts", "classcode__contractst.html#a368a74a79d34576fb378b462f3ca60d8", null ],
     [ "check_frame_conditions_function", "classcode__contractst.html#a3d27bda0b7c2ca8427b40343129d221a", null ],
@@ -19,6 +17,7 @@ var classcode__contractst =
     [ "goto_functions", "classcode__contractst.html#ad0398cb77a366c365d783a2f2afc3dd2", null ],
     [ "goto_model", "classcode__contractst.html#a2e5815107621ad091ce54e5cd47d4168", null ],
     [ "log", "classcode__contractst.html#a3d86532be9a926aa43ad05b6a0526154", null ],
+    [ "loop_names", "classcode__contractst.html#accfee04723c3fd9a7704246906873d75", null ],
     [ "ns", "classcode__contractst.html#a00713cdaad0d6c49ea879a300c9c3747", null ],
     [ "summarized", "classcode__contractst.html#a89a113a0eb07ab4ea94e58f649e32673", null ],
     [ "symbol_table", "classcode__contractst.html#a4e0f5509d76b1d2a3ae1a3daca1f454a", null ]
