@@ -1,62 +1,62 @@
 <map id="/home/runner/work/cbmc/cbmc/src/util/merge_irep.h" name="/home/runner/work/cbmc/cbmc/src/util/merge_irep.h">
-<area shape="rect" id="node1" title=" " alt="" coords="3330,5,3529,47"/>
-<area shape="rect" id="node2" href="$goto__trace__storage_8h.html" title="Goto Trace Storage." alt="" coords="479,310,663,366"/>
-<area shape="rect" id="node11" href="$goto__trace_8cpp.html" title="Traces of GOTO Programs." alt="" coords="3225,95,3409,151"/>
-<area shape="rect" id="node12" href="$symex__target__equation_8h.html" title="Generate Equation using Symbolic Execution." alt="" coords="3434,95,3649,151"/>
-<area shape="rect" id="node60" href="$merge__irep_8cpp.html" title=" " alt="" coords="3673,102,3887,143"/>
-<area shape="rect" id="node3" href="$c__test__input__generator_8cpp.html" title="Test Input Generator for C." alt="" coords="5,429,189,485"/>
-<area shape="rect" id="node4" href="$all__properties__verifier__with__fault__localization_8h.html" title="Goto verifier for verifying all properties that stores traces and localizes faults." alt="" coords="422,421,610,492"/>
-<area shape="rect" id="node7" href="$all__properties__verifier__with__trace__storage_8h.html" title="Goto verifier for verifying all properties that stores traces." alt="" coords="635,421,819,492"/>
-<area shape="rect" id="node8" href="$cover__goals__verifier__with__trace__storage_8h.html" title="Goto verifier for covering goals that stores traces." alt="" coords="843,421,1035,492"/>
-<area shape="rect" id="node9" href="$goto__trace__storage_8cpp.html" title="Goto Trace Storage." alt="" coords="213,429,397,485"/>
-<area shape="rect" id="node10" href="$report__util_8cpp.html" title="Bounded Model Checking Utilities." alt="" coords="1059,429,1243,485"/>
-<area shape="rect" id="node5" href="$cbmc__parse__options_8cpp.html" title="CBMC Command Line Option Processing." alt="" coords="1307,540,1512,596"/>
-<area shape="rect" id="node6" href="$jbmc__parse__options_8cpp.html" title="JBMC Command Line Option Processing." alt="" coords="631,540,823,596"/>
-<area shape="rect" id="node13" href="$bmc__util_8cpp.html" title="Bounded Model Checking Utilities." alt="" coords="1317,429,1501,485"/>
-<area shape="rect" id="node14" href="$counterexample__beautification_8h.html" title="Counterexample Beautification." alt="" coords="2239,310,2479,366"/>
-<area shape="rect" id="node19" href="$goto__symex__fault__localizer_8cpp.html" title="Fault Localization for Goto Symex." alt="" coords="5351,199,5582,255"/>
-<area shape="rect" id="node20" href="$goto__symex__property__decider_8h.html" title="Property Decider for Goto&#45;Symex." alt="" coords="1761,199,1996,255"/>
-<area shape="rect" id="node25" href="$scratch__program_8h.html" title="Loop Acceleration." alt="" coords="5915,310,6133,366"/>
-<area shape="rect" id="node32" href="$graphml__witness_8cpp.html" title="Witnesses for Traces and Proofs." alt="" coords="1139,199,1323,255"/>
-<area shape="rect" id="node33" href="$build__goto__trace_8h.html" title="Traces of GOTO Programs." alt="" coords="912,199,1115,255"/>
-<area shape="rect" id="node36" href="$goto__symex_8h.html" title="Symbolic Execution." alt="" coords="3310,199,3509,255"/>
-<area shape="rect" id="node51" href="$goto__symex__state_8cpp.html" title="Symbolic Execution." alt="" coords="3038,199,3237,255"/>
-<area shape="rect" id="node52" href="$partial__order__concurrency_8h.html" title="Add constraints to equation encoding partial orders on events." alt="" coords="675,199,887,255"/>
-<area shape="rect" id="node53" href="$path__storage_8h.html" title="Storage of symbolic execution paths to resume." alt="" coords="5078,199,5277,255"/>
-<area shape="rect" id="node54" href="$postcondition_8cpp.html" title="Symbolic Execution." alt="" coords="3532,206,3817,247"/>
-<area shape="rect" id="node55" href="$precondition_8cpp.html" title="Symbolic Execution." alt="" coords="3842,206,4121,247"/>
-<area shape="rect" id="node56" href="$show__program_8cpp.html" title="Output of the program (SSA) constraints." alt="" coords="4145,199,4349,255"/>
-<area shape="rect" id="node57" href="$show__vcc_8cpp.html" title="Output of the verification conditions (VCCs)" alt="" coords="4373,199,4577,255"/>
-<area shape="rect" id="node58" href="$symex__slice__class_8h.html" title="Slicer for symex traces." alt="" coords="4601,199,4815,255"/>
-<area shape="rect" id="node59" href="$symex__target__equation_8cpp.html" title="Symbolic Execution Implementation of functions to build SSA equation." alt="" coords="4839,199,5054,255"/>
-<area shape="rect" id="node15" href="$counterexample__beautification_8cpp.html" title="Counterexample Beautification using Incremental SAT." alt="" coords="2414,429,2669,485"/>
-<area shape="rect" id="node16" href="$multi__path__symex__checker_8cpp.html" title="Goto Checker using Bounded Model Checking." alt="" coords="1577,429,1807,485"/>
-<area shape="rect" id="node17" href="$single__loop__incremental__symex__checker_8cpp.html" title="Goto Checker using multi&#45;path symbolic execution with incremental unwinding of a specified loop." alt="" coords="2205,421,2390,492"/>
-<area shape="rect" id="node18" href="$single__path__symex__checker_8cpp.html" title="Goto Checker using Single Path Symbolic Execution." alt="" coords="1832,429,2067,485"/>
-<area shape="rect" id="node21" href="$goto__symex__property__decider_8cpp.html" title="Property Decider for Goto&#45;Symex." alt="" coords="1273,310,1522,366"/>
-<area shape="rect" id="node22" href="$multi__path__symex__checker_8h.html" title="Goto Checker using Multi&#45;Path Symbolic Execution." alt="" coords="1546,310,1761,366"/>
-<area shape="rect" id="node23" href="$single__loop__incremental__symex__checker_8h.html" title="Goto Checker using multi&#45;path symbolic execution with incremental unwinding of a specified loop." alt="" coords="3442,303,3627,373"/>
-<area shape="rect" id="node24" href="$single__path__symex__checker_8h.html" title="Goto Checker using Single Path Symbolic Execution." alt="" coords="1994,310,2214,366"/>
-<area shape="rect" id="node26" href="$accelerate_8cpp.html" title="Loop Acceleration." alt="" coords="6734,429,6927,485"/>
-<area shape="rect" id="node27" href="$acceleration__utils_8cpp.html" title="Loop Acceleration." alt="" coords="6951,421,7145,492"/>
-<area shape="rect" id="node28" href="$disjunctive__polynomial__acceleration_8cpp.html" title="Loop Acceleration." alt="" coords="5611,421,5861,492"/>
-<area shape="rect" id="node29" href="$polynomial__accelerator_8cpp.html" title="Loop Acceleration." alt="" coords="5885,429,6163,485"/>
-<area shape="rect" id="node30" href="$sat__path__enumerator_8cpp.html" title="Loop Acceleration." alt="" coords="6187,429,6450,485"/>
-<area shape="rect" id="node31" href="$scratch__program_8cpp.html" title="Loop Acceleration." alt="" coords="6475,429,6709,485"/>
-<area shape="rect" id="node34" href="$bmc__util_8h.html" title="Bounded Model Checking Utilities." alt="" coords="913,310,1097,366"/>
-<area shape="rect" id="node35" href="$build__goto__trace_8cpp.html" title="Traces of GOTO Programs." alt="" coords="687,310,889,366"/>
-<area shape="rect" id="node37" href="$symex__bmc_8h.html" title="Bounded Model Checking for ANSI&#45;C." alt="" coords="1785,310,1969,366"/>
-<area shape="rect" id="node38" href="$auto__objects_8cpp.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="3651,310,3850,366"/>
-<area shape="rect" id="node39" href="$goto__symex_8cpp.html" title="Symbolic Execution." alt="" coords="2503,310,2702,366"/>
-<area shape="rect" id="node40" href="$symex__atomic__section_8cpp.html" title="Symbolic Execution." alt="" coords="2726,310,2941,366"/>
-<area shape="rect" id="node41" href="$symex__builtin__functions_8cpp.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="4931,310,5146,366"/>
-<area shape="rect" id="node42" href="$symex__catch_8cpp.html" title="Symbolic Execution." alt="" coords="2965,310,3179,366"/>
-<area shape="rect" id="node43" href="$symex__clean__expr_8cpp.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="3878,429,4093,485"/>
-<area shape="rect" id="node44" href="$symex__dead_8cpp.html" title="Symbolic Execution." alt="" coords="3203,310,3418,366"/>
-<area shape="rect" id="node45" href="$symex__decl_8cpp.html" title="Symbolic Execution." alt="" coords="5170,310,5385,366"/>
-<area shape="rect" id="node46" href="$symex__dereference_8cpp.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="4117,429,4331,485"/>
-<area shape="rect" id="node47" href="$symex__dereference__state_8h.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="3925,310,4139,366"/>
-<area shape="rect" id="node48" href="$symex__function__call_8cpp.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="4215,310,4430,366"/>
-<area shape="rect" id="node49" href="$symex__goto_8cpp.html" title="Symbolic Execution." alt="" coords="4454,310,4669,366"/>
-<area shape="rect" id="node50" href="$symex__main_8cpp.html" title="Symbolic Execution." alt="" coords="4693,310,4907,366"/>
+<area shape="rect" id="node1" title=" " alt="" coords="2973,5,3171,47"/>
+<area shape="rect" id="node2" href="$goto__trace__storage_8h.html" title="Goto Trace Storage." alt="" coords="677,310,861,366"/>
+<area shape="rect" id="node13" href="$goto__trace_8cpp.html" title="Traces of GOTO Programs." alt="" coords="2868,95,3052,151"/>
+<area shape="rect" id="node14" href="$symex__target__equation_8h.html" title="Generate Equation using Symbolic Execution." alt="" coords="3077,95,3291,151"/>
+<area shape="rect" id="node60" href="$merge__irep_8cpp.html" title=" " alt="" coords="3315,102,3530,143"/>
+<area shape="rect" id="node3" href="$c__test__input__generator_8cpp.html" title="Test Input Generator for C." alt="" coords="213,429,397,485"/>
+<area shape="rect" id="node4" href="$all__properties__verifier__with__fault__localization_8h.html" title="Goto verifier for verifying all properties that stores traces and localizes faults." alt="" coords="731,421,919,492"/>
+<area shape="rect" id="node7" href="$all__properties__verifier__with__trace__storage_8h.html" title="Goto verifier for verifying all properties that stores traces." alt="" coords="523,421,707,492"/>
+<area shape="rect" id="node10" href="$cover__goals__verifier__with__trace__storage_8h.html" title="Goto verifier for covering goals that stores traces." alt="" coords="944,421,1136,492"/>
+<area shape="rect" id="node11" href="$goto__trace__storage_8cpp.html" title="Goto Trace Storage." alt="" coords="5,429,189,485"/>
+<area shape="rect" id="node12" href="$report__util_8cpp.html" title="Bounded Model Checking Utilities." alt="" coords="1160,429,1344,485"/>
+<area shape="rect" id="node5" href="$cbmc__parse__options_8cpp.html" title="CBMC Command Line Option Processing." alt="" coords="1304,540,1509,596"/>
+<area shape="rect" id="node6" href="$jbmc__parse__options_8cpp.html" title="JBMC Command Line Option Processing." alt="" coords="731,540,923,596"/>
+<area shape="rect" id="node8" href="$cegis__verifier_8cpp.html" title="Verifier for Counterexample&#45;Guided Synthesis." alt="" coords="301,540,499,596"/>
+<area shape="rect" id="node9" href="$api_8cpp.html" title=" " alt="" coords="523,540,707,596"/>
+<area shape="rect" id="node15" href="$bmc__util_8cpp.html" title="Bounded Model Checking Utilities." alt="" coords="2576,429,2760,485"/>
+<area shape="rect" id="node16" href="$counterexample__beautification_8h.html" title="Counterexample Beautification." alt="" coords="1852,310,2092,366"/>
+<area shape="rect" id="node21" href="$goto__symex__fault__localizer_8cpp.html" title="Fault Localization for Goto Symex." alt="" coords="1613,199,1843,255"/>
+<area shape="rect" id="node22" href="$goto__symex__property__decider_8h.html" title="Property Decider for Goto&#45;Symex." alt="" coords="1868,199,2103,255"/>
+<area shape="rect" id="node27" href="$scratch__program_8h.html" title="Loop Acceleration." alt="" coords="5584,310,5803,366"/>
+<area shape="rect" id="node34" href="$graphml__witness_8cpp.html" title="Witnesses for Traces and Proofs." alt="" coords="2177,199,2361,255"/>
+<area shape="rect" id="node35" href="$build__goto__trace_8h.html" title="Traces of GOTO Programs." alt="" coords="2385,199,2588,255"/>
+<area shape="rect" id="node38" href="$goto__symex_8h.html" title="Symbolic Execution." alt="" coords="3185,199,3383,255"/>
+<area shape="rect" id="node51" href="$goto__symex__state_8cpp.html" title="Symbolic Execution." alt="" coords="2849,199,3047,255"/>
+<area shape="rect" id="node52" href="$partial__order__concurrency_8h.html" title="Add constraints to equation encoding partial orders on events." alt="" coords="2613,199,2825,255"/>
+<area shape="rect" id="node53" href="$path__storage_8h.html" title="Storage of symbolic execution paths to resume." alt="" coords="5017,199,5215,255"/>
+<area shape="rect" id="node54" href="$postcondition_8cpp.html" title="Symbolic Execution." alt="" coords="3407,206,3692,247"/>
+<area shape="rect" id="node55" href="$precondition_8cpp.html" title="Symbolic Execution." alt="" coords="3717,206,3995,247"/>
+<area shape="rect" id="node56" href="$show__program_8cpp.html" title="Output of the program (SSA) constraints." alt="" coords="4019,199,4223,255"/>
+<area shape="rect" id="node57" href="$show__vcc_8cpp.html" title="Output of the verification conditions (VCCs)" alt="" coords="4247,199,4451,255"/>
+<area shape="rect" id="node58" href="$symex__slice__class_8h.html" title="Slicer for symex traces." alt="" coords="4475,199,4690,255"/>
+<area shape="rect" id="node59" href="$symex__target__equation_8cpp.html" title="Symbolic Execution Implementation of functions to build SSA equation." alt="" coords="4714,199,4929,255"/>
+<area shape="rect" id="node17" href="$counterexample__beautification_8cpp.html" title="Counterexample Beautification using Incremental SAT." alt="" coords="2246,429,2501,485"/>
+<area shape="rect" id="node18" href="$multi__path__symex__checker_8cpp.html" title="Goto Checker using Bounded Model Checking." alt="" coords="1470,429,1701,485"/>
+<area shape="rect" id="node19" href="$single__loop__incremental__symex__checker_8cpp.html" title="Goto Checker using multi&#45;path symbolic execution with incremental unwinding of a specified loop." alt="" coords="1777,421,1962,492"/>
+<area shape="rect" id="node20" href="$single__path__symex__checker_8cpp.html" title="Goto Checker using Single Path Symbolic Execution." alt="" coords="1987,429,2221,485"/>
+<area shape="rect" id="node23" href="$goto__symex__property__decider_8cpp.html" title="Property Decider for Goto&#45;Symex." alt="" coords="886,310,1135,366"/>
+<area shape="rect" id="node24" href="$multi__path__symex__checker_8h.html" title="Goto Checker using Multi&#45;Path Symbolic Execution." alt="" coords="1159,310,1374,366"/>
+<area shape="rect" id="node25" href="$single__loop__incremental__symex__checker_8h.html" title="Goto Checker using multi&#45;path symbolic execution with incremental unwinding of a specified loop." alt="" coords="2117,303,2302,373"/>
+<area shape="rect" id="node26" href="$single__path__symex__checker_8h.html" title="Goto Checker using Single Path Symbolic Execution." alt="" coords="1607,310,1827,366"/>
+<area shape="rect" id="node28" href="$accelerate_8cpp.html" title="Loop Acceleration." alt="" coords="5597,429,5790,485"/>
+<area shape="rect" id="node29" href="$acceleration__utils_8cpp.html" title="Loop Acceleration." alt="" coords="5814,421,6007,492"/>
+<area shape="rect" id="node30" href="$disjunctive__polynomial__acceleration_8cpp.html" title="Loop Acceleration." alt="" coords="6031,421,6281,492"/>
+<area shape="rect" id="node31" href="$polynomial__accelerator_8cpp.html" title="Loop Acceleration." alt="" coords="6305,429,6583,485"/>
+<area shape="rect" id="node32" href="$sat__path__enumerator_8cpp.html" title="Loop Acceleration." alt="" coords="6607,429,6870,485"/>
+<area shape="rect" id="node33" href="$scratch__program_8cpp.html" title="Loop Acceleration." alt="" coords="5337,429,5572,485"/>
+<area shape="rect" id="node36" href="$bmc__util_8h.html" title="Bounded Model Checking Utilities." alt="" coords="1399,310,1583,366"/>
+<area shape="rect" id="node37" href="$build__goto__trace_8cpp.html" title="Traces of GOTO Programs." alt="" coords="2428,310,2631,366"/>
+<area shape="rect" id="node39" href="$symex__bmc_8h.html" title="Bounded Model Checking for ANSI&#45;C." alt="" coords="2705,310,2889,366"/>
+<area shape="rect" id="node40" href="$auto__objects_8cpp.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="3153,310,3351,366"/>
+<area shape="rect" id="node41" href="$goto__symex_8cpp.html" title="Symbolic Execution." alt="" coords="3375,310,3574,366"/>
+<area shape="rect" id="node42" href="$symex__atomic__section_8cpp.html" title="Symbolic Execution." alt="" coords="3598,310,3813,366"/>
+<area shape="rect" id="node43" href="$symex__builtin__functions_8cpp.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="4895,310,5110,366"/>
+<area shape="rect" id="node44" href="$symex__catch_8cpp.html" title="Symbolic Execution." alt="" coords="3837,310,4051,366"/>
+<area shape="rect" id="node45" href="$symex__clean__expr_8cpp.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="4081,429,4295,485"/>
+<area shape="rect" id="node46" href="$symex__dead_8cpp.html" title="Symbolic Execution." alt="" coords="2914,310,3129,366"/>
+<area shape="rect" id="node47" href="$symex__decl_8cpp.html" title="Symbolic Execution." alt="" coords="4418,310,4633,366"/>
+<area shape="rect" id="node48" href="$symex__dereference_8cpp.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="4319,429,4534,485"/>
+<area shape="rect" id="node49" href="$symex__dereference__state_8h.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="4127,310,4342,366"/>
+<area shape="rect" id="node50" href="$symex__function__call_8cpp.html" title="Symbolic Execution of ANSI&#45;C." alt="" coords="4657,310,4871,366"/>
 </map>
