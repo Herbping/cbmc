@@ -890,6 +890,15 @@ void code_contractst::apply_loop_contract(
       throw 0;
     }
 
+    if(loop_head->is_target())
+    {
+      goto_programt new_skip;
+      new_skip.add(
+        goto_programt::make_skip());
+      insert_before_swap_and_advance(goto_function.body, loop_head, new_skip);
+    }
+    loop_end->set_target(loop_head);
+
     exprt assigns_clause =
       static_cast<const exprt &>(loop_end->condition().find(ID_C_spec_assigns));
     exprt invariant = static_cast<const exprt &>(

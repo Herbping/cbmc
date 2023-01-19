@@ -603,7 +603,7 @@ optionalt<cext> cegis_verifiert::verify()
   // Control verbosity.
   // We allow non-error output message only when verbosity is set to at least 9.
   const unsigned original_verbosity = log.get_message_handler().get_verbosity();
-  if(original_verbosity < 9)
+  if(original_verbosity <= 9)
     log.get_message_handler().set_verbosity(1);
 
   // Apply loop contracts we annotated.
@@ -630,7 +630,7 @@ optionalt<cext> cegis_verifiert::verify()
   // Run the checker to get the result.
   const resultt result = (*checker)();
 
-  if(original_verbosity >= 9)
+  if(original_verbosity > 9)
     checker->report();
 
   // Restore the verbosity.
@@ -666,6 +666,7 @@ optionalt<cext> cegis_verifiert::verify()
     // assignable violation found
     if(property.second.description.find("assignable") != std::string::npos)
     {
+      target_violation_found = true;
       target_violation = property.first;
       target_violation_info = property.second;
       break;
@@ -675,10 +676,20 @@ optionalt<cext> cegis_verifiert::verify()
     // assigns/invariant.
     if(!target_violation_found)
     {
+      if(property.second.pc->condition() == false_exprt())
+        continue;
       target_violation = property.first;
       target_violation_info = property.second;
       target_violation_found = true;
     }
+  }
+
+  // All violations are
+  // ASSERT FALSE
+  if(!target_violation_found)
+  {
+    restore_functions();
+    return optionalt<cext>();
   }
 
   // Decide the violation type from the description of violation
@@ -698,6 +709,8 @@ optionalt<cext> cegis_verifiert::verify()
   // although there can be multiple ones.
 
   log.debug() << "Start to compute cause loop ids." << messaget::eom;
+  log.debug() << "Violation description: " << target_violation_info.description
+              << messaget::eom;
 
   const auto &trace = checker->get_traces()[target_violation];
   // Doing assigns-synthesis or invariant-synthesis
