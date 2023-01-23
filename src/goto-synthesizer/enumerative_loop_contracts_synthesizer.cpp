@@ -73,9 +73,8 @@ std::vector<exprt> construct_terminals(const std::set<symbol_exprt> &symbols)
         unary_exprt(ID_loop_entry, e, e.type()), size_type()));
     }
   }
-  result.push_back(from_integer(1, unsigned_int_type()));
-  result.push_back(from_integer(1, unsigned_long_int_type()));
-  result.push_back(from_integer(0, signed_int_type()));
+  result.push_back(from_integer(1, signed_short_int_type()));
+  result.push_back(from_integer(0, signed_short_int_type()));
   return result;
 }
 
