@@ -15,6 +15,7 @@ Author: Qinheping Hu
 #include <util/c_types.h>
 #include <util/find_symbols.h>
 #include <util/format_expr.h>
+#include <util/mathematical_expr.h>
 #include <util/pointer_predicates.h>
 #include <util/replace_symbol.h>
 #include <util/simplify_expr.h>
@@ -82,6 +83,87 @@ std::vector<exprt> construct_terminals(const std::set<symbol_exprt> &symbols)
   return result;
 }
 
+static exprt get_memcmp_invariant(
+  const goto_functiont &memcmp_function,
+  messaget &log,
+  const namespacet &ns,
+  goto_modelt &goto_model)
+{
+  const auto &n_symbol = ns.lookup(memcmp_function.parameter_identifiers[2]);
+  log.progress() << n_symbol.type.pretty() << messaget::eom;
+  symbol_exprt n_expr(n_symbol.name, n_symbol.type);
+  log.progress() << n_expr.pretty() << messaget::eom;
+  symbol_exprt sc1_expr = n_expr;
+  symbol_exprt sc2_expr = n_expr;
+  symbol_exprt res_expr = n_expr;
+  for(const auto &ins : memcmp_function.body.instructions)
+  {
+    if(!ins.is_decl())
+      continue;
+
+    if(ins.decl_symbol().get_identifier() == "memcmp::1::sc1")
+    {
+      sc1_expr = ins.decl_symbol();
+      log.progress() << sc1_expr.type().pretty() << messaget::eom;
+    }
+    if(ins.decl_symbol().get_identifier() == "memcmp::1::sc2")
+    {
+      sc2_expr = ins.decl_symbol();
+      log.progress() << sc2_expr.type().pretty() << messaget::eom;
+    }
+    if(ins.decl_symbol().get_identifier() == "memcmp::1::res")
+    {
+      res_expr = ins.decl_symbol();
+    }
+  }
+  exprt result = true_exprt();
+  result = and_exprt(
+    result,
+    less_than_or_equal_exprt(n_expr, unary_exprt(ID_loop_entry, n_expr)));
+  result = and_exprt(
+    result, same_object(sc1_expr, unary_exprt(ID_loop_entry, sc1_expr)));
+  result = and_exprt(
+    result, same_object(sc2_expr, unary_exprt(ID_loop_entry, sc2_expr)));
+  result = and_exprt(
+    result,
+    less_than_or_equal_exprt(
+      sc1_expr,
+      plus_exprt(
+        unary_exprt(ID_loop_entry, sc1_expr),
+        unary_exprt(ID_loop_entry, n_expr))));
+  result = and_exprt(
+    result,
+    less_than_or_equal_exprt(
+      sc2_expr,
+      plus_exprt(
+        unary_exprt(ID_loop_entry, sc2_expr),
+        unary_exprt(ID_loop_entry, n_expr))));
+  result =
+    and_exprt(result, equal_exprt(res_expr, from_integer(0, res_expr.type())));
+  result = and_exprt(
+    result,
+    equal_exprt(
+      minus_exprt(
+        pointer_offset_exprt(sc1_expr, n_expr.type()),
+        pointer_offset_exprt(
+          unary_exprt(ID_loop_entry, sc1_expr), n_expr.type())),
+      minus_exprt(
+        pointer_offset_exprt(sc2_expr, n_expr.type()),
+        pointer_offset_exprt(
+          unary_exprt(ID_loop_entry, sc2_expr), n_expr.type()))));
+  result = and_exprt(
+    result,
+    equal_exprt(
+      minus_exprt(
+        pointer_offset_exprt(sc1_expr, n_expr.type()),
+        pointer_offset_exprt(
+          unary_exprt(ID_loop_entry, sc1_expr), n_expr.type())),
+      minus_exprt(unary_exprt(ID_loop_entry, n_expr), n_expr)));
+
+  simplify(result, ns);
+  return result;
+}
+
 void enumerative_loop_contracts_synthesizert::init_candidates()
 {
   for(auto &function_p : goto_model.goto_functions.function_map)
@@ -99,15 +181,26 @@ void enumerative_loop_contracts_synthesizert::init_candidates()
       if(loop_head_and_content.second.size() <= 1)
         continue;
 
-      goto_programt::const_targett loop_end =
+      goto_programt::targett loop_end =
         get_loop_end_from_loop_head_and_content_mutable(
           loop_head_and_content.first, loop_head_and_content.second);
 
       loop_idt new_id(function_p.first, loop_end->loop_number);
       loop_cfg_infot cfg_info(function_p.second, loop_head_and_content.second);
 
-      log.debug() << "Initialize candidates for the loop at "
-                  << loop_end->source_location() << messaget::eom;
+      log.progress() << "Initialize candidates for the loop at "
+                     << loop_end->source_location() << messaget::eom;
+
+      if(
+        loop_end->has_condition() &&
+        simplify_expr(loop_end->condition(), ns) == false_exprt())
+      {
+        loop_end->turn_into_skip();
+        continue;
+      }
+
+      loop_end->output(log.progress());
+      log.progress() << messaget::eom;
 
       // we only synthesize invariants and assigns for unannotated loops
       if(loop_end->condition().find(ID_C_spec_loop_invariant).is_nil())
@@ -120,9 +213,21 @@ void enumerative_loop_contracts_synthesizert::init_candidates()
         if(loop_head->has_condition())
           neg_guards[new_id] = loop_head->condition();
 
-        // Initialize invariant clauses as `true`.
-        in_invariant_clause_map[new_id] = true_exprt();
-        pos_invariant_clause_map[new_id] = true_exprt();
+        if(function_p.first == "memcmp")
+        {
+          log.progress() << "Using predefined invariant for memcmp.\n"
+                         << messaget::eom;
+          in_invariant_clause_map[new_id] =
+            get_memcmp_invariant(function_p.second, log, ns, goto_model);
+          pos_invariant_clause_map[new_id] =
+            get_memcmp_invariant(function_p.second, log, ns, goto_model);
+        }
+        else
+        {
+          // Initialize invariant clauses as `true`.
+          in_invariant_clause_map[new_id] = true_exprt();
+          pos_invariant_clause_map[new_id] = true_exprt();
+        }
 
         // Initialize assigns clauses.
         if(loop_end->condition().find(ID_C_spec_assigns).is_nil())
@@ -282,7 +387,8 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
     ID_plus,
     start_ph,
     start_ph,
-    [](const partitiont &partition) {
+    [](const partitiont &partition)
+    {
       if(partition.size() <= 1)
         return true;
       return partition.front() == 1;
@@ -378,7 +484,7 @@ invariant_mapt enumerative_loop_contracts_synthesizert::synthesize_all()
 
   log.debug() << "Start the first synthesis iteration." << messaget::eom;
   auto return_cex = verifier.verify();
-
+  return combined_invariant;
   while(return_cex.has_value())
   {
     exprt new_invariant_clause = true_exprt();
