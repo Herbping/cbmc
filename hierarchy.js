@@ -427,6 +427,7 @@ var hierarchy =
     [ "dfcc_contract_clauses_codegent", "classdfcc__contract__clauses__codegent.html", null ],
     [ "dfcc_contract_functionst", "classdfcc__contract__functionst.html", null ],
     [ "dfcc_contract_handlert", "classdfcc__contract__handlert.html", null ],
+    [ "dfcc_instrument_loopt", "classdfcc__instrument__loopt.html", null ],
     [ "dfcc_instrumentt", "classdfcc__instrumentt.html", null ],
     [ "dfcc_is_freeablet", "classdfcc__is__freeablet.html", null ],
     [ "dfcc_is_fresht", "classdfcc__is__fresht.html", null ],
@@ -437,7 +438,7 @@ var hierarchy =
     [ "dfcc_pointer_in_ranget", "classdfcc__pointer__in__ranget.html", null ],
     [ "dfcc_spec_functionst", "classdfcc__spec__functionst.html", null ],
     [ "dfcc_swap_and_wrapt", "classdfcc__swap__and__wrapt.html", null ],
-    [ "dfcc_utilst", "classdfcc__utilst.html", null ],
+    [ "dfcc_utilst", "structdfcc__utilst.html", null ],
     [ "dfcc_wrapper_programt", "classdfcc__wrapper__programt.html", null ],
     [ "dfcct", "classdfcct.html", null ],
     [ "diagnostics_helpert< T >", "structdiagnostics__helpert.html", null ],
@@ -1046,6 +1047,7 @@ var hierarchy =
     [ "loop_templatet< T >", "classloop__templatet.html", [
       [ "loop_with_parent_analysis_templatet< T >", "classloop__with__parent__analysis__templatet.html", null ]
     ] ],
+    [ "loop_templatet< goto_programt::targett >", "classloop__templatet.html", null ],
     [ "main_function_resultt", "structmain__function__resultt.html", null ],
     [ "detail::make_voidt< typest >", "structdetail_1_1make__voidt.html", null ],
     [ "boolbv_mapt::map_entryt", "classboolbv__mapt_1_1map__entryt.html", null ],
@@ -1203,6 +1205,7 @@ var hierarchy =
       [ "goto_analyzer_parse_optionst", "classgoto__analyzer__parse__optionst.html", null ],
       [ "goto_diff_parse_optionst", "classgoto__diff__parse__optionst.html", null ],
       [ "goto_harness_parse_optionst", "classgoto__harness__parse__optionst.html", null ],
+      [ "goto_inspect_parse_optionst", "structgoto__inspect__parse__optionst.html", null ],
       [ "goto_instrument_parse_optionst", "classgoto__instrument__parse__optionst.html", null ],
       [ "goto_synthesizer_parse_optionst", "classgoto__synthesizer__parse__optionst.html", null ],
       [ "janalyzer_parse_optionst", "classjanalyzer__parse__optionst.html", null ],
@@ -1372,6 +1375,7 @@ var hierarchy =
     [ "rename_symbolt", "classrename__symbolt.html", null ],
     [ "smt_bit_vector_theoryt::repeatt", "structsmt__bit__vector__theoryt_1_1repeatt.html", null ],
     [ "replace_callst", "classreplace__callst.html", null ],
+    [ "replace_history_parametert", "structreplace__history__parametert.html", null ],
     [ "replace_symbolt", "classreplace__symbolt.html", [
       [ "casting_replace_symbolt", "classcasting__replace__symbolt.html", null ],
       [ "unchecked_replace_symbolt", "classunchecked__replace__symbolt.html", [

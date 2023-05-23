@@ -29,6 +29,10 @@ var dir_c09e2f4c4cbc9b698baa471c135538ab =
     [ "dfcc_instrument.h", "dfcc__instrument_8h.html", [
       [ "dfcc_instrumentt", "classdfcc__instrumentt.html", "classdfcc__instrumentt" ]
     ] ],
+    [ "dfcc_instrument_loop.cpp", "dfcc__instrument__loop_8cpp.html", null ],
+    [ "dfcc_instrument_loop.h", "dfcc__instrument__loop_8h.html", [
+      [ "dfcc_instrument_loopt", "classdfcc__instrument__loopt.html", "classdfcc__instrument__loopt" ]
+    ] ],
     [ "dfcc_is_cprover_symbol.cpp", "dfcc__is__cprover__symbol_8cpp.html", "dfcc__is__cprover__symbol_8cpp" ],
     [ "dfcc_is_cprover_symbol.h", "dfcc__is__cprover__symbol_8h.html", "dfcc__is__cprover__symbol_8h" ],
     [ "dfcc_is_freeable.cpp", "dfcc__is__freeable_8cpp.html", null ],
@@ -69,9 +73,9 @@ var dir_c09e2f4c4cbc9b698baa471c135538ab =
     [ "dfcc_swap_and_wrap.h", "dfcc__swap__and__wrap_8h.html", [
       [ "dfcc_swap_and_wrapt", "classdfcc__swap__and__wrapt.html", "classdfcc__swap__and__wrapt" ]
     ] ],
-    [ "dfcc_utils.cpp", "dfcc__utils_8cpp.html", null ],
+    [ "dfcc_utils.cpp", "dfcc__utils_8cpp.html", "dfcc__utils_8cpp" ],
     [ "dfcc_utils.h", "dfcc__utils_8h.html", [
-      [ "dfcc_utilst", "classdfcc__utilst.html", "classdfcc__utilst" ]
+      [ "dfcc_utilst", "structdfcc__utilst.html", "structdfcc__utilst" ]
     ] ],
     [ "dfcc_wrapper_program.cpp", "dfcc__wrapper__program_8cpp.html", "dfcc__wrapper__program_8cpp" ],
     [ "dfcc_wrapper_program.h", "dfcc__wrapper__program_8h.html", [
