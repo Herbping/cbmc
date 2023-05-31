@@ -207,6 +207,8 @@ optionst goto_synthesizer_parse_optionst::get_options()
 
   parse_solver_options(cmdline, options);
 
+  options.set_option("arrays-uf", "always");
+
   return options;
 }
 
