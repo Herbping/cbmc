@@ -959,9 +959,6 @@ var hierarchy =
       [ "cmdlinet::option_namest::option_names_iteratort", "structcmdlinet_1_1option__namest_1_1option__names__iteratort.html", null ],
       [ "dense_integer_mapt< K, V, KeyToDenseInteger >::iterator_templatet< UnderlyingIterator, UnderlyingValue >", "classdense__integer__mapt_1_1iterator__templatet.html", null ]
     ] ],
-    [ "std::list< T >::iterator", null, [
-      [ "instruction_location_numbert", "structinstruction__location__numbert.html", null ]
-    ] ],
     [ "symbol_table_baset::iteratort", "classsymbol__table__baset_1_1iteratort.html", null ],
     [ "jar_filet", "classjar__filet.html", null ],
     [ "jar_poolt", "classjar__poolt.html", null ],
@@ -1015,6 +1012,7 @@ var hierarchy =
     [ "linear_functiont", "classlinear__functiont.html", null ],
     [ "document_propertiest::linet", "structdocument__propertiest_1_1linet.html", null ],
     [ "linker_script_merget", "classlinker__script__merget.html", null ],
+    [ "linkingt", "classlinkingt.html", null ],
     [ "literalt", "classliteralt.html", null ],
     [ "local_may_aliast::loc_infot", "classlocal__may__aliast_1_1loc__infot.html", null ],
     [ "local_bitvector_analysist", "classlocal__bitvector__analysist.html", null ],
@@ -1027,16 +1025,17 @@ var hierarchy =
     [ "java_bytecode_parse_treet::methodt::local_variablet", "structjava__bytecode__parse__treet_1_1methodt_1_1local__variablet.html", null ],
     [ "localst", "classlocalst.html", null ],
     [ "instrument_spec_assignst::location_intervalt", "classinstrument__spec__assignst_1_1location__intervalt.html", null ],
+    [ "location_number_less_thant", "structlocation__number__less__thant.html", null ],
     [ "data_dependency_contextt::location_ordert", "classdata__dependency__contextt_1_1location__ordert.html", null ],
     [ "smt_bit_vector_theoryt::logical_shift_rightt", "structsmt__bit__vector__theoryt_1_1logical__shift__rightt.html", null ],
-    [ "loop_analysist< T >", "classloop__analysist.html", [
-      [ "natural_loops_templatet< goto_programt, goto_programt::targett >", "classnatural__loops__templatet.html", null ],
-      [ "natural_loops_templatet< const goto_programt, goto_programt::const_targett >", "classnatural__loops__templatet.html", [
+    [ "loop_analysist< T, C >", "classloop__analysist.html", [
+      [ "natural_loops_templatet< const goto_programt, goto_programt::const_targett, goto_programt::target_less_than >", "classnatural__loops__templatet.html", [
         [ "natural_loopst", "classnatural__loopst.html", null ]
       ] ],
-      [ "lexical_loops_templatet< P, T >", "classlexical__loops__templatet.html", null ],
-      [ "linked_loop_analysist< T >", "classlinked__loop__analysist.html", null ],
-      [ "natural_loops_templatet< P, T >", "classnatural__loops__templatet.html", null ]
+      [ "natural_loops_templatet< goto_programt, goto_programt::targett, goto_programt::target_less_than >", "classnatural__loops__templatet.html", null ],
+      [ "lexical_loops_templatet< P, T, C >", "classlexical__loops__templatet.html", null ],
+      [ "linked_loop_analysist< T, C >", "classlinked__loop__analysist.html", null ],
+      [ "natural_loops_templatet< P, T, C >", "classnatural__loops__templatet.html", null ]
     ] ],
     [ "c_wranglert::loop_contract_clauset", "structc__wranglert_1_1loop__contract__clauset.html", null ],
     [ "loop_contracts_synthesizer_baset", "classloop__contracts__synthesizer__baset.html", [
@@ -1044,10 +1043,10 @@ var hierarchy =
     ] ],
     [ "loop_idt", "structloop__idt.html", null ],
     [ "framet::loop_infot", "structframet_1_1loop__infot.html", null ],
-    [ "loop_templatet< T >", "classloop__templatet.html", [
-      [ "loop_with_parent_analysis_templatet< T >", "classloop__with__parent__analysis__templatet.html", null ]
+    [ "loop_templatet< T, C >", "classloop__templatet.html", [
+      [ "loop_with_parent_analysis_templatet< T, C >", "classloop__with__parent__analysis__templatet.html", null ]
     ] ],
-    [ "loop_templatet< goto_programt::targett >", "classloop__templatet.html", null ],
+    [ "loop_templatet< goto_programt::targett, goto_programt::instructiont::target_less_than >", "classloop__templatet.html", null ],
     [ "main_function_resultt", "structmain__function__resultt.html", null ],
     [ "detail::make_voidt< typest >", "structdetail_1_1make__voidt.html", null ],
     [ "boolbv_mapt::map_entryt", "classboolbv__mapt_1_1map__entryt.html", null ],
@@ -1107,12 +1106,12 @@ var hierarchy =
         ] ],
         [ "java_bytecode_typecheckt", "classjava__bytecode__typecheckt.html", null ],
         [ "jsil_typecheckt", "classjsil__typecheckt.html", null ],
-        [ "linkingt", "classlinkingt.html", null ],
         [ "statement_list_typecheckt", "classstatement__list__typecheckt.html", null ]
       ] ]
     ] ],
     [ "cpp_typecheckt::method_bodyt", "structcpp__typecheckt_1_1method__bodyt.html", null ],
     [ "method_bytecodet", "classmethod__bytecodet.html", null ],
+    [ "java_bytecode_convert_methodt::method_with_amapt", "structjava__bytecode__convert__methodt_1_1method__with__amapt.html", null ],
     [ "class_typet::methodt", null, [
       [ "java_class_typet::methodt", "classjava__class__typet_1_1methodt.html", null ]
     ] ],
@@ -2020,6 +2019,7 @@ var hierarchy =
     [ "string_ptr_hash", "classstring__ptr__hash.html", null ],
     [ "string_ptrt", "structstring__ptrt.html", null ],
     [ "struct_aggregate_typet", "structstruct__aggregate__typet.html", null ],
+    [ "struct_encodingt", "classstruct__encodingt.html", null ],
     [ "structured_data_entryt", "structstructured__data__entryt.html", null ],
     [ "structured_datat", "classstructured__datat.html", null ],
     [ "structured_pool_entryt", "classstructured__pool__entryt.html", [
@@ -2062,6 +2062,8 @@ var hierarchy =
     [ "taint_analysist", "classtaint__analysist.html", null ],
     [ "taint_parse_treet", "classtaint__parse__treet.html", null ],
     [ "take_time_resourcet", "classtake__time__resourcet.html", null ],
+    [ "goto_programt::instructiont::target_less_than", "structgoto__programt_1_1instructiont_1_1target__less__than.html", null ],
+    [ "java_bytecode_convert_methodt::method_with_amapt::target_less_than", "structjava__bytecode__convert__methodt_1_1method__with__amapt_1_1target__less__than.html", null ],
     [ "goto_convertt::targetst", "structgoto__convertt_1_1targetst.html", null ],
     [ "grapht< N >::tarjant", "classgrapht_1_1tarjant.html", null ],
     [ "tdefl_compressor", "structtdefl__compressor.html", null ],

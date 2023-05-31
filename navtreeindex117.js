@@ -1,5 +1,9 @@
 var NAVTREEINDEX117 =
 {
+"pattern_8h_source.html":[9,0,1,0,1,104],
+"pbs__dimacs__cnf_8cpp.html":[9,0,2,28,7,8],
+"pbs__dimacs__cnf_8cpp_source.html":[9,0,2,28,7,8],
+"pbs__dimacs__cnf_8h.html":[9,0,2,28,7,9],
 "pbs__dimacs__cnf_8h_source.html":[9,0,2,28,7,9],
 "piped__process_8cpp.html":[9,0,2,31,156],
 "piped__process_8cpp.html#aeca034f67218340ecb2261a22c2f3dcd":[9,0,2,31,156,0],
@@ -245,9 +249,5 @@ var NAVTREEINDEX117 =
 "propagate_8cpp.html#a8dd82056e3f86d6b081647e63563a84b":[9,0,2,6,37,0],
 "propagate_8cpp_source.html":[9,0,2,6,37],
 "propagate_8h.html":[9,0,2,6,38],
-"propagate_8h.html#a701d47bc957d2620039c57556df3c33f":[9,0,2,6,38,2],
-"propagate_8h.html#ab5303783d4dcecae4a4e62a7005d93fa":[9,0,2,6,38,0],
-"propagate_8h.html#af09c0aae4c333a6d0fabcd5d9c36733d":[9,0,2,6,38,1],
-"propagate_8h_source.html":[9,0,2,6,38],
-"properties_8cpp.html":[9,0,2,10,26]
+"propagate_8h.html#a701d47bc957d2620039c57556df3c33f":[9,0,2,6,38,2]
 };

@@ -1,7 +1,5 @@
 var NAVTREEINDEX54 =
 {
-"classrange__spect.html#a8de6c2251c42df8294b2937f69703acd":[8,0,954,16],
-"classrange__spect.html#aa573efcc85da1dfc21e9239c8a305d70":[8,0,954,9],
 "classrange__spect.html#ab89bc55c4be6566563f2969d86597593":[8,0,954,7],
 "classrange__spect.html#acbdceecb249179d327b3fb89444c00ab":[8,0,954,10],
 "classrange__spect.html#adf066c67b544d86b1bdccd2baccc1ad4":[8,0,954,12],
@@ -64,13 +62,13 @@ var NAVTREEINDEX54 =
 "classrd__range__domaint.html#aaec768256a7a7beb04f0d6bb8b6ef315":[8,0,960,26],
 "classrd__range__domaint.html#ab556a22d2c58abc550ac6752ede692a0":[8,0,960,16],
 "classrd__range__domaint.html#ab6760b22672c62e81c1b44dcdb3d7a5f":[8,0,960,25],
-"classrd__range__domaint.html#abdc51105a2280a3309f39c5b17fd32ea":[8,0,960,1],
 "classrd__range__domaint.html#acf0b78f258ad82672daac59afdd272d5":[8,0,960,13],
 "classrd__range__domaint.html#ad1d7c6edd9a897a8452f266658a094c0":[8,0,960,23],
 "classrd__range__domaint.html#ad4ba2d479b90c28ddfd9b0f5399eb68a":[8,0,960,17],
 "classrd__range__domaint.html#addc7f05775e71c373d3fbb44a3e655d4":[8,0,960,2],
 "classrd__range__domaint.html#ae1869ff3d9a9840d391d04fcca08215e":[8,0,960,7],
 "classrd__range__domaint.html#ae7a7c5402ef8f88bcecdfbfd92190002":[8,0,960,11],
+"classrd__range__domaint.html#ae92a8500ae2d673562ac4aa7b6ea389f":[8,0,960,1],
 "classrd__range__domaint.html#aeafe1f973a1d62d188eeeeb01948c59a":[8,0,960,30],
 "classrd__range__domaint.html#aefcc8e23034c1909165008f55c31495d":[8,0,960,22],
 "classrd__range__domaint.html#aefec68ff7576aa514183b90eee2a738b":[8,0,960,5],
@@ -249,5 +247,7 @@ var NAVTREEINDEX54 =
 "classremove__const__function__pointerst.html#a98e037b87cedd97d2a53f93bc244c04d":[8,0,982,17],
 "classremove__const__function__pointerst.html#a99147f3ab1b8ed10ae53353bcfa58a35":[8,0,982,6],
 "classremove__const__function__pointerst.html#a9dd141e9d4107d123227426005139c54":[8,0,982,4],
-"classremove__const__function__pointerst.html#aac8374aee19d9059c6e5a4bf298a46eb":[8,0,982,1]
+"classremove__const__function__pointerst.html#aac8374aee19d9059c6e5a4bf298a46eb":[8,0,982,1],
+"classremove__const__function__pointerst.html#abd864ef908b0d4fbf00eda25fc66d4bc":[8,0,982,9],
+"classremove__const__function__pointerst.html#aca9f27c32848f402d0b4300d5889ff95":[8,0,982,19]
 };
