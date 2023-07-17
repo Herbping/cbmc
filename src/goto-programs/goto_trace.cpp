@@ -526,8 +526,8 @@ void show_full_goto_trace(
   for(const auto &step : goto_trace.steps)
   {
     // hide the hidden ones
-    if(step.hidden)
-      continue;
+    // if(step.hidden)
+    //  continue;
 
     switch(step.type)
     {

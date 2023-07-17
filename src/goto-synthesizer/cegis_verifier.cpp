@@ -570,7 +570,7 @@ optionalt<cext> cegis_verifiert::verify()
   annotate_invariants(invariant_candidates, goto_model);
 
   // Annotate assigns
-  annotate_assigns(assigns_map, goto_model);
+  // annotate_assigns(assigns_map, goto_model);
 
   // Control verbosity. We allow non-error output message only when verbosity
   // is set to larger than messaget::M_DEBUG.
