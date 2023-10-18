@@ -26,6 +26,8 @@ Date: June 2023
 #include <ansi-c/ansi_c_typecheck.h>
 #include <goto-instrument/contracts/utils.h>
 
+#include <iostream>
+
 contracts_wranglert::contracts_wranglert(
   goto_modelt &goto_model,
   const std::string &file_name,
@@ -97,6 +99,33 @@ void contracts_wranglert::add_builtin_pointer_function_symbol(
   symbol_table.add(fun_symbol);
 }
 
+static bool replace_component(exprt &dest, std::string from, std::string to)
+{
+  bool result = true; // unchanged
+
+  // now do expression itself
+
+  if(dest.id() == ID_member)
+  {
+    std::cout << dest.pretty() << "\n";
+    member_exprt &me = to_member_expr(dest);
+    if(me.get_component_name() == "ZERO")
+      me.set_component_name("0");
+    std::cout << dest.pretty() << "\n";
+
+    if(!replace_component(me.struct_op(), from, to))
+      result = false;
+  }
+  else
+  {
+    Forall_operands(it, dest)
+      if(!replace_component(*it, from, to))
+        result = false;
+  }
+
+  return result;
+}
+
 void contracts_wranglert::mangle(
   const loop_contracts_clauset &loop_contracts,
   const irep_idt &function_id)
@@ -153,7 +182,7 @@ void contracts_wranglert::mangle(
                                          .operands()[0]
                                          .add(ID_C_spec_loop_invariant))
                     .operands()[0]);
-
+  replace_component(inv_expr, "ZERO", "0");
   log.debug() << "Extracted loop invariants: " << inv_expr.pretty() << "\n"
               << log.eom;
 
@@ -161,14 +190,16 @@ void contracts_wranglert::mangle(
   optionalt<exprt> assigns_expr;
   if(!loop_contracts.assigns.empty())
   {
+    exprt t = true_exprt();
     assigns_expr = static_cast<exprt &>(ansi_c_parser.parse_tree.items.front()
                                           .declarator()
                                           .value()
                                           .operands()[0]
                                           .add(ID_C_spec_assigns))
                      .operands()[0];
+    replace_component(assigns_expr.value(), "ZERO", "0");
   }
-
+  std::cout << "DONE\n";
   // Extract the decreases from parse_tree.
   exprt::operandst decreases_exprs;
   if(!loop_contracts.decreases.empty())
@@ -338,6 +369,10 @@ void contracts_wranglert::configure_functions(const jsont &config)
                 symbol_map_str.begin(), symbol_map_str.end(), isspace),
               symbol_map_str.end());
 
+            for(const auto &s : symbol_table)
+            {
+              std::cout << s.first << "\n";
+            }
             for(const auto &symbol_map_entry :
                 split_string(symbol_map_str, ';'))
             {
