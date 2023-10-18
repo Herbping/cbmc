@@ -211,7 +211,7 @@ void code_contractst::check_apply_loop_contracts(
   // set of targets to havoc
   assignst to_havoc;
 
-  if(assigns_clause.is_nil())
+  if(1 == 1)
   {
     // No assigns clause was specified for this loop.
     // Infer memory locations assigned by the loop from the loop instructions
@@ -243,6 +243,18 @@ void code_contractst::check_apply_loop_contracts(
 
       instrument_spec_assigns.get_static_locals(
         std::inserter(to_havoc, to_havoc.end()));
+
+      if(!assigns_clause.is_nil())
+      {
+        // An assigns clause was specified for this loop.
+        // Add the targets to the set of expressions to havoc.
+        for(const auto &target : assigns_clause.operands())
+        {
+          to_havoc.insert(target);
+          instrument_spec_assigns.track_spec_target(
+            target, snapshot_instructions);
+        }
+      }
     }
     catch(const analysis_exceptiont &exc)
     {
