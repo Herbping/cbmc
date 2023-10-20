@@ -15,7 +15,7 @@ Author: Qinheping Hu
 #include "cegis_verifier.h"
 
 /// Evaluator for checking if an expression is consistent with a given set of
-/// test cases.
+/// test cases (positive examples and negative examples).
 class cegis_evaluator
 {
 public:

@@ -377,7 +377,7 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
         new_in_clauses, new_pos_clauses, neg_guards);
 
       // Quick filter:
-      // Rule out a candidate if its evaluation is inconsistent with the examples.
+      // Rule out a candidate if its evaluation is inconsistent with examples.
       cegis_evaluator evaluator(
         combined_invariant.at(cause_loop_id), cexs, log);
       count_all++;

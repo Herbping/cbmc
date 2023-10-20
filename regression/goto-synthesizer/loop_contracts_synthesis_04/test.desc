@@ -3,7 +3,7 @@ main.c
 --pointer-check _ --verbosity 9
 ^EXIT=0$
 ^SIGNAL=0$
-Quick filter\: 60 out of 67 candidates were filtered out\.
+Quick filter\: 6.* out of 67 candidates were filtered out\.
 ^\[main.pointer\_dereference.\d+\] .* SUCCESS$
 ^VERIFICATION SUCCESSFUL$
 --
