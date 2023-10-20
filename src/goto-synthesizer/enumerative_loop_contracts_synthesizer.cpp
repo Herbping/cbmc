@@ -26,8 +26,10 @@ Author: Qinheping Hu
 #include <goto-instrument/havoc_utils.h>
 #include <goto-instrument/loop_utils.h>
 
-#include "cegis_verifier.h"
+#include "cegis_evaluator.h"
 #include "expr_enumerator.h"
+
+#include <iostream>
 
 // substitute all tmp_post variables with their origins in `expr`
 void replace_tmp_post(
@@ -289,7 +291,8 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_same_object_predicate(
 exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
   const std::vector<exprt> terminal_symbols,
   const loop_idt &cause_loop_id,
-  const irep_idt &violation_id)
+  const irep_idt &violation_id,
+  const std::vector<cext> &cexs)
 {
   // Synthesis of strengthening clauses is a enumerate-and-check process.
   // We first construct the enumerator for the following grammar.
@@ -350,6 +353,10 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
   // starting from 0
   size_t size_bound = 0;
 
+  // Count how many candidates are filtered out by the quick filter.
+  size_t count_all = 0;
+  size_t count_filtered = 0;
+
   // Start to enumerate and check.
   while(true)
   {
@@ -369,6 +376,17 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
       const auto &combined_invariant = combine_in_and_post_invariant_clauses(
         new_in_clauses, new_pos_clauses, neg_guards);
 
+      // Quick filter:
+      // Rule out a candidate if its evaluation is inconsistent with the examples.
+      cegis_evaluator evaluator(
+        combined_invariant.at(cause_loop_id), cexs, log);
+      count_all++;
+      if(!evaluator.evaluate())
+      {
+        count_filtered++;
+        continue;
+      }
+
       // The verifier we use to check current invariant candidates.
       cegis_verifiert verifier(
         combined_invariant, assigns_map, goto_model, options, log);
@@ -386,6 +404,8 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
          return_cex->violation_type !=
            cext::violation_typet::cex_not_preserved))
       {
+        log.progress() << "Quick filter: " << count_filtered << " out of "
+                       << count_all << " candidates were filtered out.\n";
         return strengthening_candidate;
       }
     }
@@ -416,8 +436,12 @@ invariant_mapt enumerative_loop_contracts_synthesizert::synthesize_all()
   log.debug() << "Start the first synthesis iteration." << messaget::eom;
   auto return_cex = verifier.verify();
 
+  // Counterexamples we have seen.
+  std::vector<cext> cexs;
+
   while(return_cex.has_value())
   {
+    cexs.push_back(return_cex.value());
     exprt new_invariant_clause = true_exprt();
     // Synthesize the new_clause
     // We use difference strategies for different type of violations.
@@ -449,7 +473,8 @@ invariant_mapt enumerative_loop_contracts_synthesizert::synthesize_all()
       new_invariant_clause = synthesize_strengthening_clause(
         terminal_symbols,
         return_cex->cause_loop_ids.front(),
-        verifier.target_violation_id);
+        verifier.target_violation_id,
+        cexs);
       break;
 
     case cext::violation_typet::cex_not_hold_upon_entry:
