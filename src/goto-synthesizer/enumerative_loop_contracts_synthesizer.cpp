@@ -60,6 +60,7 @@ std::vector<exprt> construct_terminals(const std::set<symbol_exprt> &symbols)
   std::vector<exprt> result;
   for(const auto &e : symbols)
   {
+    std::cout << format(e) << " ID: " << e.pretty() << "\n";
     if(e.type().id() == ID_unsignedbv)
     {
       // For a variable v with primitive type, we add
@@ -365,8 +366,6 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
     // generate candidate and verify
     for(auto strengthening_candidate : start_bool_ph.enumerate(size_bound))
     {
-      log.progress() << "Verifying candidate: "
-                     << format(strengthening_candidate) << messaget::eom;
       invariant_mapt new_in_clauses = invariant_mapt(in_invariant_clause_map);
       new_in_clauses[cause_loop_id] =
         and_exprt(new_in_clauses[cause_loop_id], strengthening_candidate);
@@ -375,6 +374,10 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
         and_exprt(new_pos_clauses[cause_loop_id], strengthening_candidate);
       const auto &combined_invariant = combine_in_and_post_invariant_clauses(
         new_in_clauses, new_pos_clauses, neg_guards);
+
+      log.progress() << "Verifying candidate: "
+                     << format(combined_invariant.at(cause_loop_id))
+                     << messaget::eom;
 
       // Quick filter:
       // Rule out a candidate if its evaluation is inconsistent with examples.
