@@ -13,6 +13,7 @@ Author: Qinheping Hu
 
 #include <util/arith_tools.h>
 #include <util/c_types.h>
+#include <util/expr_iterator.h>
 #include <util/find_symbols.h>
 #include <util/format_expr.h>
 #include <util/pointer_predicates.h>
@@ -30,6 +31,21 @@ Author: Qinheping Hu
 #include "expr_enumerator.h"
 
 #include <iostream>
+
+static bool contains_tmp_symbol(const exprt &expr)
+{
+  for(auto it = expr.depth_begin(), itend = expr.depth_end(); it != itend; ++it)
+  {
+    if(
+      it->id() == ID_symbol &&
+      id2string(to_symbol_expr(*it).get_identifier()).find("$tmp::") !=
+        std::string::npos)
+    {
+      return true;
+    }
+  }
+  return false;
+}
 
 // substitute all tmp_post variables with their origins in `expr`
 void replace_tmp_post(
@@ -257,8 +273,11 @@ enumerative_loop_contracts_synthesizert::compute_dependent_symbols(
   // the original symbol table.
   for(auto it = result.begin(); it != result.end();)
   {
-    if(original_symbol_table.lookup(it->get_identifier()) == nullptr)
+    if(
+      contains_tmp_symbol(*it) ||
+      original_symbol_table.lookup(it->get_identifier()) == nullptr)
     {
+      std::cout << format(*it) << " erased\n";
       it = result.erase(it);
     }
     else
@@ -323,7 +342,8 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
     ID_plus,
     start_ph,
     start_ph,
-    [](const partitiont &partition) {
+    [](const partitiont &partition)
+    {
       if(partition.size() <= 1)
         return true;
       return partition.front() == 1;
@@ -376,13 +396,11 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
         new_in_clauses, new_pos_clauses, neg_guards);
 
       log.progress() << "Verifying candidate: "
-                     << format(combined_invariant.at(cause_loop_id))
-                     << messaget::eom;
+                     << format(strengthening_candidate) << messaget::eom;
 
       // Quick filter:
       // Rule out a candidate if its evaluation is inconsistent with examples.
-      cegis_evaluator evaluator(
-        combined_invariant.at(cause_loop_id), cexs, log);
+      cegis_evaluator evaluator(strengthening_candidate, cexs, log);
       count_all++;
       if(!evaluator.evaluate())
       {
