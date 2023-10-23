@@ -37,6 +37,7 @@ bool cegis_evaluator::evaluate_rec_bool(
   const cext &cex,
   const bool is_positive)
 {
+  log.progress() << "Evaluating " << format(expr) << "\n";
   const auto id = expr.id();
   // eval(AND op1 op2) :=
   // eval(op1) && eval(op2)
@@ -151,6 +152,7 @@ mp_integer cegis_evaluator::evaluate_rec_int(
   const cext &cex,
   const bool is_positive)
 {
+  log.progress() << "Evaluating " << format(expr) << "\n";
   const auto id = expr.id();
   mp_integer result;
 
