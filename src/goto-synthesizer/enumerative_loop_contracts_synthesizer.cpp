@@ -374,10 +374,6 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
   // starting from 0
   size_t size_bound = 0;
 
-  // Count how many candidates are filtered out by the quick filter.
-  size_t count_all = 0;
-  size_t count_filtered = 0;
-
   // Start to enumerate and check.
   while(true)
   {
@@ -400,13 +396,7 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
 
       // Quick filter:
       // Rule out a candidate if its evaluation is inconsistent with examples.
-      cegis_evaluator evaluator(strengthening_candidate, cexs, log);
-      count_all++;
-      if(!evaluator.evaluate())
-      {
-        count_filtered++;
-        continue;
-      }
+
 
       // The verifier we use to check current invariant candidates.
       cegis_verifiert verifier(
@@ -425,8 +415,6 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
          return_cex->violation_type !=
            cext::violation_typet::cex_not_preserved))
       {
-        log.progress() << "Quick filter: " << count_filtered << " out of "
-                       << count_all << " candidates were filtered out.\n";
         return strengthening_candidate;
       }
     }
