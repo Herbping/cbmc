@@ -2,7 +2,7 @@
 
 void main()
 {
-  unsigned long len;
+  unsigned len;
   __CPROVER_assume(len <= SIZE);
   __CPROVER_assume(len >= 8);
   char *array = malloc(len);
