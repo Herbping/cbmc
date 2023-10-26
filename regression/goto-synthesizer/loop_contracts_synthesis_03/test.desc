@@ -1,10 +1,11 @@
 CORE
 main.c
---pointer-check
+--pointer-check _ --verbosity 10
 ^EXIT=0$
 ^SIGNAL=0$
 ^\[main.pointer\_dereference.\d+\] .* SUCCESS$
 ^VERIFICATION SUCCESSFUL$
+^DONT accept$
 --
 --
 This test shows that loop invariants using range predicates and same-object

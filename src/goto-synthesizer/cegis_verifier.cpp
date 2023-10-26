@@ -13,6 +13,7 @@ Author: Qinheping Hu
 
 #include <util/arith_tools.h>
 #include <util/c_types.h>
+#include <util/format_expr.h>
 #include <util/options.h>
 #include <util/pointer_offset_size.h>
 #include <util/pointer_predicates.h>
@@ -39,13 +40,15 @@ Author: Qinheping Hu
 #include <pointer-analysis/add_failed_symbols.h>
 #include <solvers/prop/prop.h>
 
+#include <iostream>
+
 static bool contains_symbol_prefix(const exprt &expr, const std::string &prefix)
 {
   for(auto it = expr.depth_begin(), itend = expr.depth_end(); it != itend; ++it)
   {
     if(
-      expr.id() == ID_symbol &&
-      has_prefix(id2string(to_symbol_expr(expr).get_identifier()), prefix))
+      it->id() == ID_symbol &&
+      has_prefix(id2string(to_symbol_expr(*it).get_identifier()), prefix))
     {
       return true;
     }
@@ -464,7 +467,8 @@ cext cegis_verifiert::build_cex(
           {
             if(
               underlying_array.id() == ID_address_of ||
-              underlying_array.id() == ID_index)
+              underlying_array.id() == ID_index ||
+              underlying_array.id() == ID_typecast)
             {
               underlying_array = underlying_array.operands()[0];
               continue;
@@ -742,6 +746,11 @@ optionalt<cext> cegis_verifiert::verify()
   return_cex.cause_loop_ids = cause_loop_ids;
   return_cex.violation_location = violation_location;
   return_cex.violation_type = violation_type;
+
+  for(const auto &e : return_cex.loop_entry_values)
+  {
+    std::cout << format(e.first) << " = " << e.second << "\n";
+  }
 
   // The pointer checked in the null-pointer-check violation.
   if(violation_type == cext::violation_typet::cex_null_pointer)

@@ -13,6 +13,7 @@ Author: Qinheping Hu
 
 #include <util/arith_tools.h>
 #include <util/c_types.h>
+#include <util/expr_iterator.h>
 #include <util/find_symbols.h>
 #include <util/format_expr.h>
 #include <util/pointer_predicates.h>
@@ -26,8 +27,25 @@ Author: Qinheping Hu
 #include <goto-instrument/havoc_utils.h>
 #include <goto-instrument/loop_utils.h>
 
-#include "cegis_verifier.h"
+#include "cegis_evaluator.h"
 #include "expr_enumerator.h"
+
+#include <iostream>
+
+static bool contains_tmp_symbol(const exprt &expr)
+{
+  for(auto it = expr.depth_begin(), itend = expr.depth_end(); it != itend; ++it)
+  {
+    if(
+      it->id() == ID_symbol &&
+      id2string(to_symbol_expr(*it).get_identifier()).find("$tmp::") !=
+        std::string::npos)
+    {
+      return true;
+    }
+  }
+  return false;
+}
 
 // substitute all tmp_post variables with their origins in `expr`
 void replace_tmp_post(
@@ -58,6 +76,7 @@ std::vector<exprt> construct_terminals(const std::set<symbol_exprt> &symbols)
   std::vector<exprt> result;
   for(const auto &e : symbols)
   {
+    std::cout << format(e) << " ID: " << e.pretty() << "\n";
     if(e.type().id() == ID_unsignedbv)
     {
       // For a variable v with primitive type, we add
@@ -254,8 +273,11 @@ enumerative_loop_contracts_synthesizert::compute_dependent_symbols(
   // the original symbol table.
   for(auto it = result.begin(); it != result.end();)
   {
-    if(original_symbol_table.lookup(it->get_identifier()) == nullptr)
+    if(
+      contains_tmp_symbol(*it) ||
+      original_symbol_table.lookup(it->get_identifier()) == nullptr)
     {
+      std::cout << format(*it) << " erased\n";
       it = result.erase(it);
     }
     else
@@ -289,7 +311,8 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_same_object_predicate(
 exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
   const std::vector<exprt> terminal_symbols,
   const loop_idt &cause_loop_id,
-  const irep_idt &violation_id)
+  const irep_idt &violation_id,
+  const std::vector<cext> &cexs)
 {
   // Synthesis of strengthening clauses is a enumerate-and-check process.
   // We first construct the enumerator for the following grammar.
@@ -319,7 +342,8 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
     ID_plus,
     start_ph,
     start_ph,
-    [](const partitiont &partition) {
+    [](const partitiont &partition)
+    {
       if(partition.size() <= 1)
         return true;
       return partition.front() == 1;
@@ -358,8 +382,6 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
     // generate candidate and verify
     for(auto strengthening_candidate : start_bool_ph.enumerate(size_bound))
     {
-      log.progress() << "Verifying candidate: "
-                     << format(strengthening_candidate) << messaget::eom;
       invariant_mapt new_in_clauses = invariant_mapt(in_invariant_clause_map);
       new_in_clauses[cause_loop_id] =
         and_exprt(new_in_clauses[cause_loop_id], strengthening_candidate);
@@ -368,6 +390,13 @@ exprt enumerative_loop_contracts_synthesizert::synthesize_strengthening_clause(
         and_exprt(new_pos_clauses[cause_loop_id], strengthening_candidate);
       const auto &combined_invariant = combine_in_and_post_invariant_clauses(
         new_in_clauses, new_pos_clauses, neg_guards);
+
+      log.progress() << "Verifying candidate: "
+                     << format(strengthening_candidate) << messaget::eom;
+
+      // Quick filter:
+      // Rule out a candidate if its evaluation is inconsistent with examples.
+
 
       // The verifier we use to check current invariant candidates.
       cegis_verifiert verifier(
@@ -416,8 +445,12 @@ invariant_mapt enumerative_loop_contracts_synthesizert::synthesize_all()
   log.debug() << "Start the first synthesis iteration." << messaget::eom;
   auto return_cex = verifier.verify();
 
+  // Counterexamples we have seen.
+  std::vector<cext> cexs;
+
   while(return_cex.has_value())
   {
+    cexs.push_back(return_cex.value());
     exprt new_invariant_clause = true_exprt();
     // Synthesize the new_clause
     // We use difference strategies for different type of violations.
@@ -449,7 +482,8 @@ invariant_mapt enumerative_loop_contracts_synthesizert::synthesize_all()
       new_invariant_clause = synthesize_strengthening_clause(
         terminal_symbols,
         return_cex->cause_loop_ids.front(),
-        verifier.target_violation_id);
+        verifier.target_violation_id,
+        cexs);
       break;
 
     case cext::violation_typet::cex_not_hold_upon_entry:

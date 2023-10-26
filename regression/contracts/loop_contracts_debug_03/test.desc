@@ -1,0 +1,10 @@
+CORE
+main.c
+--apply-loop-contracts _ --pointer-check
+^EXIT=0$
+^SIGNAL=0$
+^\[main.pointer\_dereference.\d+\] .* SUCCESS$
+^VERIFICATION SUCCESSFUL$
+^DONT accept$
+--
+--
