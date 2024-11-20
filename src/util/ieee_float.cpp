@@ -894,6 +894,11 @@ void ieee_floatt::align()
       else
         make_fltmax(); // positive
       break;
+
+    case ROUND_TO_AWAY:
+      // round towards + or - infinity
+      infinity_flag = true;
+      break;
     }
 
     return; // done
@@ -967,6 +972,10 @@ void ieee_floatt::divide_and_round(
     case ROUND_TO_PLUS_INF:
       if(!sign_flag)
         ++dividend;
+      break;
+
+    case ROUND_TO_AWAY:
+      ++dividend;
       break;
 
     case NONDETERMINISTIC:

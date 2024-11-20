@@ -331,14 +331,17 @@ class ieee_floatt : public ieee_float_valuet
 public:
   // ROUND_TO_EVEN is also known as "round to nearest, ties to even", and
   // is the IEEE default.
+  // ROUND_TO_AWAY is also known as "round to infinity".
   // The numbering below is what x86 uses in the control word and
-  // what is recommended in C11 5.2.4.2.2
+  // what is recommended in C11 5.2.4.2.2.
+  // The numbering of ROUND_TO_AWAY is not specified in C11 5.2.4.2.2.
   enum rounding_modet
   {
     ROUND_TO_EVEN = 0,
     ROUND_TO_MINUS_INF = 1,
     ROUND_TO_PLUS_INF = 2,
     ROUND_TO_ZERO = 3,
+    ROUND_TO_AWAY = 4,
     UNKNOWN,
     NONDETERMINISTIC
   };

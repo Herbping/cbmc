@@ -3917,10 +3917,12 @@ void smt2_convt::convert_rounding_mode_FPA(const exprt &expr)
       out << "roundTowardPositive";
     else if(value==3)
       out << "roundTowardZero";
+    else if(value == 4)
+      out << "roundNearestTiesToAway";
     else
       INVARIANT_WITH_DIAGNOSTICS(
         false,
-        "Rounding mode should have value 0, 1, 2, or 3",
+        "Rounding mode should have value 0, 1, 2, 3, or 4",
         id2string(cexpr.get_value()));
   }
   else
@@ -3940,10 +3942,14 @@ void smt2_convt::convert_rounding_mode_FPA(const exprt &expr)
     convert_expr(expr);
     out << ") roundTowardPositive ";
 
-    // TODO: add some kind of error checking here
-    out << "roundTowardZero";
+    out << "(ite (= (_ bv3 " << width << ") ";
+    convert_expr(expr);
+    out << ") roundTowardZero ";
 
-    out << ")))";
+    // TODO: add some kind of error checking here
+    out << "roundNearestTiesToAway";
+
+    out << "))))";
   }
 }
 

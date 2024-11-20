@@ -104,6 +104,7 @@ private:
     exprt round_to_zero;
     exprt round_to_plus_inf;
     exprt round_to_minus_inf;
+    exprt round_to_away;
 
     void get(const exprt &rm);
     explicit rounding_mode_bitst(const exprt &rm) { get(rm); }

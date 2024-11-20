@@ -1093,12 +1093,14 @@ void smt2_parsert::setup_expressions()
     return from_integer(ieee_floatt::ROUND_TO_EVEN, unsignedbv_typet(32));
   };
 
-  expressions["roundNearestTiesToAway"] = [this]() -> exprt {
-    throw error("unsupported rounding mode");
+  expressions["roundNearestTiesToAway"] = [] {
+    // we encode as 32-bit unsignedbv
+    return from_integer(ieee_floatt::ROUND_TO_AWAY, unsignedbv_typet(32));
   };
 
-  expressions["RNA"] = [this]() -> exprt {
-    throw error("unsupported rounding mode");
+  expressions["RNA"] = [] {
+    // we encode as 32-bit unsignedbv
+    return from_integer(ieee_floatt::ROUND_TO_AWAY, unsignedbv_typet(32));
   };
 
   expressions["roundTowardPositive"] = [] {
