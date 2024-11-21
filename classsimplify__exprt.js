@@ -69,7 +69,7 @@ var classsimplify__exprt =
     [ "simplify_pointer_object", "classsimplify__exprt.html#a9006f65b369a35d09c56cd54b5d36b8e", null ],
     [ "simplify_pointer_offset", "classsimplify__exprt.html#acb1f095b6c91e193720bdcd2f9b3b58b", null ],
     [ "simplify_popcount", "classsimplify__exprt.html#a4877e4ea8311a707cfb0006ed9aecc8e", null ],
-    [ "simplify_power", "classsimplify__exprt.html#a0b8aa370b2a679588537b94a158ec765", null ],
+    [ "simplify_power", "classsimplify__exprt.html#aea6b8756cffb42a709817afce98f1b2a", null ],
     [ "simplify_prophecy_pointer_in_range", "classsimplify__exprt.html#a593fbffe8e85cc5a4f0a20a09b4c8747", null ],
     [ "simplify_prophecy_r_or_w_ok", "classsimplify__exprt.html#a3f276636c12a79a535f544cf4d00cb54", null ],
     [ "simplify_rec", "classsimplify__exprt.html#a6bc0edfa759d71ad602d938230f74423", null ],
@@ -82,6 +82,7 @@ var classsimplify__exprt =
     [ "simplify_unary_pointer_predicate_preorder", "classsimplify__exprt.html#a4c49e6b2414c72cbd3c94fdcac83c973", null ],
     [ "simplify_update", "classsimplify__exprt.html#ac913c4764c2a86583aaf19e8056bad42", null ],
     [ "simplify_with", "classsimplify__exprt.html#aa450966cb47d0e7ff2839200df642b3e", null ],
+    [ "simplify_zero_extend", "classsimplify__exprt.html#a3842b1e5fc9659caa720c234dd743576", null ],
     [ "unchanged", "classsimplify__exprt.html#abe0382ab13fb829ab12b2058b1255577", null ],
     [ "do_simplify_if", "classsimplify__exprt.html#aeead73ae3d17be163dded212e9b37fa9", null ],
     [ "ns", "classsimplify__exprt.html#a0dc7f96e955895764c4a6525a659000d", null ]
