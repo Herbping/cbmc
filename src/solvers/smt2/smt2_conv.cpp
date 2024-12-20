@@ -517,10 +517,13 @@ constant_exprt smt2_convt::parse_literal(
     std::size_t width=boolbv_width(type);
     return constant_exprt(integer2bvrep(value, width), type);
   }
-  else if(type.id()==ID_integer ||
-          type.id()==ID_range)
+  else if(type.id() == ID_integer)
   {
     return from_integer(value, type);
+  }
+  else if(type.id() == ID_range)
+  {
+    return from_integer(value + to_range_type(type).get_from(), type);
   }
   else
     UNREACHABLE_BECAUSE(
@@ -3783,7 +3786,7 @@ void smt2_convt::convert_plus(const plus_exprt &expr)
   }
   else if(
     expr.type().id() == ID_unsignedbv || expr.type().id() == ID_signedbv ||
-    expr.type().id() == ID_fixedbv || expr.type().id() == ID_range)
+    expr.type().id() == ID_fixedbv)
   {
     // These could be chained, i.e., need not be binary,
     // but at least MathSat doesn't like that.
@@ -3794,6 +3797,31 @@ void smt2_convt::convert_plus(const plus_exprt &expr)
       out << " ";
       convert_expr(expr.op1());
       out << ")";
+    }
+    else
+    {
+      convert_plus(to_plus_expr(make_binary(expr)));
+    }
+  }
+  else if(expr.type().id() == ID_range)
+  {
+    auto &range_type = to_range_type(expr.type());
+
+    // These could be chained, i.e., need not be binary,
+    // but at least MathSat doesn't like that.
+    if(expr.operands().size() == 2)
+    {
+      // add: lhs + from + rhs + from - from = lhs + rhs + from
+      mp_integer from = range_type.get_from();
+      const auto size = range_type.get_to() - range_type.get_from() + 1;
+      const auto width = address_bits(size);
+
+      out << "(bvadd ";
+      convert_expr(expr.op0());
+      out << " (bvadd ";
+      convert_expr(expr.op1());
+      out << " (_ bv" << range_type.get_from() << ' ' << width
+          << ")))"; // bv, bvadd, bvadd
     }
     else
     {
