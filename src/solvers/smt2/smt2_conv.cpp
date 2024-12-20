@@ -4065,6 +4065,22 @@ void smt2_convt::convert_minus(const minus_exprt &expr)
         "unsupported operand types for -: " + expr.op0().type().id_string() +
         " and " + expr.op1().type().id_string());
   }
+  else if(expr.type().id() == ID_range)
+  {
+    auto &range_type = to_range_type(expr.type());
+
+    // sub: lhs + from - (rhs + from) - from = lhs - rhs - from
+    mp_integer from = range_type.get_from();
+    const auto size = range_type.get_to() - range_type.get_from() + 1;
+    const auto width = address_bits(size);
+
+    out << "(bvsub (bvsub ";
+    convert_expr(expr.op0());
+    out << ' ';
+    convert_expr(expr.op1());
+    out << ") (_ bv" << range_type.get_from() << ' ' << width
+        << "))"; // bv, bvsub
+  }
   else
     UNEXPECTEDCASE("unsupported type for -: "+expr.type().id_string());
 }
