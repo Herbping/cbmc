@@ -83,6 +83,70 @@ inline floatbv_typecast_exprt &to_floatbv_typecast_expr(exprt &expr)
   return ret;
 }
 
+/// \brief Round a floating-point number to an integral value
+/// considering the given rounding mode
+class floatbv_round_to_integral_exprt : public binary_exprt
+{
+public:
+  floatbv_round_to_integral_exprt(exprt op, exprt rounding)
+    : binary_exprt(
+        op,
+        ID_floatbv_round_to_integral,
+        std::move(rounding),
+        op.type())
+  {
+  }
+
+  exprt &op()
+  {
+    return op0();
+  }
+
+  const exprt &op() const
+  {
+    return op0();
+  }
+
+  exprt &rounding_mode()
+  {
+    return op1();
+  }
+
+  const exprt &rounding_mode() const
+  {
+    return op1();
+  }
+};
+
+template <>
+inline bool can_cast_expr<floatbv_round_to_integral_exprt>(const exprt &base)
+{
+  return base.id() == ID_floatbv_round_to_integral;
+}
+
+/// \brief Cast an exprt to a \ref floatbv_round_to_integral_exprt
+///
+/// \a expr must be known to be \ref floatbv_round_to_integral_exprt.
+///
+/// \param expr: Source expression
+/// \return Object of type \ref floatbv_round_to_integral_exprt
+inline const floatbv_round_to_integral_exprt &
+to_floatbv_round_to_integral_expr(const exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_floatbv_round_to_integral);
+  floatbv_round_to_integral_exprt::check(expr);
+  return static_cast<const floatbv_round_to_integral_exprt &>(expr);
+}
+
+/// \copydoc to_floatbv_round_to_integral_expr(const exprt &)
+inline floatbv_round_to_integral_exprt &
+to_floatbv_round_to_integral_expr(exprt &expr)
+{
+  PRECONDITION(expr.id() == ID_floatbv_round_to_integral);
+  floatbv_round_to_integral_exprt::check(expr);
+  return static_cast<floatbv_round_to_integral_exprt &>(expr);
+}
+
 /// \brief Evaluates to true if the operand is NaN
 class isnan_exprt : public unary_predicate_exprt
 {

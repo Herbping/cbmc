@@ -252,6 +252,10 @@ public:
     return !NaN_flag && !infinity_flag && fraction==0 && exponent==0;
   }
   bool get_sign() const { return sign_flag; }
+  bool is_negative() const
+  {
+    return sign_flag;
+  }
   bool is_NaN() const { return NaN_flag; }
   bool is_infinity() const { return !NaN_flag && infinity_flag; }
   bool is_normal() const;
@@ -296,11 +300,15 @@ public:
   bool operator>(const ieee_float_valuet &) const;
   bool operator>=(const ieee_float_valuet &) const;
 
+  ieee_float_valuet abs() const;
+
   // warning: these do packed equality, not IEEE equality
   // e.g., NAN==NAN
   bool operator==(const ieee_float_valuet &) const;
   bool operator!=(const ieee_float_valuet &) const;
   bool operator==(int) const;
+  bool operator==(double) const;
+  bool operator==(float) const;
 
   // these do IEEE equality, i.e., NAN!=NAN
   bool ieee_equal(const ieee_float_valuet &) const;
@@ -331,7 +339,7 @@ class ieee_floatt : public ieee_float_valuet
 public:
   // ROUND_TO_EVEN is also known as "round to nearest, ties to even", and
   // is the IEEE default.
-  // ROUND_TO_AWAY is also known as "round to infinity".
+  // ROUND_TO_AWAY is also known as "round to nearest, ties away from zero".
   // The numbering below is what x86 uses in the control word and
   // what is recommended in C11 5.2.4.2.2.
   // The numbering of ROUND_TO_AWAY is not specified in C11 5.2.4.2.2.
@@ -357,6 +365,15 @@ public:
   ieee_floatt(ieee_float_spect __spec, rounding_modet __rounding_mode)
     : ieee_float_valuet(__spec), _rounding_mode(__rounding_mode)
   {
+  }
+
+  ieee_floatt(
+    ieee_float_spect __spec,
+    rounding_modet __rounding_mode,
+    const mp_integer &value)
+    : ieee_float_valuet(__spec), _rounding_mode(__rounding_mode)
+  {
+    from_integer(value);
   }
 
   ieee_floatt(const floatbv_typet &type, rounding_modet __rounding_mode)
@@ -388,6 +405,9 @@ public:
 
   // conversions
   void change_spec(const ieee_float_spect &dest_spec);
+
+  // Rounds according to the configured rounding mode
+  ieee_floatt round_to_integral() const;
 
   // the usual operators
   ieee_floatt &operator/=(const ieee_floatt &other);

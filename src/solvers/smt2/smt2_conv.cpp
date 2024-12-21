@@ -1204,6 +1204,10 @@ void smt2_convt::convert_expr(const exprt &expr)
   {
     convert_floatbv_typecast(to_floatbv_typecast_expr(expr));
   }
+  else if(expr.id() == ID_floatbv_round_to_integral)
+  {
+    convert_floatbv_round_to_integral(to_floatbv_round_to_integral_expr(expr));
+  }
   else if(expr.id()==ID_struct)
   {
     convert_struct(to_struct_expr(expr));
@@ -3284,6 +3288,23 @@ void smt2_convt::convert_floatbv_typecast(const floatbv_typecast_exprt &expr)
     UNEXPECTEDCASE(
       "TODO typecast12 "+src_type.id_string()+" -> "+dest_type.id_string());
   }
+}
+
+void smt2_convt::convert_floatbv_round_to_integral(
+  const floatbv_round_to_integral_exprt &expr)
+{
+  PRECONDITION(expr.type().id() == ID_floatbv);
+
+  if(use_FPA_theory)
+  {
+    out << "(fp.roundToIntegral ";
+    convert_rounding_mode_FPA(expr.rounding_mode());
+    out << ' ';
+    convert_expr(expr.op());
+    out << ")";
+  }
+  else
+    UNEXPECTEDCASE("TODO floatbv_round_to_integral without FPA");
 }
 
 void smt2_convt::convert_struct(const struct_exprt &expr)

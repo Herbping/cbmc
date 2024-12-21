@@ -94,6 +94,9 @@ int __CPROVER_islessgreaterf(float f, float g);
 int __CPROVER_islessgreaterd(double f, double g);
 int __CPROVER_isunorderedf(float f, float g);
 int __CPROVER_isunorderedd(double f, double g);
+float __CPROVER_round_to_integralf(float, int);
+double __CPROVER_round_to_integrald(double, int);
+long double __CPROVER_round_to_integralld(long double, int);
 
 // absolute value
 int __CPROVER_abs(int x);

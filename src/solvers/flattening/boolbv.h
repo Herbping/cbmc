@@ -33,6 +33,7 @@ class byte_update_exprt;
 class concatenation_exprt;
 class extractbit_exprt;
 class extractbits_exprt;
+class floatbv_round_to_integral_exprt;
 class floatbv_typecast_exprt;
 class ieee_float_op_exprt;
 class overflow_result_exprt;
@@ -176,6 +177,8 @@ protected:
   virtual bvt convert_floatbv_op(const ieee_float_op_exprt &);
   virtual bvt convert_floatbv_mod_rem(const binary_exprt &);
   virtual bvt convert_floatbv_typecast(const floatbv_typecast_exprt &expr);
+  virtual bvt
+  convert_floatbv_round_to_integral(const floatbv_round_to_integral_exprt &);
   virtual bvt convert_member(const member_exprt &expr);
   virtual bvt convert_with(const with_exprt &expr);
   virtual bvt convert_update(const update_exprt &);

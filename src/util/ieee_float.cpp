@@ -57,6 +57,13 @@ void ieee_float_spect::from_type(const floatbv_typet &type)
     e=e-1; // no hidden bit
 }
 
+ieee_float_valuet ieee_float_valuet::abs() const
+{
+  ieee_float_valuet result = *this;
+  result.sign_flag = false;
+  return result;
+}
+
 void ieee_float_valuet::print(std::ostream &out) const
 {
   out << to_ansi_c_string();
@@ -696,6 +703,20 @@ bool ieee_float_valuet::operator==(int i) const
   return *this == other;
 }
 
+bool ieee_float_valuet::operator==(double d) const
+{
+  ieee_float_valuet other;
+  other.from_double(d);
+  return *this == other;
+}
+
+bool ieee_float_valuet::operator==(float f) const
+{
+  ieee_float_valuet other;
+  other.from_float(f);
+  return *this == other;
+}
+
 bool ieee_float_valuet::operator!=(const ieee_float_valuet &other) const
 {
   return !(*this == other);
@@ -975,7 +996,21 @@ void ieee_floatt::divide_and_round(
       break;
 
     case ROUND_TO_AWAY:
-      ++dividend;
+    {
+      mp_integer divisor_middle = divisor / 2;
+      if(remainder < divisor_middle)
+      {
+        // crop
+      }
+      else if(remainder > divisor_middle)
+      {
+        ++dividend;
+      }
+      else // exactly in the middle -- go to away
+      {
+        ++dividend;
+      }
+    }
       break;
 
     case NONDETERMINISTIC:
@@ -1331,4 +1366,40 @@ bool ieee_float_valuet::is_double() const
 bool ieee_float_valuet::is_float() const
 {
   return spec.f==23 && spec.e==8;
+}
+
+ieee_floatt ieee_floatt::round_to_integral() const
+{
+  if(NaN_flag || infinity_flag || is_zero())
+    return *this;
+
+  ieee_floatt magic_number{spec, _rounding_mode};
+  magic_number.from_integer(power(2, spec.f));
+
+  if(this->abs() >= magic_number)
+    return *this;
+  else
+  {
+    ieee_floatt result = *this;
+
+    // add and subtract 2^f
+    // Preserve the original sign bit
+    bool original_sign = result.get_sign();
+
+    if(result.is_negative())
+    {
+      result -= magic_number;
+      result += magic_number;
+    }
+    else
+    {
+      result += magic_number;
+      result -= magic_number;
+    }
+
+    // Restore the original sign bit
+    result.sign_flag = original_sign;
+
+    return result;
+  }
 }
