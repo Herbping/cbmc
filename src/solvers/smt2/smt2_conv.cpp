@@ -1320,17 +1320,26 @@ void smt2_convt::convert_expr(const exprt &expr)
   else if(expr.id()==ID_unary_minus)
   {
     const unary_minus_exprt &unary_minus_expr = to_unary_minus_expr(expr);
+    const auto &type = expr.type();
 
     if(
-      unary_minus_expr.type().id() == ID_rational ||
-      unary_minus_expr.type().id() == ID_integer ||
-      unary_minus_expr.type().id() == ID_real)
+      type.id() == ID_rational || type.id() == ID_integer ||
+      type.id() == ID_real)
     {
       out << "(- ";
       convert_expr(unary_minus_expr.op());
       out << ")";
     }
-    else if(unary_minus_expr.type().id() == ID_floatbv)
+    else if(type.id() == ID_range)
+    {
+      auto &range_type = to_range_type(type);
+      PRECONDITION(type == unary_minus_expr.op().type());
+      // turn -x into 0-x
+      auto minus_expr =
+        minus_exprt{range_type.zero_expr(), unary_minus_expr.op()};
+      convert_expr(minus_expr);
+    }
+    else if(type.id() == ID_floatbv)
     {
       // this has no rounding mode
       if(use_FPA_theory)
