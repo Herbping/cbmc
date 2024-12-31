@@ -87,7 +87,7 @@ public:
 
   ieee_float_spect spec;
 
-  bvt build_constant(const ieee_floatt &);
+  bvt build_constant(const ieee_float_valuet &);
 
   static inline literalt sign_bit(const bvt &src)
   {
@@ -139,7 +139,7 @@ public:
   literalt relation(const bvt &src1, relt rel, const bvt &src2);
 
   // constants
-  ieee_floatt get(const bvt &) const;
+  ieee_float_valuet get(const bvt &) const;
 
   // helpers
   literalt exponent_all_ones(const bvt &);

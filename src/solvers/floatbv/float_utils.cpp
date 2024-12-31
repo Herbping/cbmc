@@ -136,7 +136,7 @@ bvt float_utilst::to_integer(
   return result;
 }
 
-bvt float_utilst::build_constant(const ieee_floatt &src)
+bvt float_utilst::build_constant(const ieee_float_valuet &src)
 {
   unbiased_floatt result;
 
@@ -1268,14 +1268,14 @@ bvt float_utilst::pack(const biased_floatt &src)
   return result;
 }
 
-ieee_floatt float_utilst::get(const bvt &src) const
+ieee_float_valuet float_utilst::get(const bvt &src) const
 {
   mp_integer int_value=0;
 
   for(std::size_t i=0; i<src.size(); i++)
     int_value+=power(2, i)*prop.l_get(src[i]).is_true();
 
-  ieee_floatt result;
+  ieee_float_valuet result;
   result.spec=spec;
   result.unpack(int_value);
 

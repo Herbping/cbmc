@@ -102,8 +102,9 @@ static bool sum_expr(
   }
   else if(type_id==ID_floatbv)
   {
-    ieee_floatt f(dest);
-    f += ieee_floatt(expr);
+    auto rm = ieee_floatt::rounding_modet::ROUND_TO_EVEN;
+    ieee_floatt f(dest, rm);
+    f += ieee_floatt(expr, rm);
     dest=f.to_expr();
     return false;
   }
@@ -151,8 +152,9 @@ static bool mul_expr(
   }
   else if(type_id==ID_floatbv)
   {
-    ieee_floatt f(to_constant_expr(dest));
-    f*=ieee_floatt(to_constant_expr(expr));
+    auto rm = ieee_floatt::rounding_modet::ROUND_TO_EVEN;
+    ieee_floatt f(to_constant_expr(dest), rm);
+    f *= ieee_floatt(to_constant_expr(expr), rm);
     dest=f.to_expr();
     return false;
   }
@@ -1302,7 +1304,7 @@ simplify_exprt::simplify_unary_minus(const unary_minus_exprt &expr)
     }
     else if(type_id==ID_floatbv)
     {
-      ieee_floatt f(constant_expr);
+      ieee_float_valuet f(constant_expr);
       f.negate();
       return f.to_expr();
     }
@@ -1494,8 +1496,8 @@ simplify_exprt::resultt<> simplify_exprt::simplify_inequality_both_constant(
   }
   else if(tmp0.type().id() == ID_floatbv)
   {
-    ieee_floatt f0(tmp0_const);
-    ieee_floatt f1(tmp1_const);
+    ieee_float_valuet f0(tmp0_const);
+    ieee_float_valuet f1(tmp1_const);
 
     if(expr.id() == ID_ge)
       return make_boolean_expr(f0 >= f1);
@@ -1889,7 +1891,8 @@ simplify_exprt::resultt<> simplify_exprt::simplify_inequality_rhs_is_constant(
     expr.op0().id() == ID_typecast && expr.op0().type().id() == ID_floatbv &&
     to_typecast_expr(expr.op0()).op().type().id() == ID_floatbv)
   {
-    ieee_floatt const_val(to_constant_expr(expr.op1()));
+    auto rm = ieee_floatt::rounding_modet::ROUND_TO_EVEN;
+    ieee_floatt const_val(to_constant_expr(expr.op1()), rm);
     ieee_floatt const_val_converted=const_val;
     const_val_converted.change_spec(ieee_float_spect(
       to_floatbv_type(to_typecast_expr(expr.op0()).op().type())));

@@ -2181,16 +2181,19 @@ exprt::operandst &java_bytecode_convert_methodt::convert_const(
       is_float ? ieee_float_spect::single_precision()
                : ieee_float_spect::double_precision());
 
-    ieee_floatt value(spec);
     if(arg0.type().id() != ID_floatbv)
     {
+      // conversion from integer to float may need rounding
+      auto rm = ieee_floatt::rounding_modet::ROUND_TO_EVEN;
       const mp_integer number = numeric_cast_v<mp_integer>(arg0);
+      ieee_floatt value(spec, rm);
       value.from_integer(number);
+      results[0] = value.to_expr();
     }
     else
-      value.from_expr(arg0);
-
-    results[0] = value.to_expr();
+    {
+      results[0] = ieee_float_valuet{arg0}.to_expr();
+    }
   }
   else
   {

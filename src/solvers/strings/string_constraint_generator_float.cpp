@@ -77,7 +77,7 @@ exprt get_significand(
 /// \return an expression representing this floating point
 exprt constant_float(const double f, const ieee_float_spect &float_spec)
 {
-  ieee_floatt fl(float_spec);
+  ieee_float_valuet fl(float_spec);
   if(float_spec == ieee_float_spect::single_precision())
     fl.from_float(f);
   else if(float_spec == ieee_float_spect::double_precision())

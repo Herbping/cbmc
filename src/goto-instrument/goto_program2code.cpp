@@ -1923,7 +1923,7 @@ void goto_program2codet::cleanup_expr(exprt &expr, bool no_typecast)
   {
     if(expr.type().id()==ID_floatbv)
     {
-      const ieee_floatt f(to_constant_expr(expr));
+      const ieee_float_valuet f(to_constant_expr(expr));
       if(f.is_NaN() || f.is_infinity())
         system_headers.insert("math.h");
     }

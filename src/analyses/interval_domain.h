@@ -18,7 +18,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include "ai_domain.h"
 
-typedef interval_templatet<ieee_floatt> ieee_float_intervalt;
+typedef interval_templatet<ieee_float_valuet> ieee_float_intervalt;
 
 class interval_domaint:public ai_domain_baset
 {

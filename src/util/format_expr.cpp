@@ -207,7 +207,7 @@ static std::ostream &format_rec(std::ostream &os, const constant_exprt &src)
   else if(type == ID_string)
     return os << '"' << escape(id2string(src.get_value())) << '"';
   else if(type == ID_floatbv)
-    return os << ieee_floatt(src);
+    return os << ieee_float_valuet(src);
   else if(type == ID_pointer)
   {
     if(src.is_null_pointer())

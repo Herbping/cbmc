@@ -761,12 +761,13 @@ void goto_check_ct::conversion_check(const exprt &expr, const guardt &guard)
       else if(old_type.id() == ID_floatbv) // float -> signed
       {
         // Note that the fractional part is truncated!
-        ieee_floatt upper(to_floatbv_type(old_type));
+        auto rm = ieee_floatt::rounding_modet::ROUND_TO_EVEN;
+        ieee_floatt upper(to_floatbv_type(old_type), rm);
         upper.from_integer(power(2, new_width - 1));
         const binary_relation_exprt no_overflow_upper(
           op, ID_lt, upper.to_expr());
 
-        ieee_floatt lower(to_floatbv_type(old_type));
+        ieee_floatt lower(to_floatbv_type(old_type), rm);
         lower.from_integer(-power(2, new_width - 1) - 1);
         const binary_relation_exprt no_overflow_lower(
           op, ID_gt, lower.to_expr());
@@ -844,12 +845,13 @@ void goto_check_ct::conversion_check(const exprt &expr, const guardt &guard)
       else if(old_type.id() == ID_floatbv) // float -> unsigned
       {
         // Note that the fractional part is truncated!
-        ieee_floatt upper(to_floatbv_type(old_type));
+        auto rm = ieee_floatt::rounding_modet::ROUND_TO_EVEN;
+        ieee_floatt upper(to_floatbv_type(old_type), rm);
         upper.from_integer(power(2, new_width));
         const binary_relation_exprt no_overflow_upper(
           op, ID_lt, upper.to_expr());
 
-        ieee_floatt lower(to_floatbv_type(old_type));
+        ieee_floatt lower(to_floatbv_type(old_type), rm);
         lower.from_integer(-1);
         const binary_relation_exprt no_overflow_lower(
           op, ID_gt, lower.to_expr());
@@ -1295,8 +1297,8 @@ void goto_check_ct::nan_check(const exprt &expr, const guardt &guard)
     // -inf + +inf = NaN and +inf + -inf = NaN,
     // i.e., signs differ
     ieee_float_spect spec = ieee_float_spect(to_floatbv_type(plus_expr.type()));
-    exprt plus_inf = ieee_floatt::plus_infinity(spec).to_expr();
-    exprt minus_inf = ieee_floatt::minus_infinity(spec).to_expr();
+    exprt plus_inf = ieee_float_valuet::plus_infinity(spec).to_expr();
+    exprt minus_inf = ieee_float_valuet::minus_infinity(spec).to_expr();
 
     isnan = or_exprt(
       and_exprt(
@@ -1315,8 +1317,8 @@ void goto_check_ct::nan_check(const exprt &expr, const guardt &guard)
 
     ieee_float_spect spec =
       ieee_float_spect(to_floatbv_type(minus_expr.type()));
-    exprt plus_inf = ieee_floatt::plus_infinity(spec).to_expr();
-    exprt minus_inf = ieee_floatt::minus_infinity(spec).to_expr();
+    exprt plus_inf = ieee_float_valuet::plus_infinity(spec).to_expr();
+    exprt minus_inf = ieee_float_valuet::minus_infinity(spec).to_expr();
 
     isnan = or_exprt(
       and_exprt(

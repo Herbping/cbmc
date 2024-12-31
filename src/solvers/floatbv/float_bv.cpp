@@ -240,7 +240,7 @@ exprt float_bvt::is_zero(const exprt &src)
 
   constant_exprt mask(integer2bvrep(v, width), src.type());
 
-  ieee_floatt z(type);
+  ieee_float_valuet z(type);
   z.make_zero();
 
   return equal_exprt(bitand_exprt(src, mask), z.to_expr());
