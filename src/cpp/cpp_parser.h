@@ -56,7 +56,7 @@ public:
   void add_location()
   {
     token_buffer.current_token().line_no=get_line_no()-1;
-    token_buffer.current_token().filename=source_location.get_file();
+    token_buffer.current_token().filename = source_location().get_file();
   }
 
   // scanner

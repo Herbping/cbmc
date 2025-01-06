@@ -17,6 +17,7 @@ Author: Daniel Kroening, kroening@kroening.com
 
 #include <filesystem>
 #include <iosfwd>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -33,7 +34,7 @@ public:
     : in(nullptr),
       log(message_handler),
       line_no(0),
-      previous_line_no(0),
+      previous_line_no(std::numeric_limits<unsigned int>::max()),
       column(1)
   {
   }
@@ -82,14 +83,14 @@ public:
 
   void set_file(const irep_idt &file)
   {
-    source_location.set_file(file);
-    source_location.set_working_directory(
+    _source_location.set_file(file);
+    _source_location.set_working_directory(
       std::filesystem::current_path().string());
   }
 
   irep_idt get_file() const
   {
-    return source_location.get_file();
+    return _source_location.get_file();
   }
 
   unsigned get_line_no() const
@@ -107,21 +108,31 @@ public:
     column=_column;
   }
 
-  void set_source_location(exprt &e)
+  const source_locationt &source_location()
   {
     // Only set line number when needed, as this destroys sharing.
     if(previous_line_no!=line_no)
     {
       previous_line_no=line_no;
-      source_location.set_line(line_no);
+
+      // for the case of a file with no newlines
+      if(line_no == 0)
+        _source_location.set_line(1);
+      else
+        _source_location.set_line(line_no);
     }
 
-    e.add_source_location()=source_location;
+    return _source_location;
+  }
+
+  void set_source_location(exprt &e)
+  {
+    e.add_source_location() = source_location();
   }
 
   void set_function(const irep_idt &function)
   {
-    source_location.set_function(function);
+    _source_location.set_function(function);
   }
 
   void advance_column(unsigned token_width)
@@ -131,7 +142,7 @@ public:
 
 protected:
   messaget log;
-  source_locationt source_location;
+  source_locationt _source_location;
   unsigned line_no, previous_line_no;
   unsigned column;
 };
