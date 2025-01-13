@@ -3397,6 +3397,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         return MZ_TRUE;
     }
 
+#ifndef MINIZ_NO_ARCHIVE_WRITING_APIS
     static MZ_FORCEINLINE mz_bool mz_zip_array_reserve(mz_zip_archive *pZip, mz_zip_array *pArray, size_t new_capacity, mz_uint growing)
     {
         if (new_capacity > pArray->m_capacity)
@@ -3406,6 +3407,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         }
         return MZ_TRUE;
     }
+#endif
 
     static MZ_FORCEINLINE mz_bool mz_zip_array_resize(mz_zip_archive *pZip, mz_zip_array *pArray, size_t new_size, mz_uint growing)
     {
@@ -3418,6 +3420,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         return MZ_TRUE;
     }
 
+#ifndef MINIZ_NO_ARCHIVE_WRITING_APIS
     static MZ_FORCEINLINE mz_bool mz_zip_array_ensure_room(mz_zip_archive *pZip, mz_zip_array *pArray, size_t n)
     {
         return mz_zip_array_reserve(pZip, pArray, pArray->m_size + n, MZ_TRUE);
@@ -3432,6 +3435,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
             memcpy((mz_uint8 *)pArray->m_p + orig_size * pArray->m_element_size, pElements, n * pArray->m_element_size);
         return MZ_TRUE;
     }
+#endif /* #ifndef MINIZ_NO_ARCHIVE_WRITING_APIS */
 
 #ifndef MINIZ_NO_TIME
     static MZ_TIME_T mz_zip_dos_to_time_t(int dos_time, int dos_date)
@@ -5781,6 +5785,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
         return n;
     }
 
+#ifndef MINIZ_NO_ARCHIVE_WRITING_APIS
     static mz_bool mz_zip_writer_end_internal(mz_zip_archive *pZip, mz_bool set_last_error)
     {
         mz_zip_internal_state *pState;
@@ -7540,6 +7545,7 @@ static int mz_stat64(const char *path, struct __stat64 *buffer)
     {
         return mz_zip_writer_end_internal(pZip, MZ_TRUE);
     }
+#endif /* #ifndef MINIZ_NO_ARCHIVE_WRITING_APIS */
 
 #ifndef MINIZ_NO_STDIO
     mz_bool mz_zip_add_mem_to_archive_file_in_place(const char *pZip_filename, const char *pArchive_name, const void *pBuf, size_t buf_size, const void *pComment, mz_uint16 comment_size, mz_uint level_and_flags)
