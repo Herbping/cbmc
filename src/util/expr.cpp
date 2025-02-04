@@ -75,7 +75,7 @@ bool exprt::is_zero() const
     }
     else if(type_id==ID_floatbv)
     {
-      if(ieee_floatt(constant)==0)
+      if(ieee_float_valuet(constant) == 0)
         return true;
     }
     else if(type_id==ID_pointer)
@@ -131,7 +131,7 @@ bool exprt::is_one() const
     }
     else if(type_id==ID_floatbv)
     {
-      if(ieee_floatt(constant_expr) == 1)
+      if(ieee_float_valuet(constant_expr) == 1)
         return true;
     }
   }

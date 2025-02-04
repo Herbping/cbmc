@@ -31,7 +31,7 @@ static void output_constant(std::ostream &os, const constant_exprt &constant)
     os << ivalue;
   else if(can_cast_type<floatbv_typet>(constant.type()))
   {
-    ieee_floatt real{get_real_type()};
+    ieee_float_valuet real{get_real_type()};
     real.from_expr(constant);
     os << real.to_float();
   }

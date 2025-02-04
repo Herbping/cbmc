@@ -358,13 +358,13 @@ assign_primitive_from_json(const exprt &expr, const jsont &json)
   }
   else if(expr.type() == java_double_type())
   {
-    ieee_floatt ieee_float(to_floatbv_type(expr.type()));
+    ieee_float_valuet ieee_float(to_floatbv_type(expr.type()));
     ieee_float.from_double(std::stod(json.value));
     result.add(code_frontend_assignt{expr, ieee_float.to_expr()});
   }
   else if(expr.type() == java_float_type())
   {
-    ieee_floatt ieee_float(to_floatbv_type(expr.type()));
+    ieee_float_valuet ieee_float(to_floatbv_type(expr.type()));
     ieee_float.from_float(std::stof(json.value));
     result.add(code_frontend_assignt{expr, ieee_float.to_expr()});
   }

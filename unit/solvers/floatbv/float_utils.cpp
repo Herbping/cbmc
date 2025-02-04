@@ -34,7 +34,7 @@ static float random_float(distt &dist, std::mt19937 &gen)
   return u.f;
 }
 
-static bool eq(const ieee_floatt &a, const ieee_floatt &b)
+static bool eq(const ieee_float_valuet &a, const ieee_float_valuet &b)
 {
   return (a.is_NaN() && b.is_NaN()) ||
          (a.is_infinity() && b.is_infinity() && a.get_sign() == b.get_sign()) ||
@@ -69,8 +69,8 @@ static float set_values(
   float_utilst &float_utils,
   float &f1,
   float &f2,
-  ieee_floatt &i1,
-  ieee_floatt &i2)
+  ieee_float_valuet &i1,
+  ieee_float_valuet &i2)
 {
   f1 = random_float(dist, gen);
   f2 = random_float(dist, gen);
@@ -86,8 +86,8 @@ static bvt compute(
   float_utilst &float_utils,
   const float &f2,
   float &f3,
-  const ieee_floatt &i1,
-  const ieee_floatt &i2)
+  const ieee_float_valuet &i1,
+  const ieee_float_valuet &i2)
 {
   const bvt b1 = float_utils.build_constant(i1);
   const bvt b2 = float_utils.build_constant(i2);
@@ -118,10 +118,10 @@ static bvt compute(
 
 static void print(
   unsigned i,
-  const ieee_floatt &i1,
-  const ieee_floatt &i2,
-  const ieee_floatt &i3,
-  const ieee_floatt &fres,
+  const ieee_float_valuet &i1,
+  const ieee_float_valuet &i2,
+  const ieee_float_valuet &i3,
+  const ieee_float_valuet &fres,
   const float &f1,
   const float &f2,
   const float &f3)
@@ -147,7 +147,7 @@ static void print(
 
 SCENARIO("float_utils", "[core][solvers][floatbv][float_utils]")
 {
-  ieee_floatt i1, i2, i3;
+  ieee_float_valuet i1, i2, i3;
   float f1, f2, f3;
 
   std::random_device rd;
@@ -171,7 +171,7 @@ SCENARIO("float_utils", "[core][solvers][floatbv][float_utils]")
         const satcheckt::resultt result = satcheck.prop_solve();
         REQUIRE(result == satcheckt::resultt::P_SATISFIABLE);
 
-        const ieee_floatt fres = float_utils.get(res);
+        const ieee_float_valuet fres = float_utils.get(res);
 
         if(!eq(fres, i3))
           print(i, i1, i2, i3, fres, f1, f2, f3);
@@ -184,7 +184,7 @@ SCENARIO("float_utils", "[core][solvers][floatbv][float_utils]")
 
 SCENARIO("float_approximation", "[core][solvers][floatbv][float_approximation]")
 {
-  ieee_floatt i1, i2, i3;
+  ieee_float_valuet i1, i2, i3;
   float f1, f2, f3;
 
   std::random_device rd;
@@ -208,7 +208,7 @@ SCENARIO("float_approximation", "[core][solvers][floatbv][float_approximation]")
         const satcheckt::resultt result = satcheck.prop_solve();
         REQUIRE(result == satcheckt::resultt::P_SATISFIABLE);
 
-        const ieee_floatt fres = float_utils.get(res);
+        const ieee_float_valuet fres = float_utils.get(res);
 
         if(!eq(fres, i3))
           print(i, i1, i2, i3, fres, f1, f2, f3);

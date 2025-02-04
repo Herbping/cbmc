@@ -576,7 +576,7 @@ exprt interpretert::get_value(
   }
   else if(type.id() == ID_floatbv)
   {
-    ieee_floatt f(to_floatbv_type(type));
+    ieee_float_valuet f(to_floatbv_type(type));
     f.unpack(rhs[numeric_cast_v<std::size_t>(offset)]);
     return f.to_expr();
   }

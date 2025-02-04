@@ -212,7 +212,7 @@ xmlt xml(const exprt &expr, const namespacet &ns)
       result.set_attribute("width", width);
       result.set_attribute(
         "binary", integer2binary(bvrep2integer(value, width, false), width));
-      result.data = ieee_floatt(constant_expr).to_ansi_c_string();
+      result.data = ieee_float_valuet(constant_expr).to_ansi_c_string();
     }
     else if(type.id() == ID_pointer)
     {

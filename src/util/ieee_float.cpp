@@ -57,17 +57,12 @@ void ieee_float_spect::from_type(const floatbv_typet &type)
     e=e-1; // no hidden bit
 }
 
-constant_exprt ieee_floatt::rounding_mode_expr(rounding_modet rm)
-{
-  return floatbv_rounding_mode(static_cast<unsigned>(rm));
-}
-
-void ieee_floatt::print(std::ostream &out) const
+void ieee_float_valuet::print(std::ostream &out) const
 {
   out << to_ansi_c_string();
 }
 
-std::string ieee_floatt::format(const format_spect &format_spec) const
+std::string ieee_float_valuet::format(const format_spect &format_spec) const
 {
   std::string result;
 
@@ -127,7 +122,7 @@ std::string ieee_floatt::format(const format_spect &format_spec) const
   return result;
 }
 
-mp_integer ieee_floatt::base10_digits(const mp_integer &src)
+mp_integer ieee_float_valuet::base10_digits(const mp_integer &src)
 {
   PRECONDITION(src >= 0);
   mp_integer tmp=src;
@@ -136,7 +131,7 @@ mp_integer ieee_floatt::base10_digits(const mp_integer &src)
   return result;
 }
 
-std::string ieee_floatt::to_string_decimal(std::size_t precision) const
+std::string ieee_float_valuet::to_string_decimal(std::size_t precision) const
 {
   std::string result;
 
@@ -230,7 +225,7 @@ std::string ieee_floatt::to_string_decimal(std::size_t precision) const
 
 /// format as [-]d.ddde+-d Note that printf always produces at least two digits
 /// for the exponent.
-std::string ieee_floatt::to_string_scientific(std::size_t precision) const
+std::string ieee_float_valuet::to_string_scientific(std::size_t precision) const
 {
   std::string result;
 
@@ -317,7 +312,7 @@ std::string ieee_floatt::to_string_scientific(std::size_t precision) const
   return result;
 }
 
-void ieee_floatt::unpack(const mp_integer &i)
+void ieee_float_valuet::unpack(const mp_integer &i)
 {
   PRECONDITION(spec.f != 0);
   PRECONDITION(spec.e != 0);
@@ -367,12 +362,12 @@ void ieee_floatt::unpack(const mp_integer &i)
   }
 }
 
-bool ieee_floatt::is_normal() const
+bool ieee_float_valuet::is_normal() const
 {
   return fraction>=power(2, spec.f);
 }
 
-mp_integer ieee_floatt::pack() const
+mp_integer ieee_float_valuet::pack() const
 {
   mp_integer result=0;
 
@@ -410,7 +405,7 @@ mp_integer ieee_floatt::pack() const
   return result;
 }
 
-void ieee_floatt::extract_base2(
+void ieee_float_valuet::extract_base2(
   mp_integer &_fraction,
   mp_integer &_exponent) const
 {
@@ -434,7 +429,7 @@ void ieee_floatt::extract_base2(
   }
 }
 
-void ieee_floatt::extract_base10(
+void ieee_float_valuet::extract_base10(
   mp_integer &_fraction,
   mp_integer &_exponent) const
 {
@@ -470,17 +465,95 @@ void ieee_floatt::extract_base10(
   }
 }
 
-ieee_floatt ieee_floatt::one(const ieee_float_spect &spec)
+ieee_float_valuet ieee_float_valuet::one(const ieee_float_spect &spec)
 {
-  ieee_floatt result{spec};
+  ieee_float_valuet result{spec};
   result.exponent = 0;
   result.fraction = power(2, result.spec.f);
   return result;
 }
 
-ieee_floatt ieee_floatt::one(const floatbv_typet &type)
+ieee_float_valuet ieee_float_valuet::one(const floatbv_typet &type)
 {
   return one(ieee_float_spect{type});
+}
+
+/// Note that calling from_double -> to_double can return different bit patterns
+/// for NaN.
+double ieee_float_valuet::to_double() const
+{
+  PRECONDITION(spec == ieee_float_spect::double_precision());
+  union
+  {
+    double f;
+    uint64_t i;
+  } a;
+
+  if(infinity_flag)
+  {
+    if(sign_flag)
+      return -std::numeric_limits<double>::infinity();
+    else
+      return std::numeric_limits<double>::infinity();
+  }
+
+  if(NaN_flag)
+  {
+    if(sign_flag)
+      return -std::numeric_limits<double>::quiet_NaN();
+    else
+      return std::numeric_limits<double>::quiet_NaN();
+  }
+
+  mp_integer i = pack();
+  CHECK_RETURN(i.is_ulong());
+  CHECK_RETURN(i <= std::numeric_limits<std::uint64_t>::max());
+
+  a.i = i.to_ulong();
+  return a.f;
+}
+
+/// Note that calling from_float -> to_float can return different bit patterns
+/// for NaN.
+float ieee_float_valuet::to_float() const
+{
+  // if false - ieee_floatt::to_float not supported on this architecture
+  static_assert(
+    std::numeric_limits<float>::is_iec559,
+    "this requires the float layout is according to the IEC 559/IEEE 754 "
+    "standard");
+  static_assert(
+    sizeof(float) == sizeof(uint32_t), "a 32 bit float type is required");
+
+  union
+  {
+    float f;
+    uint32_t i;
+  } a;
+
+  if(infinity_flag)
+  {
+    if(sign_flag)
+      return -std::numeric_limits<float>::infinity();
+    else
+      return std::numeric_limits<float>::infinity();
+  }
+
+  if(NaN_flag)
+  {
+    if(sign_flag)
+      return -std::numeric_limits<float>::quiet_NaN();
+    else
+      return std::numeric_limits<float>::quiet_NaN();
+  }
+
+  a.i = numeric_cast_v<uint32_t>(pack());
+  return a.f;
+}
+
+constant_exprt ieee_floatt::rounding_mode_expr(rounding_modet rm)
+{
+  return floatbv_rounding_mode(static_cast<unsigned>(rm));
 }
 
 void ieee_floatt::build(
@@ -496,6 +569,196 @@ void ieee_floatt::build(
   align();
 }
 
+constant_exprt ieee_float_valuet::to_expr() const
+{
+  return constant_exprt(integer2bvrep(pack(), spec.width()), spec.to_type());
+}
+
+bool ieee_float_valuet::operator<(const ieee_float_valuet &other) const
+{
+  PRECONDITION(other.spec == spec);
+
+  if(NaN_flag || other.NaN_flag)
+    return false;
+
+  // check both zero?
+  if(is_zero() && other.is_zero())
+    return false;
+
+  // one of them zero?
+  if(is_zero())
+    return !other.sign_flag;
+  else if(other.is_zero())
+    return sign_flag;
+
+  // check sign
+  if(sign_flag != other.sign_flag)
+    return sign_flag;
+
+  // handle infinity
+  if(infinity_flag)
+  {
+    if(other.infinity_flag)
+      return false;
+    else
+      return sign_flag;
+  }
+  else if(other.infinity_flag)
+    return !sign_flag;
+
+  // check exponent
+  if(exponent != other.exponent)
+  {
+    if(sign_flag) // both negative
+      return exponent > other.exponent;
+    else
+      return exponent < other.exponent;
+  }
+
+  // check significand
+  if(sign_flag) // both negative
+    return fraction > other.fraction;
+  else
+    return fraction < other.fraction;
+}
+
+bool ieee_float_valuet::operator<=(const ieee_float_valuet &other) const
+{
+  PRECONDITION(other.spec == spec);
+
+  if(NaN_flag || other.NaN_flag)
+    return false;
+
+  // check zero
+  if(is_zero() && other.is_zero())
+    return true;
+
+  // handle infinity
+  if(infinity_flag && other.infinity_flag && sign_flag == other.sign_flag)
+    return true;
+
+  if(
+    !infinity_flag && !other.infinity_flag && sign_flag == other.sign_flag &&
+    exponent == other.exponent && fraction == other.fraction)
+    return true;
+
+  return *this < other;
+}
+
+bool ieee_float_valuet::operator>(const ieee_float_valuet &other) const
+{
+  return other < *this;
+}
+
+bool ieee_float_valuet::operator>=(const ieee_float_valuet &other) const
+{
+  return other <= *this;
+}
+
+bool ieee_float_valuet::operator==(const ieee_float_valuet &other) const
+{
+  PRECONDITION(other.spec == spec);
+
+  // packed equality!
+  if(NaN_flag && other.NaN_flag)
+    return true;
+  else if(NaN_flag || other.NaN_flag)
+    return false;
+
+  if(infinity_flag && other.infinity_flag && sign_flag == other.sign_flag)
+    return true;
+  else if(infinity_flag || other.infinity_flag)
+    return false;
+
+  // if(a.is_zero() && b.is_zero()) return true;
+
+  return exponent == other.exponent && fraction == other.fraction &&
+         sign_flag == other.sign_flag;
+}
+
+bool ieee_float_valuet::ieee_equal(const ieee_float_valuet &other) const
+{
+  PRECONDITION(other.spec == spec);
+
+  if(NaN_flag || other.NaN_flag)
+    return false;
+  if(is_zero() && other.is_zero())
+    return true;
+  PRECONDITION(spec == other.spec);
+  return *this == other;
+}
+
+bool ieee_float_valuet::operator==(int i) const
+{
+  auto rm = ieee_floatt::rounding_modet::ROUND_TO_ZERO;
+  ieee_floatt other(spec, rm);
+  other.from_integer(i);
+  return *this == other;
+}
+
+bool ieee_float_valuet::operator!=(const ieee_float_valuet &other) const
+{
+  return !(*this == other);
+}
+
+bool ieee_float_valuet::ieee_not_equal(const ieee_float_valuet &other) const
+{
+  PRECONDITION(other.spec == spec);
+
+  if(NaN_flag || other.NaN_flag)
+    return true; // !!!
+  if(is_zero() && other.is_zero())
+    return false;
+  PRECONDITION(spec == other.spec);
+  return *this != other;
+}
+
+/// Sets *this to the next representable number closer to plus infinity (greater
+/// = true) or minus infinity (greater = false).
+void ieee_float_valuet::next_representable(bool greater)
+{
+  if(is_NaN())
+    return;
+
+  bool old_sign = get_sign();
+
+  if(is_zero())
+  {
+    unpack(1);
+    set_sign(!greater);
+
+    return;
+  }
+
+  if(is_infinity())
+  {
+    if(get_sign() == greater)
+    {
+      make_fltmax();
+      set_sign(old_sign);
+    }
+    return;
+  }
+
+  bool dir;
+  if(greater)
+    dir = !get_sign();
+  else
+    dir = get_sign();
+
+  set_sign(false);
+
+  mp_integer old = pack();
+  if(dir)
+    ++old;
+  else
+    --old;
+
+  unpack(old);
+
+  // sign change impossible (zero case caught earlier)
+  set_sign(old_sign);
+}
 /// compute f * (10^e)
 void ieee_floatt::from_base10(
   const mp_integer &_fraction,
@@ -595,7 +858,7 @@ void ieee_floatt::align()
   if(biased_exponent>=spec.max_exponent())
   {
     // we need to consider the rounding mode here
-    switch(rounding_mode)
+    switch(rounding_mode())
     {
     case UNKNOWN:
     case NONDETERMINISTIC:
@@ -671,7 +934,7 @@ void ieee_floatt::divide_and_round(
 
   if(remainder!=0)
   {
-    switch(rounding_mode)
+    switch(rounding_mode())
     {
     case ROUND_TO_EVEN:
       {
@@ -711,11 +974,6 @@ void ieee_floatt::divide_and_round(
       UNREACHABLE;
     }
   }
-}
-
-constant_exprt ieee_floatt::to_expr() const
-{
-  return constant_exprt(integer2bvrep(pack(), spec.width()), spec.to_type());
 }
 
 ieee_floatt &ieee_floatt::operator/=(const ieee_floatt &other)
@@ -861,7 +1119,7 @@ ieee_floatt &ieee_floatt::operator+=(const ieee_floatt &other)
       return *this;
     else
     {
-      if(rounding_mode==ROUND_TO_MINUS_INF)
+      if(rounding_mode() == ROUND_TO_MINUS_INF)
       {
         set_sign(true);
         return *this;
@@ -902,7 +1160,7 @@ ieee_floatt &ieee_floatt::operator+=(const ieee_floatt &other)
   // there is some set of rules to get the sign
   if(fraction==0)
   {
-    if(rounding_mode==ROUND_TO_MINUS_INF)
+    if(rounding_mode() == ROUND_TO_MINUS_INF)
       sign_flag=true;
     else
       sign_flag=false;
@@ -926,149 +1184,6 @@ ieee_floatt &ieee_floatt::operator-=(const ieee_floatt &other)
   return (*this)+=_other;
 }
 
-bool ieee_floatt::operator<(const ieee_floatt &other) const
-{
-  PRECONDITION(other.spec == spec);
-
-  if(NaN_flag || other.NaN_flag)
-    return false;
-
-  // check both zero?
-  if(is_zero() && other.is_zero())
-    return false;
-
-  // one of them zero?
-  if(is_zero())
-    return !other.sign_flag;
-  else if(other.is_zero())
-    return sign_flag;
-
-  // check sign
-  if(sign_flag!=other.sign_flag)
-    return sign_flag;
-
-  // handle infinity
-  if(infinity_flag)
-  {
-    if(other.infinity_flag)
-      return false;
-    else
-      return sign_flag;
-  }
-  else if(other.infinity_flag)
-    return !sign_flag;
-
-  // check exponent
-  if(exponent!=other.exponent)
-  {
-    if(sign_flag) // both negative
-      return exponent>other.exponent;
-    else
-      return exponent<other.exponent;
-  }
-
-  // check significand
-  if(sign_flag) // both negative
-    return fraction>other.fraction;
-  else
-    return fraction<other.fraction;
-}
-
-bool ieee_floatt::operator<=(const ieee_floatt &other) const
-{
-  PRECONDITION(other.spec == spec);
-
-  if(NaN_flag || other.NaN_flag)
-    return false;
-
-  // check zero
-  if(is_zero() && other.is_zero())
-    return true;
-
-  // handle infinity
-  if(infinity_flag && other.infinity_flag &&
-     sign_flag==other.sign_flag)
-    return true;
-
-  if(!infinity_flag && !other.infinity_flag &&
-     sign_flag==other.sign_flag &&
-     exponent==other.exponent &&
-     fraction==other.fraction)
-    return true;
-
-  return *this<other;
-}
-
-bool ieee_floatt::operator>(const ieee_floatt &other) const
-{
-  return other<*this;
-}
-
-bool ieee_floatt::operator>=(const ieee_floatt &other) const
-{
-  return other<=*this;
-}
-
-bool ieee_floatt::operator==(const ieee_floatt &other) const
-{
-  PRECONDITION(other.spec == spec);
-
-  // packed equality!
-  if(NaN_flag && other.NaN_flag)
-    return true;
-  else if(NaN_flag || other.NaN_flag)
-    return false;
-
-  if(infinity_flag && other.infinity_flag &&
-     sign_flag==other.sign_flag)
-    return true;
-  else if(infinity_flag || other.infinity_flag)
-    return false;
-
-  // if(a.is_zero() && b.is_zero()) return true;
-
-  return
-    exponent==other.exponent &&
-    fraction==other.fraction &&
-    sign_flag==other.sign_flag;
-}
-
-bool ieee_floatt::ieee_equal(const ieee_floatt &other) const
-{
-  PRECONDITION(other.spec == spec);
-
-  if(NaN_flag || other.NaN_flag)
-    return false;
-  if(is_zero() && other.is_zero())
-    return true;
-  PRECONDITION(spec == other.spec);
-  return *this==other;
-}
-
-bool ieee_floatt::operator==(int i) const
-{
-  ieee_floatt other(spec);
-  other.from_integer(i);
-  return *this==other;
-}
-
-bool ieee_floatt::operator!=(const ieee_floatt &other) const
-{
-  return !(*this==other);
-}
-
-bool ieee_floatt::ieee_not_equal(const ieee_floatt &other) const
-{
-  PRECONDITION(other.spec == spec);
-
-  if(NaN_flag || other.NaN_flag)
-    return true; // !!!
-  if(is_zero() && other.is_zero())
-    return false;
-  PRECONDITION(spec == other.spec);
-  return *this!=other;
-}
-
 void ieee_floatt::change_spec(const ieee_float_spect &dest_spec)
 {
   mp_integer _exponent=exponent-spec.f;
@@ -1088,7 +1203,7 @@ void ieee_floatt::change_spec(const ieee_float_spect &dest_spec)
     build(_fraction, _exponent);
 }
 
-void ieee_floatt::from_expr(const constant_exprt &expr)
+void ieee_float_valuet::from_expr(const constant_exprt &expr)
 {
   spec=ieee_float_spect(to_floatbv_type(expr.type()));
   unpack(bvrep2integer(expr.get_value(), spec.width(), false));
@@ -1115,7 +1230,7 @@ mp_integer ieee_floatt::to_integer() const
   return result;
 }
 
-void ieee_floatt::from_double(const double d)
+void ieee_float_valuet::from_double(const double d)
 {
   spec.f=52;
   spec.e=11;
@@ -1139,7 +1254,7 @@ void ieee_floatt::from_double(const double d)
   unpack(u.i);
 }
 
-void ieee_floatt::from_float(const float f)
+void ieee_float_valuet::from_float(const float f)
 {
   spec.f=23;
   spec.e=8;
@@ -1163,7 +1278,7 @@ void ieee_floatt::from_float(const float f)
   unpack(u.i);
 }
 
-void ieee_floatt::make_NaN()
+void ieee_float_valuet::make_NaN()
 {
   NaN_flag=true;
   // sign=false;
@@ -1172,19 +1287,19 @@ void ieee_floatt::make_NaN()
   infinity_flag=false;
 }
 
-void ieee_floatt::make_fltmax()
+void ieee_float_valuet::make_fltmax()
 {
   mp_integer bit_pattern=
     power(2, spec.e+spec.f)-1-power(2, spec.f);
   unpack(bit_pattern);
 }
 
-void ieee_floatt::make_fltmin()
+void ieee_float_valuet::make_fltmin()
 {
   unpack(power(2, spec.f));
 }
 
-void ieee_floatt::make_plus_infinity()
+void ieee_float_valuet::make_plus_infinity()
 {
   NaN_flag=false;
   sign_flag=false;
@@ -1193,130 +1308,18 @@ void ieee_floatt::make_plus_infinity()
   infinity_flag=true;
 }
 
-void ieee_floatt::make_minus_infinity()
+void ieee_float_valuet::make_minus_infinity()
 {
   make_plus_infinity();
   sign_flag=true;
 }
 
-bool ieee_floatt::is_double() const
+bool ieee_float_valuet::is_double() const
 {
   return spec.f==52 && spec.e==11;
 }
 
-bool ieee_floatt::is_float() const
+bool ieee_float_valuet::is_float() const
 {
   return spec.f==23 && spec.e==8;
-}
-
-/// Note that calling from_double -> to_double can return different bit patterns
-/// for NaN.
-double ieee_floatt::to_double() const
-{
-  PRECONDITION(spec == ieee_float_spect::double_precision());
-  union { double f; uint64_t i; } a;
-
-  if(infinity_flag)
-  {
-    if(sign_flag)
-      return -std::numeric_limits<double>::infinity();
-    else
-      return std::numeric_limits<double>::infinity();
-  }
-
-  if(NaN_flag)
-  {
-    if(sign_flag)
-      return -std::numeric_limits<double>::quiet_NaN();
-    else
-      return std::numeric_limits<double>::quiet_NaN();
-  }
-
-  mp_integer i=pack();
-  CHECK_RETURN(i.is_ulong());
-  CHECK_RETURN(i <= std::numeric_limits<std::uint64_t>::max());
-
-  a.i=i.to_ulong();
-  return a.f;
-}
-
-/// Note that calling from_float -> to_float can return different bit patterns
-/// for NaN.
-float ieee_floatt::to_float() const
-{
-  // if false - ieee_floatt::to_float not supported on this architecture
-  static_assert(
-    std::numeric_limits<float>::is_iec559,
-    "this requires the float layout is according to the IEC 559/IEEE 754 "
-    "standard");
-  static_assert(
-    sizeof(float) == sizeof(uint32_t), "a 32 bit float type is required");
-
-  union { float f; uint32_t i; } a;
-
-  if(infinity_flag)
-  {
-    if(sign_flag)
-      return -std::numeric_limits<float>::infinity();
-    else
-      return std::numeric_limits<float>::infinity();
-  }
-
-  if(NaN_flag)
-  {
-    if(sign_flag)
-      return -std::numeric_limits<float>::quiet_NaN();
-    else
-      return std::numeric_limits<float>::quiet_NaN();
-  }
-
-  a.i = numeric_cast_v<uint32_t>(pack());
-  return a.f;
-}
-
-/// Sets *this to the next representable number closer to plus infinity (greater
-/// = true) or minus infinity (greater = false).
-void ieee_floatt::next_representable(bool greater)
-{
-  if(is_NaN())
-    return;
-
-  bool old_sign=get_sign();
-
-  if(is_zero())
-  {
-    unpack(1);
-    set_sign(!greater);
-
-    return;
-  }
-
-  if(is_infinity())
-  {
-    if(get_sign()==greater)
-    {
-      make_fltmax();
-      set_sign(old_sign);
-    }
-    return;
-  }
-
-  bool dir;
-  if(greater)
-    dir=!get_sign();
-  else
-    dir=get_sign();
-
-  set_sign(false);
-
-  mp_integer old=pack();
-  if(dir)
-    ++old;
-  else
-    --old;
-
-  unpack(old);
-
-  // sign change impossible (zero case caught earlier)
-  set_sign(old_sign);
 }

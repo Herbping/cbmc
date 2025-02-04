@@ -36,7 +36,7 @@ std::string format_constantt::operator()(const exprt &expr)
     }
     else if(expr.type().id()==ID_floatbv)
     {
-      return ieee_floatt(to_constant_expr(expr)).format(*this);
+      return ieee_float_valuet(to_constant_expr(expr)).format(*this);
     }
   }
   else if(expr.id()==ID_string_constant)

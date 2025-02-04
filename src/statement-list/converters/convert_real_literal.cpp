@@ -18,7 +18,7 @@ Author: Matthias Weiss, matthias.weiss@diffblue.com
 
 constant_exprt convert_real_literal(const std::string &src)
 {
-  ieee_floatt real{get_real_type()};
+  ieee_float_valuet real{get_real_type()};
   real.from_float(std::stof(src));
   return real.to_expr();
 }

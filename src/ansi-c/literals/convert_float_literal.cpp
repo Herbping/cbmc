@@ -71,7 +71,9 @@ exprt convert_float_literal(const std::string &src)
     // but these aren't handled anywhere
   }
 
-  ieee_floatt a(type);
+  // This may require rounding.
+  auto rm = ieee_floatt::rounding_modet::ROUND_TO_EVEN;
+  ieee_floatt a(type, rm);
 
   if(parsed_float.exponent_base==10)
     a.from_base10(parsed_float.significand, parsed_float.exponent);

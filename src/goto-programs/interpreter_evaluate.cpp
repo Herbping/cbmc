@@ -364,7 +364,7 @@ interpretert::mp_vectort interpretert::evaluate(const exprt &expr)
     }
     else if(expr.type().id()==ID_floatbv)
     {
-      ieee_floatt f;
+      ieee_float_valuet f;
       f.from_expr(to_constant_expr(expr));
       return {f.pack()};
     }
@@ -731,8 +731,9 @@ interpretert::mp_vectort interpretert::evaluate(const exprt &expr)
         }
         else if(expr.type().id()==ID_floatbv)
         {
-          ieee_floatt f1(to_floatbv_type(expr.type()));
-          ieee_floatt f2(to_floatbv_type(op.type()));
+          auto rm = ieee_floatt::rounding_modet::ROUND_TO_EVEN;
+          ieee_floatt f1(to_floatbv_type(expr.type()), rm);
+          ieee_floatt f2(to_floatbv_type(op.type()), rm);
           f1.unpack(result);
           f2.unpack(tmp.front());
           f1*=f2;

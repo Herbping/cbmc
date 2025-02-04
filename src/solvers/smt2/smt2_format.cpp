@@ -93,7 +93,7 @@ std::ostream &smt2_format_rec(std::ostream &out, const exprt &expr)
     }
     else if(expr_type.id() == ID_floatbv)
     {
-      const ieee_floatt v = ieee_floatt(constant_expr);
+      const ieee_float_valuet v = ieee_float_valuet(constant_expr);
       const size_t e = v.spec.e;
       const size_t f = v.spec.f + 1; // SMT-LIB counts the hidden bit
 

@@ -288,7 +288,7 @@ void interval_domaint::assume_rec(
     }
     else if(is_float(lhs.type()) && is_float(rhs.type()))
     {
-      ieee_floatt tmp(to_constant_expr(rhs));
+      ieee_float_valuet tmp(to_constant_expr(rhs));
       if(id==ID_lt)
         tmp.decrement();
       ieee_float_intervalt &fi=float_map[lhs_identifier];
@@ -313,7 +313,7 @@ void interval_domaint::assume_rec(
     }
     else if(is_float(lhs.type()) && is_float(rhs.type()))
     {
-      ieee_floatt tmp(to_constant_expr(lhs));
+      ieee_float_valuet tmp(to_constant_expr(lhs));
       if(id==ID_lt)
         tmp.increment();
       ieee_float_intervalt &fi=float_map[rhs_identifier];

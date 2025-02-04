@@ -938,7 +938,7 @@ code_blockt java_string_library_preprocesst::make_float_to_string_code(
 
   // Expression representing 0.0
   const ieee_float_spect float_spec{to_floatbv_type(params[0].type())};
-  ieee_floatt zero_float(float_spec);
+  ieee_float_valuet zero_float(float_spec);
   zero_float.from_float(0.0);
   const constant_exprt zero = zero_float.to_expr();
 
@@ -996,7 +996,7 @@ code_blockt java_string_library_preprocesst::make_float_to_string_code(
   string_expr_list.push_back(zero_string);
 
   // Case of -0.0
-  ieee_floatt minus_zero_float(float_spec);
+  ieee_float_valuet minus_zero_float(float_spec);
   minus_zero_float.from_float(-0.0f);
   condition_list.push_back(equal_exprt(arg, minus_zero_float.to_expr()));
   const refined_string_exprt minus_zero_string =
@@ -1004,8 +1004,9 @@ code_blockt java_string_library_preprocesst::make_float_to_string_code(
   string_expr_list.push_back(minus_zero_string);
 
   // Case of simple notation
-  ieee_floatt bound_inf_float(float_spec);
-  ieee_floatt bound_sup_float(float_spec);
+  auto rm = ieee_floatt::rounding_modet::ROUND_TO_EVEN;
+  ieee_floatt bound_inf_float(float_spec, rm);
+  ieee_floatt bound_sup_float(float_spec, rm);
   bound_inf_float.from_float(1e-3f);
   bound_sup_float.from_float(1e7f);
   bound_inf_float.change_spec(float_spec);

@@ -782,7 +782,7 @@ void java_bytecode_parsert::rconstant_pool()
 
       case CONSTANT_Float:
       {
-        ieee_floatt value(ieee_float_spect::single_precision());
+        ieee_float_valuet value(ieee_float_spect::single_precision());
         value.unpack(entry.number);
         entry.expr = value.to_expr();
       }
@@ -794,7 +794,7 @@ void java_bytecode_parsert::rconstant_pool()
 
       case CONSTANT_Double:
       {
-        ieee_floatt value(ieee_float_spect::double_precision());
+        ieee_float_valuet value(ieee_float_spect::double_precision());
         value.unpack(entry.number);
         entry.expr = value.to_expr();
       }

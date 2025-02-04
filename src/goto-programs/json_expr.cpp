@@ -276,7 +276,7 @@ json_objectt json(const exprt &expr, const namespacet &ns, const irep_idt &mode)
         json_numbert(std::to_string(to_bitvector_type(type).get_width()));
       result["binary"] = json_stringt(binary(constant_expr));
       result["data"] =
-        json_stringt(ieee_floatt(constant_expr).to_ansi_c_string());
+        json_stringt(ieee_float_valuet(constant_expr).to_ansi_c_string());
     }
     else if(type.id() == ID_pointer)
     {

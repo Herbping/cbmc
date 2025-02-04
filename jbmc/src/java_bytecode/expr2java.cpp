@@ -230,7 +230,7 @@ std::string expr2javat::convert_constant(
           (src.type()==java_double_type()))
   {
     // This converts NaNs to the canonical NaN
-    const ieee_floatt ieee_repr(to_constant_expr(src));
+    const ieee_float_valuet ieee_repr(to_constant_expr(src));
     if(ieee_repr.is_double())
       return floating_point_to_java_string(ieee_repr.to_double());
     return floating_point_to_java_string(ieee_repr.to_float());

@@ -171,7 +171,9 @@ constant_exprt from_integer(
   }
   else if(type_id==ID_floatbv)
   {
-    ieee_floatt ieee_float(to_floatbv_type(type));
+    ieee_floatt ieee_float(
+      to_floatbv_type(type), ieee_floatt::rounding_modet::ROUND_TO_EVEN);
+    // always rounds to zero
     ieee_float.from_integer(int_value);
     return ieee_float.to_expr();
   }
