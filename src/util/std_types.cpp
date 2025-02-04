@@ -165,6 +165,23 @@ void bitvector_typet::width(const mp_integer &width)
   set_width(numeric_cast_v<std::size_t>(width));
 }
 
+bool range_typet::includes(const mp_integer &singleton) const
+{
+  return get_from() <= singleton && singleton <= get_to();
+}
+
+constant_exprt range_typet::one_expr() const
+{
+  PRECONDITION(includes(1));
+  return constant_exprt{ID_1, *this};
+}
+
+constant_exprt range_typet::zero_expr() const
+{
+  PRECONDITION(includes(0));
+  return constant_exprt{ID_0, *this};
+}
+
 void range_typet::set_from(const mp_integer &from)
 {
   set(ID_from, integer2string(from));

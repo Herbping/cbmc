@@ -1012,6 +1012,9 @@ public:
 
   mp_integer get_from() const;
   mp_integer get_to() const;
+  bool includes(const mp_integer &) const;
+  constant_exprt zero_expr() const;
+  constant_exprt one_expr() const;
 
   void set_from(const mp_integer &_from);
   void set_to(const mp_integer &to);
