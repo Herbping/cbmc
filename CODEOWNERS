@@ -24,7 +24,7 @@
 /src/langapi/ @kroening @tautschnig @peterschrammel
 /src/xmllang/ @kroening @tautschnig @peterschrammel
 /src/solvers/flattening @martin-cs @kroening @tautschnig @peterschrammel
-/src/solvers/floatbv @martin-cs @kroening
+/src/solvers/floatbv @martin-cs @kroening @peterschrammel
 /src/solvers/miniBDD @tautschnig @kroening
 /src/solvers/prop @martin-cs @kroening @tautschnig @peterschrammel
 /src/solvers/sat @martin-cs @kroening @tautschnig @peterschrammel
@@ -43,13 +43,13 @@
 /jbmc/src/java_bytecode/ @peterschrammel @TGWDB
 /src/analyses/ @martin-cs @peterschrammel
 /src/pointer-analysis/ @martin-cs @peterschrammel
-/src/libcprover-cpp @esteffin @TGWDB @peterschrammel
-/src/libcprover-rust @TGWDB @peterschrammel @esteffin
+/src/libcprover-cpp @TGWDB @peterschrammel
+/src/libcprover-rust @TGWDB @peterschrammel
 
 # These files change frequently and changes are medium-risk
 
 /src/goto-analyzer/ @martin-cs @peterschrammel
-/src/goto-bmc/ @esteffin @TGWDB @peterschrammel
+/src/goto-bmc/ @TGWDB @peterschrammel
 /src/goto-harness/ @martin-cs @peterschrammel
 /src/goto-instrument/ @martin-cs @peterschrammel @tautschnig @kroening
 /src/goto-instrument/contracts/ @tautschnig @feliperodri @remi-delmas-3000
@@ -62,8 +62,8 @@
 /jbmc/src/jdiff/ @peterschrammel
 /src/cpp/ @kroening @tautschnig @peterschrammel
 /src/solvers/smt2 @kroening @martin-cs @peterschrammel @TGWDB
-/src/solvers/smt2_incremental @peterschrammel @thomasspriggs @TGWDB @esteffin
-/src/solvers/Makefile @kroening @tautschnig @peterschrammel @TGWDB @esteffin
+/src/solvers/smt2_incremental @peterschrammel @thomasspriggs @TGWDB
+/src/solvers/Makefile @kroening @tautschnig @peterschrammel @TGWDB
 /src/statement-list/ @kroening @tautschnig @peterschrammel
 
 /cmake/        @diffblue/diffblue-opensource
