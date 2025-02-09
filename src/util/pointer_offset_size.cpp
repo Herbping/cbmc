@@ -564,14 +564,7 @@ std::optional<exprt> get_subexpression_at_offset(
   const namespacet &ns)
 {
   if(offset_bytes == 0 && expr.type() == target_type_raw)
-  {
-    exprt result = expr;
-
-    if(expr.type() != target_type_raw)
-      result.type() = target_type_raw;
-
-    return result;
-  }
+    return expr;
 
   if(
     offset_bytes == 0 && expr.type().id() == ID_pointer &&
