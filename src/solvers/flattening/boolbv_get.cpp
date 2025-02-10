@@ -199,7 +199,9 @@ exprt boolbvt::bv_get_rec(const exprt &expr, const bvt &bv, std::size_t offset)
   switch(bvtype)
   {
   case bvtypet::IS_UNKNOWN:
-    PRECONDITION(type.id() == ID_string || type.id() == ID_empty);
+    PRECONDITION(
+      type.id() == ID_string || type.id() == ID_empty ||
+      type.id() == ID_enumeration);
     if(type.id()==ID_string)
     {
       mp_integer int_value=binary2integer(value, false);
@@ -214,6 +216,16 @@ exprt boolbvt::bv_get_rec(const exprt &expr, const bvt &bv, std::size_t offset)
     else if(type.id() == ID_empty)
     {
       return constant_exprt{irep_idt(), type};
+    }
+    else if(type.id() == ID_enumeration)
+    {
+      auto &elements = to_enumeration_type(type).elements();
+      mp_integer int_value = binary2integer(value, false);
+      if(int_value >= elements.size())
+        return nil_exprt{};
+      else
+        return constant_exprt{
+          elements[numeric_cast_v<std::size_t>(int_value)].id(), type};
     }
     break;
 
