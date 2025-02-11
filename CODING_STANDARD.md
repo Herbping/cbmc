@@ -340,14 +340,13 @@ Now, you can commit and push the formatting fixes.
 To avoid waiting until you've made a PR to find formatting issues, you can
 install clang-format locally and run it against your code as you are working.
 
-Different versions of clang-format have slightly different behaviors. CBMC uses
-clang-format-11 as it is available the repositories for Ubuntu 20.04 and
-Homebrew.
-To install on a Unix-like system, try installing using the system package
-manager:
+Different versions of clang-format have slightly different behaviors.  CBMC
+uses clang-format-15, or later, available in the standard Ubuntu 24.04 and
+Homebrew repositories.  To install on a Unix-like system, try installing
+using the system package manager:
 ```
-apt-get install clang-format-11  # Run this on Ubuntu, Debian etc.
-brew install clang-format@11     # Run this on a Mac with Homebrew installed
+apt-get install clang-format     # Run this on Ubuntu, Debian etc.
+brew install clang-format        # Run this on a Mac with Homebrew installed
 ```
 
 If your platform doesn't have a package for clang-format, you can download a
