@@ -43,20 +43,6 @@ const symbolt &namespace_baset::lookup(const tag_typet &type) const
   return lookup(type.get_identifier());
 }
 
-/// Resolve type symbol to the type it points to.
-/// \param src: The type we want to resolve in the symbol table.
-/// \return The resolved type.
-const typet &namespace_baset::follow(const typet &src) const
-{
-  if(src.id() == ID_union_tag)
-    return follow_tag(to_union_tag_type(src));
-
-  if(src.id() == ID_struct_tag)
-    return follow_tag(to_struct_tag_type(src));
-
-  return src;
-}
-
 /// Follow type tag of union type.
 /// \param src: The union tag type to dispatch on.
 /// \return The type of the union tag in the symbol table.

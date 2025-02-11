@@ -10,7 +10,6 @@ Author: Daniel Kroening, kroening@kroening.com
 #ifndef CPROVER_UTIL_NAMESPACE_H
 #define CPROVER_UTIL_NAMESPACE_H
 
-#include "deprecate.h"
 #include "invariant.h"
 #include "irep.h"
 
@@ -61,8 +60,6 @@ public:
   virtual ~namespace_baset();
 
   void follow_macros(exprt &) const;
-  DEPRECATED(SINCE(2024, 2, 19, "use follow_tag(...) instead"))
-  const typet &follow(const typet &) const;
 
   const union_typet &follow_tag(const union_tag_typet &) const;
   const struct_typet &follow_tag(const struct_tag_typet &) const;
