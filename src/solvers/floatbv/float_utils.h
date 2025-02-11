@@ -25,19 +25,21 @@ public:
     literalt round_to_zero;
     literalt round_to_plus_inf;
     literalt round_to_minus_inf;
+    literalt round_to_away;
 
-    rounding_mode_bitst():
-      round_to_even(const_literal(true)),
-      round_to_zero(const_literal(false)),
-      round_to_plus_inf(const_literal(false)),
-      round_to_minus_inf(const_literal(false))
+    rounding_mode_bitst()
+      : round_to_even(const_literal(true)),
+        round_to_zero(const_literal(false)),
+        round_to_plus_inf(const_literal(false)),
+        round_to_minus_inf(const_literal(false)),
+        round_to_away(const_literal(false))
     {
     }
 
     void set(const ieee_floatt::rounding_modet mode)
     {
-      round_to_even=round_to_zero=round_to_plus_inf=round_to_minus_inf=
-        const_literal(false);
+      round_to_even = round_to_zero = round_to_plus_inf = round_to_minus_inf =
+        round_to_away = const_literal(false);
 
       switch(mode)
       {
@@ -55,6 +57,10 @@ public:
 
       case ieee_floatt::ROUND_TO_ZERO:
         round_to_zero=const_literal(true);
+        break;
+
+      case ieee_floatt::ROUND_TO_AWAY:
+        round_to_away = const_literal(true);
         break;
 
       case ieee_floatt::NONDETERMINISTIC:

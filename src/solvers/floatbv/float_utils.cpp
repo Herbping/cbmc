@@ -22,11 +22,14 @@ void float_utilst::set_rounding_mode(const bvt &src)
     bv_utils.build_constant(ieee_floatt::ROUND_TO_MINUS_INF, src.size());
   bvt round_to_zero=
     bv_utils.build_constant(ieee_floatt::ROUND_TO_ZERO, src.size());
+  bvt round_to_away =
+    bv_utils.build_constant(ieee_floatt::ROUND_TO_AWAY, src.size());
 
   rounding_mode_bits.round_to_even=bv_utils.equal(src, round_to_even);
   rounding_mode_bits.round_to_plus_inf=bv_utils.equal(src, round_to_plus_inf);
   rounding_mode_bits.round_to_minus_inf=bv_utils.equal(src, round_to_minus_inf);
   rounding_mode_bits.round_to_zero=bv_utils.equal(src, round_to_zero);
+  rounding_mode_bits.round_to_away = bv_utils.equal(src, round_to_away);
 }
 
 bvt float_utilst::from_signed_integer(const bvt &src)
@@ -990,12 +993,18 @@ literalt float_utilst::fraction_rounding_decision(
   literalt round_to_zero=
     const_literal(false);
 
+  // round to away
+  literalt round_to_away = prop.lor(rounding_least, sticky_bit);
+
   // now select appropriate one
+  // clang-format off
   return prop.lselect(rounding_mode_bits.round_to_even, round_to_even,
          prop.lselect(rounding_mode_bits.round_to_plus_inf, round_to_plus_inf,
          prop.lselect(rounding_mode_bits.round_to_minus_inf, round_to_minus_inf,
          prop.lselect(rounding_mode_bits.round_to_zero, round_to_zero,
-           prop.new_variable())))); // otherwise non-det
+         prop.lselect(rounding_mode_bits.round_to_away, round_to_away,
+           prop.new_variable()))))); // otherwise non-det
+  // clang-format on
 }
 
 void float_utilst::round_fraction(unbiased_floatt &result)

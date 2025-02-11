@@ -282,11 +282,14 @@ void float_bvt::rounding_mode_bitst::get(const exprt &rm)
   exprt round_to_minus_inf_const=
     from_integer(ieee_floatt::ROUND_TO_MINUS_INF, rm.type());
   exprt round_to_zero_const=from_integer(ieee_floatt::ROUND_TO_ZERO, rm.type());
+  exprt round_to_away_const =
+    from_integer(ieee_floatt::ROUND_TO_AWAY, rm.type());
 
   round_to_even=equal_exprt(rm, round_to_even_const);
   round_to_plus_inf=equal_exprt(rm, round_to_plus_inf_const);
   round_to_minus_inf=equal_exprt(rm, round_to_minus_inf_const);
   round_to_zero=equal_exprt(rm, round_to_zero_const);
+  round_to_away = equal_exprt(rm, round_to_away_const);
 }
 
 exprt float_bvt::sign_bit(const exprt &op)
@@ -1166,12 +1169,18 @@ exprt float_bvt::fraction_rounding_decision(
   // round to zero
   false_exprt round_to_zero;
 
+  // round to away
+  const auto round_to_away = or_exprt(rounding_bit, sticky_bit);
+
   // now select appropriate one
+  // clang-format off
   return if_exprt(rounding_mode_bits.round_to_even, round_to_even,
          if_exprt(rounding_mode_bits.round_to_plus_inf, round_to_plus_inf,
          if_exprt(rounding_mode_bits.round_to_minus_inf, round_to_minus_inf,
          if_exprt(rounding_mode_bits.round_to_zero, round_to_zero,
-           false_exprt())))); // otherwise zero
+         if_exprt(rounding_mode_bits.round_to_away, round_to_away,
+           false_exprt()))))); // otherwise zero
+  // clang-format off
 }
 
 void float_bvt::round_fraction(
