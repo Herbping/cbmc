@@ -195,7 +195,7 @@ table, looking up the target symbol name in each successive table until one is
 found. Note class \ref multi_namespacet can layer arbitrary numbers of symbol
 tables, while for historical reasons \ref namespacet can layer up to two.
 
-The namespace wrapper class also provides the \ref namespacet::follow
+The namespace wrapper class also provides the \ref namespacet::follow_tag
 operation, which dereferences a `tag_typet` to retrieve the type it refers
 to, including following a type tag which refers to another symbol which
 eventually refers to a 'real' type.
