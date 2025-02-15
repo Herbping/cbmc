@@ -3250,6 +3250,24 @@ exprt c_typecheck_baset::do_special_functions(
     return std::move(infl_expr);
   }
   else if(
+    identifier == CPROVER_PREFIX "round_to_integralf" ||
+    identifier == CPROVER_PREFIX "round_to_integrald" ||
+    identifier == CPROVER_PREFIX "round_to_integralld")
+  {
+    if(expr.arguments().size() != 2)
+    {
+      error().source_location = f_op.source_location();
+      error() << identifier << " expects two arguments" << eom;
+      throw 0;
+    }
+
+    auto round_to_integral_expr =
+      floatbv_round_to_integral_exprt{expr.arguments()[0], expr.arguments()[1]};
+    round_to_integral_expr.add_source_location() = source_location;
+
+    return std::move(round_to_integral_expr);
+  }
+  else if(
     identifier == CPROVER_PREFIX "abs" || identifier == CPROVER_PREFIX "labs" ||
     identifier == CPROVER_PREFIX "llabs" ||
     identifier == CPROVER_PREFIX "imaxabs" ||

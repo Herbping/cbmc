@@ -1408,6 +1408,20 @@ void smt2_parsert::setup_expressions()
     return binary_exprt(op[0], ID_floatbv_rem, op[1]);
   };
 
+  expressions["fp.roundToIntegral"] = [this]
+  {
+    auto op = operands();
+
+    if(op.size() != 2)
+      throw error() << "fp.roundToIntegral takes two operands";
+
+    if(op[1].type().id() != ID_floatbv)
+      throw error() << "fp.roundToIntegral takes a FloatingPoint operand";
+
+    // Note swapped order.
+    return floatbv_round_to_integral_exprt(op[1], op[0]);
+  };
+
   expressions["fp.eq"] = [this] {
     return function_application_ieee_float_eq(operands());
   };
