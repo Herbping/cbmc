@@ -208,13 +208,13 @@ void ansi_c_parsert::set_pragma_cprover()
     for(const auto &pragma : pragma_set)
       flattened[pragma.first] = pragma.second;
 
-  source_location.remove(ID_pragma);
+  _source_location.remove(ID_pragma);
 
   for(const auto &pragma : flattened)
   {
     std::string check_name = id2string(pragma.first);
     std::string full_name =
       (pragma.second ? "enable:" : "disable:") + check_name;
-    source_location.add_pragma(full_name);
+    _source_location.add_pragma(full_name);
   }
 }
