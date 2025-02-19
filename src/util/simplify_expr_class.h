@@ -45,6 +45,7 @@ class exprt;
 class extractbit_exprt;
 class extractbits_exprt;
 class find_first_set_exprt;
+class floatbv_round_to_integral_exprt;
 class floatbv_typecast_exprt;
 class function_application_exprt;
 class ieee_float_op_exprt;
@@ -161,6 +162,8 @@ public:
   [[nodiscard]] resultt<> simplify_plus(const plus_exprt &);
   [[nodiscard]] resultt<> simplify_minus(const minus_exprt &);
   [[nodiscard]] resultt<> simplify_floatbv_op(const ieee_float_op_exprt &);
+  [[nodiscard]] resultt<>
+  simplify_floatbv_round_to_integral(const floatbv_round_to_integral_exprt &);
   [[nodiscard]] resultt<>
   simplify_floatbv_typecast(const floatbv_typecast_exprt &);
   [[nodiscard]] resultt<> simplify_shifts(const shift_exprt &);

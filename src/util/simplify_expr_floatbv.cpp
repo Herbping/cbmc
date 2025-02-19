@@ -135,6 +135,28 @@ bool simplify_exprt::simplify_sign(exprt &expr)
 }
 #endif
 
+simplify_exprt::resultt<> simplify_exprt::simplify_floatbv_round_to_integral(
+  const floatbv_round_to_integral_exprt &expr)
+{
+  auto &op = expr.op();
+  auto &rounding_mode = expr.rounding_mode();
+
+  // constant folding
+  if(op.is_constant() && rounding_mode.is_constant())
+  {
+    const auto rounding_mode_index =
+      numeric_cast_v<std::size_t>(to_constant_expr(rounding_mode));
+
+    ieee_floatt op_value{
+      to_constant_expr(op),
+      static_cast<ieee_floatt::rounding_modet>(rounding_mode_index)};
+
+    return op_value.round_to_integral().to_expr();
+  }
+
+  return unchanged(expr);
+}
+
 simplify_exprt::resultt<>
 simplify_exprt::simplify_floatbv_typecast(const floatbv_typecast_exprt &expr)
 {
