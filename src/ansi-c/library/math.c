@@ -1322,7 +1322,7 @@ long double ceill(long double x)
 
 double floor(double x)
 {
-  return __CPROVER_round_to_integrald(x, 3); // FE_DOWNWARD
+  return __CPROVER_round_to_integrald(x, 1); // FE_DOWNWARD
 }
 
 /* FUNCTION: floorf */
@@ -1339,7 +1339,7 @@ double floor(double x)
 
 float floorf(float x)
 {
-  return __CPROVER_round_to_integralf(x, 3); // FE_DOWNWARD
+  return __CPROVER_round_to_integralf(x, 1); // FE_DOWNWARD
 }
 
 
@@ -1357,7 +1357,7 @@ float floorf(float x)
 
 long double floorl(long double x)
 {
-  return __CPROVER_round_to_integralld(x, 3); // FE_DOWNWARD
+  return __CPROVER_round_to_integralld(x, 1); // FE_DOWNWARD
 }
 
 
@@ -1381,7 +1381,7 @@ long double floorl(long double x)
 
 double trunc(double x)
 {
-  return __CPROVER_round_to_integrald(x, 0); // FE_TOWARDZERO
+  return __CPROVER_round_to_integrald(x, 3); // FE_TOWARDZERO
 }
 
 /* FUNCTION: truncf */
@@ -1398,7 +1398,7 @@ double trunc(double x)
 
 float truncf(float x)
 {
-  return __CPROVER_round_to_integralf(x, 0); // FE_TOWARDZERO
+  return __CPROVER_round_to_integralf(x, 3); // FE_TOWARDZERO
 }
 
 
@@ -1416,7 +1416,7 @@ float truncf(float x)
 
 long double truncl(long double x)
 {
-  return __CPROVER_round_to_integralld(x, 0); // FE_TOWARDZERO
+  return __CPROVER_round_to_integralld(x, 3); // FE_TOWARDZERO
 }
 
 
@@ -1889,7 +1889,7 @@ long long int llroundl(long double x)
 
 double modf(double x, double *iptr)
 {
-  *iptr = __CPROVER_round_to_integrald(x, 0); // FE_TOWARDZERO
+  *iptr = __CPROVER_round_to_integrald(x, 3); // FE_TOWARDZERO
   return (x - *iptr);
 }
 
@@ -1907,7 +1907,7 @@ double modf(double x, double *iptr)
 
 float modff(float x, float *iptr)
 {
-  *iptr = __CPROVER_round_to_integralf(x, 0); // FE_TOWARDZERO
+  *iptr = __CPROVER_round_to_integralf(x, 3); // FE_TOWARDZERO
   return (x - *iptr);
 }
 
@@ -1926,7 +1926,7 @@ float modff(float x, float *iptr)
 
 long double modfl(long double x, long double *iptr)
 {
-  *iptr = __CPROVER_round_to_integralld(x, 0); // FE_TOWARDZERO
+  *iptr = __CPROVER_round_to_integralld(x, 3); // FE_TOWARDZERO
   return (x - *iptr);
 }
 
